@@ -1,0 +1,65 @@
+import XCTest
+@testable import TougeDash
+
+final class EMUProtocolTests: XCTestCase {
+    func testParsesFrameSplitAcrossBluetoothNotifications() {
+        var parser = EMUFrameParser()
+        let frame = Array(EMUFrameParser.encode(channel: 1, rawValue: 6_420))
+
+        XCTAssertTrue(parser.feed(Data(frame.prefix(2))).isEmpty)
+        XCTAssertEqual(parser.feed(Data(frame.dropFirst(2))), [EMUFrame(channel: 1, rawValue: 6_420)])
+        XCTAssertEqual(parser.stats.validFrames, 1)
+        XCTAssertEqual(parser.stats.badChecksums, 0)
+    }
+
+    func testRecoversAfterNoiseAndBadChecksum() {
+        var parser = EMUFrameParser()
+        var payload = Data([0xDE, 0xAD, 0xBE])
+        var damaged = Array(EMUFrameParser.encode(channel: 3, rawValue: 84))
+        damaged[4] &+= 1
+        payload.append(contentsOf: damaged)
+        payload.append(EMUFrameParser.encode(channel: 5, rawValue: 511))
+
+        XCTAssertEqual(parser.feed(payload), [EMUFrame(channel: 5, rawValue: 511)])
+        XCTAssertEqual(parser.stats.validFrames, 1)
+        XCTAssertGreaterThanOrEqual(parser.stats.badChecksums, 1)
+        XCTAssertGreaterThanOrEqual(parser.stats.droppedBytes, 4)
+    }
+
+    func testMapsScaledEngineChannels() {
+        var accumulator = EMUTelemetryAccumulator()
+        accumulator.apply(EMUFrame(channel: 14, rawValue: 100))
+        accumulator.apply(EMUFrame(channel: 2, rawValue: 220))
+        accumulator.apply(EMUFrame(channel: 5, rawValue: 511))
+        accumulator.apply(EMUFrame(channel: 21, rawValue: 64))
+        accumulator.apply(EMUFrame(channel: 27, rawValue: 128))
+        accumulator.apply(EMUFrame(channel: 28, rawValue: 512))
+
+        XCTAssertEqual(accumulator.snapshot.boostBar, 1.2, accuracy: 0.001)
+        XCTAssertEqual(accumulator.snapshot.batteryVoltage, 511.0 / 37.0, accuracy: 0.001)
+        XCTAssertEqual(accumulator.snapshot.oilPressureBar, 4, accuracy: 0.001)
+        XCTAssertEqual(accumulator.snapshot.lambda, 1, accuracy: 0.001)
+        XCTAssertEqual(accumulator.snapshot.speedKPH, 128, accuracy: 0.001)
+    }
+
+    func testMapsSignedTemperaturesAndCelMask() {
+        var accumulator = EMUTelemetryAccumulator()
+        let minusFive = UInt16(bitPattern: Int16(-5))
+        accumulator.apply(EMUFrame(channel: 24, rawValue: minusFive))
+        accumulator.apply(EMUFrame(channel: 4, rawValue: UInt16(UInt8(bitPattern: -12))))
+        accumulator.apply(EMUFrame(channel: 255, rawValue: 0x0040))
+
+        XCTAssertEqual(accumulator.snapshot.coolantCelsius, -5)
+        XCTAssertEqual(accumulator.snapshot.intakeCelsius, -12)
+        XCTAssertTrue(accumulator.snapshot.hasCheckEngine)
+        XCTAssertTrue(accumulator.snapshot.hasCriticalWarning)
+    }
+
+    func testEncoderUsesProtocolMarkerAndChecksum() {
+        let encoded = Array(EMUFrameParser.encode(channel: 12, rawValue: 124))
+
+        XCTAssertEqual(encoded.count, 5)
+        XCTAssertEqual(encoded[1], 0xA3)
+        XCTAssertEqual(encoded[4], UInt8(truncatingIfNeeded: encoded[0...3].reduce(0) { $0 + Int($1) }))
+    }
+}

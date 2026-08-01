@@ -1,0 +1,124 @@
+name: TougeDash
+options:
+  bundleIdPrefix: it.letscode
+  deploymentTarget:
+    iOS: "26.0"
+  groupSortPosition: top
+  generateEmptyDirectories: true
+  createIntermediateGroups: true
+
+settings:
+  base:
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CLANG_ENABLE_MODULES: YES
+
+targets:
+  TougeDash:
+    type: application
+    platform: iOS
+    sources:
+      - path: TougeDash
+      - path: Shared
+    resources:
+      - path: TougeDash/Resources/Assets.xcassets
+    info:
+      path: Config/TougeDash-Info.plist
+      properties:
+        CFBundleDisplayName: Touge Dash
+        CFBundleName: TougeDash
+        ITSAppUsesNonExemptEncryption: false
+        NSBluetoothAlwaysUsageDescription: Touge Dash uses Bluetooth to receive live engine data from your ECUMaster interface.
+        NSBluetoothPeripheralUsageDescription: Touge Dash uses Bluetooth to receive live engine data from your ECUMaster interface.
+        NSLocalNetworkUsageDescription: Touge Dash can discover compatible telemetry interfaces on your local network.
+        NSSupportsLiveActivities: true
+        NSSupportsLiveActivitiesFrequentUpdates: true
+        UIBackgroundModes:
+          - bluetooth-central
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    entitlements:
+      path: Config/TougeDash.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.it.letscode.touge-dash
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: it.letscode.touge-dash
+        PRODUCT_NAME: TougeDash
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+    dependencies:
+      - target: TougeDashWidgets
+        embed: true
+
+  TougeDashWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: TougeDashWidgets
+      - path: Shared
+    info:
+      path: Config/TougeDashWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: Touge Dash Cards
+        CFBundleName: TougeDashWidgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: Config/TougeDashWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.it.letscode.touge-dash
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: it.letscode.touge-dash.widgets
+        PRODUCT_NAME: TougeDashWidgets
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  TougeDashTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TougeDashTests
+    dependencies:
+      - target: TougeDash
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: it.letscode.touge-dash.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/TougeDash.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/TougeDash"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  TougeDash:
+    build:
+      targets:
+        TougeDash: all
+        TougeDashWidgets: all
+        TougeDashTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - TougeDashTests
+    archive:
+      config: Release
