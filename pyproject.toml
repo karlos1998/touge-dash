@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emu-black-dash"
+version = "0.1.0"
+description = "Raspberry Pi dashboard for the ECUMaster EMU Black Bluetooth stream"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "EMU Black dashboard project" }]
+dependencies = []
+
+[project.optional-dependencies]
+display = ["pygame-ce>=2.5,<3"]
+
+[project.scripts]
+emu-dash = "emu_dash.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+emu_dash = ["web/*", "native/*"]

@@ -1,0 +1,17 @@
+[Unit]
+Description=ECUMaster EMU Black dashboard
+After=bluetooth.target graphical.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/emu-dash
+Environment=EMU_BT_MAC=AA:BB:CC:DD:EE:FF
+ExecStart=/home/pi/emu-dash/.venv/bin/python -m emu_dash
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target
+
