@@ -55,7 +55,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     private var central: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
     private var connectedPeripheral: CBPeripheral?
-    private var shouldScan = true
+    private var shouldScan = false
     private var attemptedAutomaticConnection = false
     private let lastPeripheralKey = "TougeDash.lastECUMasterPeripheral"
     private let debugLogURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]

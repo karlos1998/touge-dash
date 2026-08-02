@@ -58,8 +58,8 @@ Dokładniejsze informacje o podpisywaniu, BLE i diagnostyce są w
 
 Touge Dash nie jest pełną aplikacją CarPlay i nie pojawia się na liście ikon.
 Używa Live Activity w rozmiarze `ActivityFamily.small`. Po podłączeniu telefonu
-aktywność pojawia się w CarPlay Dashboard albo jako powiadomienie. Pokazuje RPM,
-boost, AFR i temperaturę oleju.
+aktywność pojawia się w CarPlay Dashboard albo jako powiadomienie. Pokazuje
+ciśnienie oleju, boost, AFR i temperaturę oleju.
 
 ## Dashboard WWW na macOS
 

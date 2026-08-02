@@ -25,6 +25,9 @@ final class TelemetryController: ObservableObject {
             if state.isConnected {
                 self.showingDevicePicker = false
             }
+            if self.activityManager.isRunning {
+                self.activityManager.enqueueUpdate(self.snapshot, connectionLabel: state.label)
+            }
             self.objectWillChange.send()
         }
         bluetooth.objectWillChange
@@ -33,13 +36,16 @@ final class TelemetryController: ObservableObject {
         activityManager.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
-        bluetooth.startScanning()
         Task { [weak self] in
             guard let self else { return }
             await self.activityManager.start(
                 with: self.snapshot,
                 connectionLabel: self.connectionLabel
             )
+            // On iOS 26 an active Live Activity gives CoreBluetooth the same
+            // privileges in the background that it has in the foreground.
+            // Start scanning only after ActivityKit has established it.
+            self.bluetooth.startScanning()
         }
     }
 
@@ -99,7 +105,7 @@ final class TelemetryController: ObservableObject {
             lastWidgetReload = now
         }
         if activityManager.isRunning {
-            Task { await activityManager.update(value, connectionLabel: connectionLabel) }
+            activityManager.enqueueUpdate(value, connectionLabel: connectionLabel)
         }
     }
 

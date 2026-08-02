@@ -9,6 +9,9 @@ final class TelemetryActivityManager: ObservableObject {
 
     private var activity: Activity<TelemetryActivityAttributes>?
     private var lastUpdate = Date.distantPast
+    private var pendingUpdate: (snapshot: TelemetrySnapshot, connectionLabel: String)?
+    private var updateTask: Task<Void, Never>?
+    private let minimumUpdateInterval: TimeInterval = 0.5
 
     init() {
         activity = Activity<TelemetryActivityAttributes>.activities.first
@@ -21,7 +24,7 @@ final class TelemetryActivityManager: ObservableObject {
             return
         }
         if activity != nil {
-            await update(snapshot, connectionLabel: connectionLabel, force: true)
+            await updateImmediately(snapshot, connectionLabel: connectionLabel)
             return
         }
         let attributes = TelemetryActivityAttributes(vehicleName: "EMU Black")
@@ -32,9 +35,10 @@ final class TelemetryActivityManager: ObservableObject {
         do {
             activity = try Activity.request(
                 attributes: attributes,
-                content: ActivityContent(state: state, staleDate: .now.addingTimeInterval(3)),
+                content: ActivityContent(state: state, staleDate: .now.addingTimeInterval(2)),
                 pushType: nil
             )
+            lastUpdate = .now
             isRunning = true
             lastError = nil
         } catch {
@@ -42,9 +46,30 @@ final class TelemetryActivityManager: ObservableObject {
         }
     }
 
-    func update(_ snapshot: TelemetrySnapshot, connectionLabel: String, force: Bool = false) async {
+    func enqueueUpdate(_ snapshot: TelemetrySnapshot, connectionLabel: String) {
+        guard activity != nil else { return }
+        pendingUpdate = (snapshot, connectionLabel)
+        guard updateTask == nil else { return }
+        updateTask = Task { [weak self] in
+            await self?.drainPendingUpdates()
+        }
+    }
+
+    private func drainPendingUpdates() async {
+        while !Task.isCancelled, pendingUpdate != nil {
+            let remainingDelay = minimumUpdateInterval - Date().timeIntervalSince(lastUpdate)
+            if remainingDelay > 0 {
+                try? await Task.sleep(for: .seconds(remainingDelay))
+            }
+            guard !Task.isCancelled, let latest = pendingUpdate else { break }
+            pendingUpdate = nil
+            await updateImmediately(latest.snapshot, connectionLabel: latest.connectionLabel)
+        }
+        updateTask = nil
+    }
+
+    private func updateImmediately(_ snapshot: TelemetrySnapshot, connectionLabel: String) async {
         guard let activity else { return }
-        guard force || Date().timeIntervalSince(lastUpdate) >= 1 else { return }
         lastUpdate = .now
         let state = TelemetryActivityAttributes.ContentState(
             telemetry: snapshot,
@@ -53,13 +78,16 @@ final class TelemetryActivityManager: ObservableObject {
         await activity.update(
             ActivityContent(
                 state: state,
-                staleDate: .now.addingTimeInterval(3),
+                staleDate: .now.addingTimeInterval(2),
                 relevanceScore: snapshot.hasCriticalWarning ? 100 : 50
             )
         )
     }
 
     func stop() async {
+        updateTask?.cancel()
+        updateTask = nil
+        pendingUpdate = nil
         guard let activity else { return }
         let finalState = TelemetryActivityAttributes.ContentState(
             telemetry: SharedTelemetryStore.load(),
