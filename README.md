@@ -13,6 +13,10 @@ zawiera kodu ani zasobów z oficjalnego eDash.
   <img src="docs/screenshots/live-activity.png" width="390" alt="Touge Dash Live Activity" />
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/carplay.png" width="350" alt="Touge Dash w CarPlay Dashboard" />
+</p>
+
 ## Co działa
 
 - automatyczne wykrywanie i łączenie z interfejsami ECUMaster BLE,

@@ -273,7 +273,7 @@ private struct TelemetryActivityPanel: View {
                     .foregroundStyle(snapshot.isFresh ? WidgetPalette.mint : .secondary)
             }
 
-            HStack(spacing: compact ? 5 : 7) {
+            HStack(spacing: compact ? 0 : 7) {
                 ActivityMetricTile(
                     title: "OIL P",
                     value: snapshot.oilPressureBar.formatted(.number.precision(.fractionLength(1))),
@@ -281,6 +281,7 @@ private struct TelemetryActivityPanel: View {
                     tint: oilPressureTint(for: snapshot),
                     compact: compact
                 )
+                if compact { ActivityMetricDivider() }
                 ActivityMetricTile(
                     title: "BOOST",
                     value: snapshot.boostBar.formatted(.number.precision(.fractionLength(2))),
@@ -288,6 +289,7 @@ private struct TelemetryActivityPanel: View {
                     tint: WidgetPalette.cyan,
                     compact: compact
                 )
+                if compact { ActivityMetricDivider() }
                 ActivityMetricTile(
                     title: "AFR",
                     value: snapshot.afr.formatted(.number.precision(.fractionLength(1))),
@@ -295,6 +297,7 @@ private struct TelemetryActivityPanel: View {
                     tint: WidgetPalette.mint,
                     compact: compact
                 )
+                if compact { ActivityMetricDivider() }
                 ActivityMetricTile(
                     title: "OIL T",
                     value: Int(snapshot.oilTemperatureCelsius).formatted(.number.grouping(.never)),
@@ -333,7 +336,8 @@ private struct ActivityMetricTile: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.55)
                     .allowsTightening(true)
-                if !unit.isEmpty {
+                    .layoutPriority(1)
+                if !compact && !unit.isEmpty {
                     Text(unit)
                         .font(.system(size: compact ? 7 : 8, weight: .bold))
                         .foregroundStyle(.secondary)
@@ -342,9 +346,22 @@ private struct ActivityMetricTile: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: compact ? 41 : 49)
-        .padding(.horizontal, compact ? 3 : 5)
-        .padding(.vertical, compact ? 3 : 5)
-        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: compact ? 8 : 10))
+        .padding(.horizontal, compact ? 4 : 5)
+        .padding(.vertical, compact ? 0 : 5)
+        .background {
+            if !compact {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.055))
+            }
+        }
+    }
+}
+
+private struct ActivityMetricDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.12))
+            .frame(width: 1, height: 32)
     }
 }
 

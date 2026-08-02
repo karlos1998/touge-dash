@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import UIKit
 import WidgetKit
 
 @MainActor
@@ -19,6 +20,17 @@ final class TelemetryController: ObservableObject {
     private var lastWidgetReload = Date.distantPast
 
     init() {
+        #if DEBUG
+        UIApplication.shared.isIdleTimerDisabled = true
+
+        if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_TELEMETRY"] == "1" {
+            var preview = TelemetrySnapshot.preview
+            preview.updatedAt = .now.addingTimeInterval(300)
+            snapshot = preview
+            SharedTelemetryStore.save(preview)
+        }
+        #endif
+
         bluetooth.onBytes = { [weak self] data in self?.ingest(data) }
         bluetooth.onConnectionChanged = { [weak self] state in
             guard let self else { return }
