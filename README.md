@@ -4,9 +4,9 @@ Dashboard do podglądu danych z ECUMaster EMU Black. Powstał po to, żeby nie
 wozić telefonu z eDash przyklejonego do szyby i mieć najważniejsze parametry
 silnika również na ekranie CarPlay.
 
-Repo zawiera natywną aplikację na iPhone'a oraz prosty dashboard WWW dla
-macOS/Raspberry Pi. Kod protokołu jest niezależną implementacją — projekt nie
-zawiera kodu ani zasobów z oficjalnego eDash.
+Repo zawiera natywną aplikację na iPhone'a i Apple Watch oraz prosty dashboard
+WWW dla macOS/Raspberry Pi. Kod protokołu jest niezależną implementacją —
+projekt nie zawiera kodu ani zasobów z oficjalnego eDash.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" width="390" alt="Touge Dash na iPhone" />
@@ -25,6 +25,7 @@ zawiera kodu ani zasobów z oficjalnego eDash.
 - dashboard SwiftUI w pionie i poziomie,
 - Live Activity uruchamiana automatycznie razem z aplikacją,
 - mały widok Live Activity przygotowany pod CarPlay,
+- dashboard Apple Watch z danymi przesyłanymi na żywo z iPhone'a,
 - widgety iOS,
 - diagnostyka pakietów BLE bezpośrednio w aplikacji,
 - dashboard WWW dla starszych interfejsów Bluetooth Classic/SPP.
@@ -34,6 +35,7 @@ zawiera kodu ani zasobów z oficjalnego eDash.
 Aktualna wersja była testowana na:
 
 - iPhone 14 Pro z iOS 26.5.2,
+- Apple Watch Series 11 (46 mm) Simulator z watchOS 26.2,
 - ECUMaster EMU Black,
 - EDL-1 widocznym w BLE jako `EMULOGGER`.
 
@@ -64,6 +66,17 @@ Touge Dash nie jest pełną aplikacją CarPlay i nie pojawia się na liście iko
 Używa Live Activity w rozmiarze `ActivityFamily.small`. Po podłączeniu telefonu
 aktywność pojawia się w CarPlay Dashboard albo jako powiadomienie. Pokazuje
 ciśnienie oleju, boost, AFR i temperaturę oleju.
+
+### Apple Watch
+
+Aplikacja zegarkowa pokazuje boost, AFR, ciśnienie i temperaturę oleju. iPhone
+przekazuje dane przez WatchConnectivity maksymalnie dwa razy na sekundę, a
+zegarek zachowuje ostatni odczyt po utracie połączenia. Stan krytyczny zmienia
+kolory i uruchamia haptyczne ostrzeżenie.
+
+<p align="center">
+  <img src="docs/screenshots/apple-watch.png" width="260" alt="Touge Dash na Apple Watch" />
+</p>
 
 ## Dashboard WWW na macOS
 
@@ -105,7 +118,7 @@ wraca do synchronizacji po uszkodzonych danych.
 ## Układ repozytorium
 
 ```text
-ios/                 aplikacja SwiftUI, widgety i Live Activity
+ios/                 aplikacje iPhone/Apple Watch, widgety i Live Activity
 src/emu_dash/        parser i dashboard Python/WWW
 tests/               testy protokołu i serwera
 scripts/             instalacja na macOS i Raspberry Pi

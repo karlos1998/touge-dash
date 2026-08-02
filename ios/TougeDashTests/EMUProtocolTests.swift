@@ -62,4 +62,40 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(encoded[1], 0xA3)
         XCTAssertEqual(encoded[4], UInt8(truncatingIfNeeded: encoded[0...3].reduce(0) { $0 + Int($1) }))
     }
+
+    func testWatchPayloadKeepsDashboardMetrics() {
+        let payload = WatchTelemetryPayload(snapshot: .preview)
+
+        XCTAssertEqual(payload.boostBar, 1.18)
+        XCTAssertEqual(payload.afr, 12.4)
+        XCTAssertEqual(payload.oilPressureBar, 4.2)
+        XCTAssertEqual(payload.oilTemperatureCelsius, 104)
+        XCTAssertFalse(payload.hasCriticalWarning)
+    }
+
+    func testWatchPayloadDetectsOilWarnings() {
+        let lowPressure = WatchTelemetryPayload(
+            boostBar: 0,
+            afr: 14.7,
+            oilPressureBar: 0.3,
+            oilTemperatureCelsius: 100,
+            rpm: 3_000,
+            hasCriticalWarning: true,
+            updatedAt: .now
+        )
+        let hotOil = WatchTelemetryPayload(
+            boostBar: 0,
+            afr: 14.7,
+            oilPressureBar: 4,
+            oilTemperatureCelsius: 145,
+            rpm: 3_000,
+            hasCriticalWarning: true,
+            updatedAt: .now
+        )
+
+        XCTAssertTrue(lowPressure.hasOilPressureWarning)
+        XCTAssertFalse(lowPressure.hasOilTemperatureWarning)
+        XCTAssertFalse(hotOil.hasOilPressureWarning)
+        XCTAssertTrue(hotOil.hasOilTemperatureWarning)
+    }
 }

@@ -12,6 +12,7 @@ final class TelemetryController: ObservableObject {
 
     let bluetooth = BluetoothTelemetryService()
     let activityManager = TelemetryActivityManager()
+    private let watchBridge = WatchTelemetryBridge.shared
 
     private var parser = EMUFrameParser()
     private var accumulator = EMUTelemetryAccumulator()
@@ -64,6 +65,7 @@ final class TelemetryController: ObservableObject {
             // Start scanning only after ActivityKit has established it.
             self.bluetooth.startScanning()
         }
+        watchBridge.enqueue(snapshot)
     }
 
     var connectionLabel: String {
@@ -112,6 +114,7 @@ final class TelemetryController: ObservableObject {
 
     private func publish(_ value: TelemetrySnapshot) {
         snapshot = value
+        watchBridge.enqueue(value)
         let now = Date.now
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)
