@@ -50,6 +50,11 @@ final class TelemetryController: ObservableObject {
             .store(in: &cancellables)
         Task { [weak self] in
             guard let self else { return }
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_TELEMETRY"] == "1" {
+                await self.activityManager.stop()
+            }
+            #endif
             await self.activityManager.start(
                 with: self.snapshot,
                 connectionLabel: self.connectionLabel

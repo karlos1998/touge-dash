@@ -274,13 +274,7 @@ private struct TelemetryActivityPanel: View {
             }
 
             HStack(spacing: compact ? 0 : 7) {
-                ActivityMetricTile(
-                    title: "OIL P",
-                    value: snapshot.oilPressureBar.formatted(.number.precision(.fractionLength(1))),
-                    unit: "bar",
-                    tint: oilPressureTint(for: snapshot),
-                    compact: compact
-                )
+                ActivityOilTile(snapshot: snapshot, compact: compact)
                 if compact { ActivityMetricDivider() }
                 ActivityMetricTile(
                     title: "BOOST",
@@ -297,20 +291,81 @@ private struct TelemetryActivityPanel: View {
                     tint: WidgetPalette.mint,
                     compact: compact
                 )
-                if compact { ActivityMetricDivider() }
-                ActivityMetricTile(
-                    title: "OIL T",
-                    value: Int(snapshot.oilTemperatureCelsius).formatted(.number.grouping(.never)),
-                    unit: "°C",
-                    tint: oilTemperatureTint(for: snapshot),
-                    compact: compact
-                )
             }
         }
         .padding(.horizontal, compact ? 10 : 14)
         .padding(.vertical, compact ? 7 : 11)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(connectionLabel), oil pressure \(snapshot.oilPressureBar) bar, boost \(snapshot.boostBar) bar, AFR \(snapshot.afr), oil temperature \(Int(snapshot.oilTemperatureCelsius)) degrees Celsius")
+    }
+}
+
+private struct ActivityOilTile: View {
+    let snapshot: TelemetrySnapshot
+    let compact: Bool
+
+    var body: some View {
+        VStack(spacing: compact ? 1 : 2) {
+            Text("OIL")
+                .font(.system(size: compact ? 7 : 8, weight: .black))
+                .tracking(0.3)
+                .foregroundStyle(.secondary)
+
+            ActivityOilValue(
+                symbol: "gauge.with.dots.needle.33percent",
+                value: snapshot.oilPressureBar.formatted(.number.precision(.fractionLength(1))),
+                unit: compact ? "" : "bar",
+                tint: oilPressureTint(for: snapshot),
+                compact: compact
+            )
+            ActivityOilValue(
+                symbol: "thermometer.medium",
+                value: Int(snapshot.oilTemperatureCelsius).formatted(.number.grouping(.never)),
+                unit: compact ? "°" : "°C",
+                tint: oilTemperatureTint(for: snapshot),
+                compact: compact
+            )
+        }
+        .frame(maxWidth: .infinity, minHeight: compact ? 41 : 49)
+        .padding(.horizontal, compact ? 4 : 5)
+        .padding(.vertical, compact ? 0 : 5)
+        .background {
+            if !compact {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.055))
+            }
+        }
+    }
+}
+
+private struct ActivityOilValue: View {
+    let symbol: String
+    let value: String
+    let unit: String
+    let tint: Color
+    let compact: Bool
+
+    var body: some View {
+        HStack(alignment: .lastTextBaseline, spacing: compact ? 2 : 3) {
+            Image(systemName: symbol)
+                .font(.system(size: compact ? 7 : 8, weight: .bold))
+                .foregroundStyle(tint.opacity(0.85))
+                .frame(width: compact ? 9 : 11)
+            Text(value)
+                .font(.system(size: compact ? 11 : 15, weight: .black, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .allowsTightening(true)
+                .layoutPriority(1)
+            if !unit.isEmpty {
+                Text(unit)
+                    .font(.system(size: compact ? 6 : 7, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
     }
 }
 
