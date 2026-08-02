@@ -13,6 +13,10 @@ zasobów z oficjalnego eDash.
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/dashboard-landscape.png" width="780" alt="Szeroki dashboard Touge Dash na iPadzie" />
+</p>
+
+<p align="center">
   <img src="docs/screenshots/carplay.png" width="350" alt="Touge Dash w CarPlay Dashboard" />
 </p>
 
@@ -21,7 +25,7 @@ zasobów z oficjalnego eDash.
 - automatyczne wykrywanie i łączenie z interfejsami ECUMaster BLE,
 - odczyt ramek z `EMULOGGER` przez GATT `FFE0` / `FFE1`,
 - RPM, boost/MAP, TPS, AFR/lambda, temperatury, ciśnienia i napięcie,
-- dashboard SwiftUI w pionie i poziomie,
+- adaptacyjny dashboard SwiftUI na iPhone'a i iPada, w pionie i poziomie,
 - Live Activity uruchamiana automatycznie razem z aplikacją,
 - mały widok Live Activity przygotowany pod CarPlay,
 - dashboard Apple Watch z danymi przesyłanymi na żywo z iPhone'a,
