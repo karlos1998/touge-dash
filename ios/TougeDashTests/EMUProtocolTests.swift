@@ -1,3 +1,4 @@
+import SwiftData
 import XCTest
 @testable import TougeDash
 
@@ -134,5 +135,34 @@ final class EMUProtocolTests: XCTestCase {
 
         XCTAssertFalse(snapshot.hasTemperatureWarning)
         XCTAssertFalse(WatchTelemetryPayload(snapshot: snapshot).hasTemperatureWarning)
+    }
+
+    @MainActor
+    func testHistoryRecorderSamplesOncePerSecondAndSplitsLongGaps() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: DriveSession.self,
+            TelemetryHistorySample.self,
+            configurations: configuration
+        )
+        UserDefaults.standard.set(false, forKey: LocationTrackingService.enabledDefaultsKey)
+        let locationTracker = LocationTrackingService()
+        let recorder = TelemetryHistoryRecorder(container: container, locationTracker: locationTracker)
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+
+        recorder.record(.preview, at: start)
+        recorder.record(.preview, at: start.addingTimeInterval(0.4))
+        recorder.record(.preview, at: start.addingTimeInterval(1.1))
+        recorder.record(.preview, at: start.addingTimeInterval(TelemetryHistoryRecorder.newSessionGap + 2))
+        recorder.saveNow()
+
+        let sessions = try container.mainContext.fetch(FetchDescriptor<DriveSession>())
+        let samples = try container.mainContext.fetch(FetchDescriptor<TelemetryHistorySample>())
+
+        XCTAssertEqual(sessions.count, 2)
+        XCTAssertEqual(samples.count, 3)
+        XCTAssertEqual(sessions.map(\.sampleCount).reduce(0, +), 3)
+        XCTAssertEqual(sessions.map(\.maxRPM).max(), TelemetrySnapshot.preview.rpm)
+        XCTAssertEqual(sessions.map(\.maxBoostBar).max(), TelemetrySnapshot.preview.boostBar)
     }
 }

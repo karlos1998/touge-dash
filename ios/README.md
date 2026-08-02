@@ -6,6 +6,7 @@ Natywna aplikacja SwiftUI do podglądu telemetrii ECUMaster EMU Black. Projekt z
 - automatyczne skanowanie oraz ponowne łączenie BLE,
 - dekoder strumienia ECUMaster z resynchronizacją i kontrolą checksum,
 - automatyczne łączenie z ostatnim interfejsem ECUMaster,
+- lokalną historię przejazdów, interaktywne wykresy i opcjonalny zapis GPS,
 - mały i średni widget,
 - Live Activity ze specjalnym małym układem dla CarPlay,
 - aplikację Apple Watch z telemetrią przesyłaną przez WatchConnectivity,
@@ -45,6 +46,23 @@ W EMU Black Client otwórz `CAN, Serial → CAN setup`, następnie:
 3. zapisz ustawienia na stałe klawiszem F2.
 
 Przed jazdą porównaj RPM, MAP, temperatury i ciśnienia z EMU Black Client. Aplikacja nie jest homologowanym przyrządem bezpieczeństwa.
+
+## Historia i zapis trasy
+
+Odebrane próbki są archiwizowane lokalnie w SwiftData z częstotliwością 1 Hz.
+Przerwa dłuższa niż 90 sekund zamyka bieżącą sesję i rozpoczyna następną.
+Ekran szczegółów pokazuje zsynchronizowane wykresy temperatur, ciśnień,
+prędkości i RPM oraz pełny zestaw wartości dla wskazanego momentu. Na iPadzie
+wykresy automatycznie przechodzą w układ dwóch kolumn.
+
+Zapis pozycji jest opcjonalny i domyślnie wyłączony. Po włączeniu przełącznika
+`Zapis trasy` aplikacja prosi o zgodę na lokalizację i może zapisywać ją razem
+z telemetrią również po zablokowaniu telefonu. Trasa jest rysowana na mapie,
+a kursor wykresu przesuwa odpowiadający mu punkt na trasie.
+
+Wszystkie dane pozostają na urządzeniu. Rekordy mają stabilne UUID, identyfikator
+auta, numer rewizji i stan synchronizacji przygotowany pod przyszłe API. W tej
+wersji nie ma jeszcze kont użytkowników, backendu ani synchronizacji sieciowej.
 
 ## Uruchomienie
 
@@ -124,4 +142,6 @@ xcodebuild \
   test
 ```
 
-Testy obejmują fragmentację notyfikacji BLE, szum, złą sumę kontrolną, resynchronizację, skalowanie kanałów oraz wartości ze znakiem.
+Testy obejmują fragmentację notyfikacji BLE, szum, złą sumę kontrolną,
+resynchronizację, skalowanie kanałów, wartości ze znakiem oraz podział i
+podsumowania lokalnych sesji przejazdu.

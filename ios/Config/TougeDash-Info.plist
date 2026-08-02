@@ -28,6 +28,8 @@
 	<string>Touge Dash uses Bluetooth to receive live engine data from your ECUMaster interface.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Touge Dash can discover compatible telemetry interfaces on your local network.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Po włączeniu zapisu trasy Touge Dash zapisuje położenie razem z telemetrią silnika, także po zablokowaniu telefonu.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
@@ -35,6 +37,7 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>
+		<string>location</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

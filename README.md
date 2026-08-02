@@ -17,6 +17,15 @@ zasobów z oficjalnego eDash.
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/history.png" width="390" alt="Lista zapisanych przejazdów" />
+  <img src="docs/screenshots/history-detail.png" width="390" alt="Wykresy telemetrii przejazdu" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/history-ipad.png" width="780" alt="Analiza przejazdu na iPadzie" />
+</p>
+
+<p align="center">
   <img src="docs/screenshots/carplay.png" width="350" alt="Touge Dash w CarPlay Dashboard" />
 </p>
 
@@ -26,6 +35,7 @@ zasobów z oficjalnego eDash.
 - odczyt ramek z `EMULOGGER` przez GATT `FFE0` / `FFE1`,
 - RPM, boost/MAP, TPS, AFR/lambda, temperatury, ciśnienia i napięcie,
 - adaptacyjny dashboard SwiftUI na iPhone'a i iPada, w pionie i poziomie,
+- lokalna historia przejazdów z interaktywnymi wykresami i opcjonalną trasą GPS,
 - Live Activity uruchamiana automatycznie razem z aplikacją,
 - mały widok Live Activity przygotowany pod CarPlay,
 - dashboard Apple Watch z danymi przesyłanymi na żywo z iPhone'a,
@@ -44,6 +54,27 @@ Aktualna wersja była testowana na:
 Połączenie jest nawiązywane automatycznie. Aplikacja zapamiętuje ostatni
 interfejs, więc przy kolejnych uruchomieniach nie trzeba otwierać listy
 Bluetooth.
+
+## Historia przejazdów
+
+Gdy z EMU napływa telemetria, Touge Dash automatycznie zapisuje jedną próbkę
+na sekundę. Dłuższa niż 90 sekund przerwa rozpoczyna nowy przejazd. W zakładce
+`Historia` można później porównać na wspólnej osi czasu:
+
+- temperaturę oleju i płynu chłodniczego,
+- boost i ciśnienie oleju,
+- prędkość oraz obroty silnika,
+- pozostałe parametry widoczne dla wybranego momentu.
+
+Przesunięcie palcem po dowolnym wykresie ustawia wspólny kursor dla wszystkich
+parametrów. Jeżeli użytkownik włączy `Zapis trasy` i udzieli zgody na
+lokalizację, ten sam moment jest zaznaczany również na mapie. GPS jest
+domyślnie wyłączony, a historia pozostaje wyłącznie na urządzeniu.
+
+Model danych ma trwałe identyfikatory auta, przejazdu i próbek oraz stan
+synchronizacji. Dzięki temu późniejszy backend, konto użytkownika i panel WWW
+dla mechanika będzie można dołożyć bez wymiany lokalnego archiwum. W obecnej
+wersji nie ma jeszcze logowania ani wysyłania danych na serwer.
 
 ## iPhone
 

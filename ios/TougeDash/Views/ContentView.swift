@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var controller: TelemetryController
+    let onShowHistory: (() -> Void)?
 
     var body: some View {
         ZStack {
@@ -19,7 +20,11 @@ struct ContentView: View {
                         } else {
                             PortraitDashboard(snapshot: controller.snapshot)
                         }
-                        ControlBar(controller: controller, compact: isCompactWide)
+                        ControlBar(
+                            controller: controller,
+                            compact: isCompactWide,
+                            onShowHistory: isCompactWide ? onShowHistory : nil
+                        )
                     }
                     .padding(.horizontal, max(16, min(28, proxy.size.width * 0.035)))
                     .padding(.vertical, isCompactWide ? 7 : 14)
@@ -468,6 +473,7 @@ private struct CompactMetric: View {
 private struct ControlBar: View {
     @ObservedObject var controller: TelemetryController
     let compact: Bool
+    let onShowHistory: (() -> Void)?
 
     var body: some View {
         VStack(spacing: 10) {
@@ -482,6 +488,12 @@ private struct ControlBar: View {
                     controller.toggleLiveActivity()
                 } label: {
                     ActionLabel(title: controller.activityManager.isRunning ? "Stop card" : "CarPlay card", icon: "car.side.fill", active: controller.activityManager.isRunning, compact: compact)
+                }
+
+                if let onShowHistory {
+                    Button(action: onShowHistory) {
+                        ActionLabel(title: "Historia", icon: "chart.xyaxis.line", active: false, compact: compact)
+                    }
                 }
             }
             .buttonStyle(.plain)
@@ -621,7 +633,7 @@ private struct DevicePickerView: View {
     }
 }
 
-private struct DashboardBackground: View {
+struct DashboardBackground: View {
     var body: some View {
         ZStack {
             Color(red: 0.012, green: 0.019, blue: 0.028)
@@ -645,7 +657,7 @@ private struct DashboardBackground: View {
     }
 }
 
-private struct CutCornerPanel: Shape {
+struct CutCornerPanel: Shape {
     var cut: CGFloat = 20
 
     func path(in rect: CGRect) -> Path {
@@ -668,7 +680,7 @@ private struct CutCornerPanel: Shape {
     }
 }
 
-private extension View {
+extension View {
     func cardSurface(warning: Bool = false, accent: Color = .clear) -> some View {
         background {
             CutCornerPanel()

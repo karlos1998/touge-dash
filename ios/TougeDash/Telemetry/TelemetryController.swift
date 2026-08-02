@@ -12,6 +12,8 @@ final class TelemetryController: ObservableObject {
 
     let bluetooth = BluetoothTelemetryService()
     let activityManager = TelemetryActivityManager()
+    let historyRecorder: TelemetryHistoryRecorder
+    let locationTracker: LocationTrackingService
     private let watchBridge = WatchTelemetryBridge.shared
     private let engineAlertManager = EngineAlertManager()
 
@@ -21,7 +23,10 @@ final class TelemetryController: ObservableObject {
     private var lastSharedWrite = Date.distantPast
     private var lastWidgetReload = Date.distantPast
 
-    init() {
+    init(historyRecorder: TelemetryHistoryRecorder) {
+        self.historyRecorder = historyRecorder
+        locationTracker = historyRecorder.locationTracker
+
         #if DEBUG
         UIApplication.shared.isIdleTimerDisabled = true
 
@@ -127,6 +132,7 @@ final class TelemetryController: ObservableObject {
         snapshot = value
         watchBridge.enqueue(value)
         engineAlertManager.evaluate(value)
+        historyRecorder.record(value)
         let now = Date.now
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)
