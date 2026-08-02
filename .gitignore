@@ -1,12 +1,5 @@
-.venv/
-build/
-dist/
-__pycache__/
-*.py[cod]
-*.egg-info/
-logs/
-tmp/
 .DS_Store
+ios/build/
 ios/*.xcworkspace/xcuserdata/
 ios/*.xcodeproj/xcuserdata/
 ios/*.xcodeproj/project.xcworkspace/xcuserdata/

@@ -1,12 +1,11 @@
 # Touge Dash
 
-Dashboard do podglądu danych z ECUMaster EMU Black. Powstał po to, żeby nie
-wozić telefonu z eDash przyklejonego do szyby i mieć najważniejsze parametry
-silnika również na ekranie CarPlay.
+Natywna aplikacja mobilna do podglądu danych z ECUMaster EMU Black na iPhonie,
+Apple Watch i ekranie CarPlay. Powstała po to, żeby najważniejsze parametry
+silnika były zawsze pod ręką bez telefonu przyklejonego do szyby.
 
-Repo zawiera natywną aplikację na iPhone'a i Apple Watch oraz prosty dashboard
-WWW dla macOS/Raspberry Pi. Kod protokołu jest niezależną implementacją —
-projekt nie zawiera kodu ani zasobów z oficjalnego eDash.
+Kod protokołu jest niezależną implementacją — projekt nie zawiera kodu ani
+zasobów z oficjalnego eDash.
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" width="390" alt="Touge Dash na iPhone" />
@@ -27,8 +26,7 @@ projekt nie zawiera kodu ani zasobów z oficjalnego eDash.
 - mały widok Live Activity przygotowany pod CarPlay,
 - dashboard Apple Watch z danymi przesyłanymi na żywo z iPhone'a,
 - widgety iOS,
-- diagnostyka pakietów BLE bezpośrednio w aplikacji,
-- dashboard WWW dla starszych interfejsów Bluetooth Classic/SPP.
+- diagnostyka pakietów BLE bezpośrednio w aplikacji.
 
 ## Sprawdzony zestaw
 
@@ -85,31 +83,6 @@ na iPhonie oraz zmienia kartę Live Activity i CarPlay na czerwoną.
   <img src="docs/screenshots/apple-watch.png" width="260" alt="Touge Dash na Apple Watch" />
 </p>
 
-## Dashboard WWW na macOS
-
-Wersja desktopowa korzysta z Bluetooth Classic/RFCOMM. Przydaje się do
-starszych modułów `EMUCANBT_SPP`, których CoreBluetooth na iOS nie obsługuje.
-
-```bash
-chmod +x scripts/install-macos.sh
-./scripts/install-macos.sh
-.venv/bin/emu-dash --web --port 8090
-```
-
-Strona jest domyślnie dostępna tylko lokalnie pod `127.0.0.1`. Bez samochodu
-można uruchomić generator danych:
-
-```bash
-.venv/bin/emu-dash --web --demo --port 8090
-```
-
-Surowy strumień da się nagrać i później odtworzyć:
-
-```bash
-.venv/bin/emu-dash --web --mac AA:BB:CC:DD:EE:FF --log-raw logs/run.bin
-.venv/bin/emu-dash --web --replay logs/run.bin
-```
-
 ## Protokół
 
 Strumień ECUMaster składa się z pięciobajtowych ramek:
@@ -126,21 +99,10 @@ wraca do synchronizacji po uszkodzonych danych.
 
 ```text
 ios/                 aplikacje iPhone/Apple Watch, widgety i Live Activity
-src/emu_dash/        parser i dashboard Python/WWW
-tests/               testy protokołu i serwera
-scripts/             instalacja na macOS i Raspberry Pi
-deploy/              przykładowe pliki usługi systemd
+docs/screenshots/    zrzuty ekranów używane w README
 ```
 
 ## Testy
-
-Python:
-
-```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
-```
-
-iOS:
 
 ```bash
 xcodebuild \

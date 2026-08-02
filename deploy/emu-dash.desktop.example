@@ -1,7 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=EMU Black Dash
-Comment=Start the ECUMaster dashboard after login
-Exec=/home/pi/emu-dash/.venv/bin/python -m emu_dash --mac AA:BB:CC:DD:EE:FF
-Terminal=false
-X-GNOME-Autostart-enabled=true

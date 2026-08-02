@@ -32,7 +32,7 @@ Nazwę produktu i bundle ID można zmienić w `project.yml` przed utworzeniem re
 |---|---:|---|
 | BT CAN z BLE | Tak | Urządzenia produkowane w 2026 mają gwarantowane BLE; starsze trzeba sprawdzić. |
 | Nowszy EDL-1 z BLE | Tak | Wymagane aktualne firmware odpowiednie dla wersji EMU. |
-| Stary moduł Bluetooth SPP/Classic | Nie | iOS nie udostępnia aplikacjom zwykłego portu SPP. Potrzebny BT CAN BLE, kompatybilny EDL-1 albo późniejszy most Raspberry Pi. |
+| Stary moduł Bluetooth SPP/Classic | Nie | iOS nie udostępnia aplikacjom zwykłego portu SPP. Potrzebny jest BT CAN BLE albo kompatybilny EDL-1. |
 
 Touge Dash rozpoczyna skanowanie od razu po uruchomieniu, odrzuca wszystkie urządzenia niezwiązane z ECUMaster i automatycznie łączy pierwszy pasujący interfejs. Po pierwszym udanym połączeniu identyfikator urządzenia jest zapamiętywany, więc kolejne uruchomienia nie wymagają otwierania listy. Nie należy parować BLE ręcznie w systemowych Ustawieniach iPhone'a.
 
