@@ -14,6 +14,7 @@ final class TelemetryController: ObservableObject {
     let activityManager = TelemetryActivityManager()
     let historyRecorder: TelemetryHistoryRecorder
     let locationTracker: LocationTrackingService
+    let cloudSync: CloudSyncManager
     private let watchBridge = WatchTelemetryBridge.shared
     private let engineAlertManager = EngineAlertManager()
 
@@ -23,8 +24,9 @@ final class TelemetryController: ObservableObject {
     private var lastSharedWrite = Date.distantPast
     private var lastWidgetReload = Date.distantPast
 
-    init(historyRecorder: TelemetryHistoryRecorder) {
+    init(historyRecorder: TelemetryHistoryRecorder, cloudSync: CloudSyncManager) {
         self.historyRecorder = historyRecorder
+        self.cloudSync = cloudSync
         locationTracker = historyRecorder.locationTracker
 
         #if DEBUG
@@ -48,6 +50,10 @@ final class TelemetryController: ObservableObject {
             guard let self else { return }
             if state.isConnected {
                 self.showingDevicePicker = false
+                if let identifier = self.bluetooth.connectedIdentifier {
+                    self.historyRecorder.activateVehicle(identifier)
+                    Task { await self.cloudSync.prepareVehicle(hardwareIdentifier: identifier) }
+                }
             }
             if self.activityManager.isRunning {
                 self.activityManager.enqueueUpdate(self.snapshot, connectionLabel: state.label)
@@ -133,6 +139,7 @@ final class TelemetryController: ObservableObject {
         watchBridge.enqueue(value)
         engineAlertManager.evaluate(value)
         historyRecorder.record(value)
+        cloudSync.publishLive(value)
         let now = Date.now
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)

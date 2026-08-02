@@ -8,6 +8,8 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \DriveSession.startedAt, order: .reverse) private var sessions: [DriveSession]
     @ObservedObject var locationTracker: LocationTrackingService
+    @ObservedObject var cloudAccount: CloudAccountService
+    @ObservedObject var cloudSync: CloudSyncManager
     let onShowDashboard: (() -> Void)?
 
     var body: some View {
@@ -17,6 +19,7 @@ struct HistoryView: View {
 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 14) {
+                        CloudSyncCard(account: cloudAccount, sync: cloudSync)
                         LocationRecordingCard(locationTracker: locationTracker)
 
                         if sessions.isEmpty {
@@ -175,6 +178,9 @@ private struct DriveSessionRow: View {
                         .padding(.vertical, 5)
                         .background(Color.tougeBlue.opacity(0.12), in: Capsule())
                 }
+                Image(systemName: session.syncState == .synced ? "icloud.fill" : "arrow.up.icloud")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(session.syncState == .synced ? Color.tougeMint : Color.tougeOrange)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.tertiary)

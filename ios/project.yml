@@ -33,10 +33,16 @@ targets:
         CFBundleDisplayName: Touge Dash
         CFBundleName: TougeDash
         ITSAppUsesNonExemptEncryption: false
+        CFBundleURLTypes:
+          - CFBundleURLName: it.letscode.touge-dash.auth
+            CFBundleURLSchemes:
+              - tougedash
         NSBluetoothAlwaysUsageDescription: Touge Dash uses Bluetooth to receive live engine data from your ECUMaster interface.
         NSBluetoothPeripheralUsageDescription: Touge Dash uses Bluetooth to receive live engine data from your ECUMaster interface.
         NSLocationWhenInUseUsageDescription: Po włączeniu zapisu trasy Touge Dash zapisuje położenie razem z telemetrią silnika, także po zablokowaniu telefonu.
         NSLocalNetworkUsageDescription: Touge Dash can discover compatible telemetry interfaces on your local network.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: true
         UIBackgroundModes:
@@ -57,6 +63,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.it.letscode.touge-dash
+        com.apple.developer.applesignin:
+          - Default
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: it.letscode.touge-dash

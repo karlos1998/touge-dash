@@ -48,6 +48,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     @Published private(set) var receivedPacketCount = 0
     @Published private(set) var receivedByteCount = 0
     @Published private(set) var lastPacketHex = ""
+    @Published private(set) var connectedIdentifier: UUID?
 
     var onBytes: ((Data) -> Void)?
     var onConnectionChanged: ((BluetoothConnectionState) -> Void)?
@@ -141,6 +142,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
             central.cancelPeripheralConnection(connectedPeripheral)
         }
         connectedPeripheral = nil
+        connectedIdentifier = nil
         setState(.disconnected(nil))
     }
 
@@ -151,6 +153,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
 
     private func activateConnectedPeripheral(_ peripheral: CBPeripheral) {
         connectedPeripheral = peripheral
+        connectedIdentifier = peripheral.identifier
         peripheral.delegate = self
         let name = peripheral.name ?? "ECUMaster interface"
         peripherals[peripheral.identifier] = peripheral

@@ -10,7 +10,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
     let locationTracker: LocationTrackingService
 
     private let context: ModelContext
-    private let vehicleID: UUID
+    private var vehicleID: UUID
     private var activeSession: DriveSession?
     private var lastRecordedAt = Date.distantPast
     private var lastSavedAt = Date.distantPast
@@ -44,6 +44,16 @@ final class TelemetryHistoryRecorder: ObservableObject {
             try? context.save()
             lastSavedAt = timestamp
         }
+    }
+
+    func activateVehicle(_ id: UUID) {
+        guard vehicleID != id else { return }
+        saveNow()
+        vehicleID = id
+        activeSession = nil
+        lastDistanceLocation = nil
+        lastRecordedAt = .distantPast
+        restoreRecentSession()
     }
 
     func saveNow() {
