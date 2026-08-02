@@ -7,6 +7,7 @@ Natywna aplikacja SwiftUI do podglądu telemetrii ECUMaster EMU Black. Projekt z
 - dekoder strumienia ECUMaster z resynchronizacją i kontrolą checksum,
 - automatyczne łączenie z ostatnim interfejsem ECUMaster,
 - lokalną historię przejazdów, interaktywne wykresy i opcjonalny zapis GPS,
+- opcjonalne konto i kolejkę synchronizacji Touge Dash Cloud,
 - mały i średni widget,
 - Live Activity ze specjalnym małym układem dla CarPlay,
 - aplikację Apple Watch z telemetrią przesyłaną przez WatchConnectivity,
@@ -60,9 +61,30 @@ Zapis pozycji jest opcjonalny i domyślnie wyłączony. Po włączeniu przełąc
 z telemetrią również po zablokowaniu telefonu. Trasa jest rysowana na mapie,
 a kursor wykresu przesuwa odpowiadający mu punkt na trasie.
 
-Wszystkie dane pozostają na urządzeniu. Rekordy mają stabilne UUID, identyfikator
-auta, numer rewizji i stan synchronizacji przygotowany pod przyszłe API. W tej
-wersji nie ma jeszcze kont użytkowników, backendu ani synchronizacji sieciowej.
+Dane zawsze trafiają najpierw do lokalnego SwiftData. Konto jest opcjonalne.
+Po zalogowaniu sesje oczekujące są wysyłane partiami, a po utracie internetu
+zapis działa dalej. UUID urządzenia Bluetooth rozdziela archiwum różnych aut.
+Nowy EMULOGGER wymaga jednorazowego nadania nazwy.
+
+## Synchronizacja online
+
+Zakładka `Historia` zawiera kartę Touge Dash Cloud. Dostępne są konto
+e-mail/hasło, natywne Sign in with Apple oraz logowanie Google/Facebook przez
+panel WWW. Wariant webowy przekazuje aplikacji jednorazowy kod ważny trzy
+minuty; tokeny nie są umieszczane w adresie callbacku. Sesja i refresh token są
+przechowywane w Keychain.
+
+Domyślna konfiguracja lokalna:
+
+```text
+API: http://localhost:8181
+Web: http://localhost:4200
+```
+
+Na fizycznym iPhonie `localhost` oznacza telefon. W rozwijanej sekcji `Adres
+serwera` podaj nazwę lub adres Maca widoczny w tej samej sieci, np.
+`http://macbook.local:8181` i `http://macbook.local:4200`. W produkcji oba
+adresy będą HTTPS.
 
 ## Uruchomienie
 

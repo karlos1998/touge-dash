@@ -36,6 +36,8 @@ zasobów z oficjalnego eDash.
 - RPM, boost/MAP, TPS, AFR/lambda, temperatury, ciśnienia i napięcie,
 - adaptacyjny dashboard SwiftUI na iPhone'a i iPada, w pionie i poziomie,
 - lokalna historia przejazdów z interaktywnymi wykresami i opcjonalną trasą GPS,
+- opcjonalne konto i synchronizacja historii z Touge Dash Cloud,
+- logowanie e-mail/hasło, Sign in with Apple oraz bezpieczny handoff Google/Facebook z panelu WWW,
 - Live Activity uruchamiana automatycznie razem z aplikacją,
 - mały widok Live Activity przygotowany pod CarPlay,
 - dashboard Apple Watch z danymi przesyłanymi na żywo z iPhone'a,
@@ -71,10 +73,15 @@ parametrów. Jeżeli użytkownik włączy `Zapis trasy` i udzieli zgody na
 lokalizację, ten sam moment jest zaznaczany również na mapie. GPS jest
 domyślnie wyłączony, a historia pozostaje wyłącznie na urządzeniu.
 
-Model danych ma trwałe identyfikatory auta, przejazdu i próbek oraz stan
-synchronizacji. Dzięki temu późniejszy backend, konto użytkownika i panel WWW
-dla mechanika będzie można dołożyć bez wymiany lokalnego archiwum. W obecnej
-wersji nie ma jeszcze logowania ani wysyłania danych na serwer.
+Historia działa offline niezależnie od konta. Po zalogowaniu aplikacja rozpoznaje
+auto po UUID interfejsu Bluetooth, przy pierwszym połączeniu prosi o jego nazwę,
+a następnie wysyła zaległe sesje partiami. Utrata internetu nie przerywa zapisu:
+próbki zostają w SwiftData i są dosyłane po odzyskaniu połączenia. Tokeny sesji
+są zapisane w Keychain.
+
+Panel WWW korzysta z tego samego konta. Właściciel widzi tam wykresy, mapę,
+eksport CSV i dane live, a auto może udostępnić mechanikowi albo obserwatorowi.
+Backend oraz panel są utrzymywane w osobnych prywatnych repozytoriach.
 
 ## iPhone
 
@@ -136,6 +143,11 @@ wraca do synchronizacji po uszkodzonych danych.
 ios/                 aplikacje iPhone/Apple Watch, widgety i Live Activity
 docs/screenshots/    zrzuty ekranów używane w README
 ```
+
+Pozostałe części platformy:
+
+- API Spring Boot: [karlos1998/touge-dash-api](https://github.com/karlos1998/touge-dash-api)
+- panel Angular: [karlos1998/touge-dash-web](https://github.com/karlos1998/touge-dash-web)
 
 ## Testy
 
