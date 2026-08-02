@@ -147,6 +147,7 @@ private struct CloudAuthenticationView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var displayName = ""
+    @State private var formError: String?
     @State private var showingServer = false
     @StateObject private var webAuthentication = CloudWebAuthenticationSession()
 
@@ -181,12 +182,28 @@ private struct CloudAuthenticationView: View {
                             .textContentType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.emailAddress)
-                        SecureField("Hasło · minimum 10 znaków", text: $password)
+                        SecureField(mode == .login ? "Hasło" : "Hasło · minimum 10 znaków", text: $password)
                             .textContentType(mode == .login ? .password : .newPassword)
                     }
                     .textFieldStyle(CloudTextFieldStyle())
 
+                    if mode == .register, !password.isEmpty {
+                        passwordStatus
+                    }
+
+                    if let formError {
+                        Text(formError)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.tougeOrange)
+                            .multilineTextAlignment(.center)
+                    }
+
                     Button {
+                        if let validationMessage {
+                            formError = validationMessage
+                            return
+                        }
+                        formError = nil
                         Task {
                             let success = if mode == .login {
                                 await account.login(email: email, password: password)
@@ -205,7 +222,7 @@ private struct CloudAuthenticationView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.tougeCyan)
                     .foregroundStyle(.black)
-                    .disabled(account.isWorking || email.isEmpty || password.count < 10 || (mode == .register && displayName.isEmpty))
+                    .disabled(account.isWorking)
 
                     HStack {
                         Rectangle().fill(Color.white.opacity(0.09)).frame(height: 1)
@@ -269,6 +286,58 @@ private struct CloudAuthenticationView: View {
         }
         .presentationDetents([.large])
         .onAppear { account.clearError() }
+        .onChange(of: mode) {
+            password = ""
+            formError = nil
+            account.clearError()
+        }
+    }
+
+    private var validationMessage: String? {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedEmail.contains("@") || !trimmedEmail.contains(".") {
+            return "Podaj poprawny adres e-mail."
+        }
+        if password.isEmpty {
+            return "Podaj hasło."
+        }
+        if mode == .register {
+            if displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Podaj nazwę wyświetlaną."
+            }
+            if !CloudPasswordPolicy.isValid(password) {
+                return "Hasło musi mieć 10–72 znaki oraz zawierać literę i cyfrę."
+            }
+        }
+        return nil
+    }
+
+    private var passwordStatus: some View {
+        let strength = CloudPasswordPolicy.strength(password)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Siła hasła")
+                Spacer()
+                Text(strength.label).fontWeight(.bold)
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            ProgressView(value: Double(strength.score), total: 4)
+                .tint(CloudPasswordPolicy.isValid(password) ? Color.tougeMint : Color.tougeOrange)
+            HStack(spacing: 12) {
+                passwordRequirement("10–72 znaki", password.count >= 10 && password.count <= 72)
+                passwordRequirement("litera", password.rangeOfCharacter(from: .letters) != nil)
+                passwordRequirement("cyfra", password.rangeOfCharacter(from: .decimalDigits) != nil)
+            }
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func passwordRequirement(_ title: String, _ met: Bool) -> some View {
+        Label(title, systemImage: met ? "checkmark.circle.fill" : "circle")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(met ? Color.tougeMint : .secondary)
     }
 
     private func handleApple(_ result: Result<ASAuthorization, Error>) async {
