@@ -42,8 +42,12 @@ struct TelemetrySnapshot: Codable, Hashable, Sendable {
 
     var isFresh: Bool { Date().timeIntervalSince(updatedAt) < 2.5 }
     var hasCheckEngine: Bool { checkEngineMask != 0 }
+    var hasTemperatureWarning: Bool {
+        coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius ||
+            oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius
+    }
     var hasCriticalWarning: Bool {
-        hasCheckEngine || coolantCelsius > 108 || oilTemperatureCelsius > 140 ||
+        hasCheckEngine || hasTemperatureWarning ||
             (rpm > 1_200 && oilPressureBar > 0 && oilPressureBar < 0.5) ||
             (rpm > 500 && batteryVoltage > 0 && batteryVoltage < 11.5)
     }

@@ -1,5 +1,12 @@
 import Foundation
 
+enum EngineTemperatureLimits {
+    static let coolantWarningCelsius = 110.0
+    static let oilWarningCelsius = 120.0
+    static let coolantResetCelsius = 105.0
+    static let oilResetCelsius = 115.0
+}
+
 struct WatchTelemetryPayload: Codable, Equatable, Sendable {
     static let contextKey = "tougeDashTelemetry"
 
@@ -63,11 +70,15 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
     }
 
     var hasOilTemperatureWarning: Bool {
-        oilTemperatureCelsius > 140
+        oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius
     }
 
     var hasCoolantWarning: Bool {
-        coolantCelsius > 108
+        coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius
+    }
+
+    var hasTemperatureWarning: Bool {
+        hasOilTemperatureWarning || hasCoolantWarning
     }
 
     #if os(iOS)

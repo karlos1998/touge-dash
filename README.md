@@ -72,7 +72,14 @@ ciśnienie i temperaturę oleju, boost, AFR oraz temperaturę płynu chłodnicze
 Aplikacja zegarkowa pokazuje boost, AFR, ciśnienie i temperaturę oleju oraz
 temperaturę płynu chłodniczego. iPhone przekazuje dane przez WatchConnectivity
 maksymalnie dwa razy na sekundę, a zegarek zachowuje ostatni odczyt po utracie
-połączenia. Stan krytyczny zmienia kolory i uruchamia haptyczne ostrzeżenie.
+połączenia. Po przekroczeniu 110°C płynu lub 120°C oleju zegarek zmienia kolory
+i uruchamia haptyczne ostrzeżenie. Ten sam alert wyświetla pilne powiadomienie
+na iPhonie oraz zmienia kartę Live Activity i CarPlay na czerwoną.
+
+<p align="center">
+  <img src="docs/screenshots/carplay-temperature-alert.png" width="340" alt="Alert temperatury w CarPlay" />
+  <img src="docs/screenshots/apple-watch-temperature-alert.png" width="260" alt="Alert temperatury na Apple Watch" />
+</p>
 
 <p align="center">
   <img src="docs/screenshots/apple-watch.png" width="260" alt="Touge Dash na Apple Watch" />

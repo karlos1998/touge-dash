@@ -13,6 +13,7 @@ final class TelemetryController: ObservableObject {
     let bluetooth = BluetoothTelemetryService()
     let activityManager = TelemetryActivityManager()
     private let watchBridge = WatchTelemetryBridge.shared
+    private let engineAlertManager = EngineAlertManager()
 
     private var parser = EMUFrameParser()
     private var accumulator = EMUTelemetryAccumulator()
@@ -24,8 +25,13 @@ final class TelemetryController: ObservableObject {
         #if DEBUG
         UIApplication.shared.isIdleTimerDisabled = true
 
-        if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_TELEMETRY"] == "1" {
+        let environment = ProcessInfo.processInfo.environment
+        if environment["TOUGE_DASH_PREVIEW_TELEMETRY"] == "1" || environment["TOUGE_DASH_PREVIEW_ALERT"] == "1" {
             var preview = TelemetrySnapshot.preview
+            if environment["TOUGE_DASH_PREVIEW_ALERT"] == "1" {
+                preview.coolantCelsius = 112
+                preview.oilTemperatureCelsius = 124
+            }
             preview.updatedAt = .now.addingTimeInterval(300)
             snapshot = preview
             SharedTelemetryStore.save(preview)
@@ -66,6 +72,11 @@ final class TelemetryController: ObservableObject {
             self.bluetooth.startScanning()
         }
         watchBridge.enqueue(snapshot)
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_ALERT"] == "1" {
+            engineAlertManager.evaluate(snapshot)
+        }
+        #endif
     }
 
     var connectionLabel: String {
@@ -115,6 +126,7 @@ final class TelemetryController: ObservableObject {
     private func publish(_ value: TelemetrySnapshot) {
         snapshot = value
         watchBridge.enqueue(value)
+        engineAlertManager.evaluate(value)
         let now = Date.now
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)

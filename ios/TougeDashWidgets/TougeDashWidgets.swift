@@ -95,7 +95,7 @@ private struct SmallTelemetryWidget: View {
                 Spacer()
                 Text("OIL " + Int(snapshot.oilTemperatureCelsius).formatted() + "°")
                     .font(.caption.monospacedDigit().weight(.black))
-                    .foregroundStyle(snapshot.oilTemperatureCelsius > 135 ? WidgetPalette.orange : WidgetPalette.cyan)
+                    .foregroundStyle(snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius ? WidgetPalette.red : WidgetPalette.cyan)
             }
         }
     }
@@ -131,7 +131,7 @@ private struct MediumTelemetryWidget: View {
             VStack(spacing: 1) {
                 Text(Int(snapshot.oilTemperatureCelsius).formatted() + "°")
                     .font(.system(size: 39, weight: .black, design: .rounded))
-                    .foregroundStyle(snapshot.oilTemperatureCelsius > 135 ? WidgetPalette.orange : WidgetPalette.cyan)
+                    .foregroundStyle(snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius ? WidgetPalette.red : WidgetPalette.cyan)
                 Text("OIL TEMP")
                     .font(.system(size: 8, weight: .black))
                     .foregroundStyle(.secondary)
@@ -173,7 +173,11 @@ struct TougeDashLiveActivity: Widget {
                 vehicleName: context.attributes.vehicleName,
                 connectionLabel: context.state.connectionLabel
             )
-                .activityBackgroundTint(Color(red: 0.02, green: 0.03, blue: 0.04))
+                .activityBackgroundTint(
+                    context.state.telemetry.hasTemperatureWarning
+                        ? Color(red: 0.24, green: 0.015, blue: 0.02)
+                        : Color(red: 0.02, green: 0.03, blue: 0.04)
+                )
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             DynamicIsland {
@@ -253,24 +257,25 @@ private struct TelemetryActivityPanel: View {
     var body: some View {
         VStack(spacing: compact ? 6 : 9) {
             HStack(spacing: 6) {
-                Image(systemName: "gauge.with.dots.needle.67percent")
-                    .foregroundStyle(WidgetPalette.cyan)
-                Text("TOUGE DASH")
+                Image(systemName: snapshot.hasTemperatureWarning ? "exclamationmark.triangle.fill" : "gauge.with.dots.needle.67percent")
+                    .foregroundStyle(snapshot.hasTemperatureWarning ? WidgetPalette.red : WidgetPalette.cyan)
+                    .symbolEffect(.pulse, options: .repeating, isActive: snapshot.hasTemperatureWarning)
+                Text(snapshot.hasTemperatureWarning ? "TEMP ALERT" : "TOUGE DASH")
                     .font(.system(size: compact ? 9 : 11, weight: .black))
                     .tracking(0.8)
-                    .foregroundStyle(WidgetPalette.cyan)
-                if !compact {
+                    .foregroundStyle(snapshot.hasTemperatureWarning ? WidgetPalette.red : WidgetPalette.cyan)
+                if !compact && !snapshot.hasTemperatureWarning {
                     Text(vehicleName.uppercased())
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
                 Circle()
-                    .fill(snapshot.isFresh ? WidgetPalette.mint : Color.gray)
+                    .fill(snapshot.hasTemperatureWarning ? WidgetPalette.red : (snapshot.isFresh ? WidgetPalette.mint : Color.gray))
                     .frame(width: 6, height: 6)
-                Text(snapshot.isFresh ? "LIVE" : "STALE")
+                Text(snapshot.hasTemperatureWarning ? "ALERT" : (snapshot.isFresh ? "LIVE" : "STALE"))
                     .font(.system(size: 8, weight: .black))
-                    .foregroundStyle(snapshot.isFresh ? WidgetPalette.mint : .secondary)
+                    .foregroundStyle(snapshot.hasTemperatureWarning ? WidgetPalette.red : (snapshot.isFresh ? WidgetPalette.mint : .secondary))
             }
 
             HStack(spacing: compact ? 0 : 7) {
@@ -303,6 +308,16 @@ private struct TelemetryActivityPanel: View {
         }
         .padding(.horizontal, compact ? 10 : 14)
         .padding(.vertical, compact ? 7 : 11)
+        .background {
+            if snapshot.hasTemperatureWarning {
+                LinearGradient(
+                    colors: [WidgetPalette.red.opacity(0.34), WidgetPalette.red.opacity(0.08)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(connectionLabel), oil pressure \(snapshot.oilPressureBar) bar, boost \(snapshot.boostBar) bar, AFR \(snapshot.afr), oil temperature \(Int(snapshot.oilTemperatureCelsius)) degrees Celsius, coolant temperature \(Int(snapshot.coolantCelsius)) degrees Celsius")
     }
@@ -462,11 +477,11 @@ private func oilPressureTint(for snapshot: TelemetrySnapshot) -> Color {
 }
 
 private func oilTemperatureTint(for snapshot: TelemetrySnapshot) -> Color {
-    snapshot.oilTemperatureCelsius > 135 ? WidgetPalette.red : WidgetPalette.orange
+    snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius ? WidgetPalette.red : WidgetPalette.orange
 }
 
 private func coolantTint(for snapshot: TelemetrySnapshot) -> Color {
-    snapshot.coolantCelsius > 108 ? WidgetPalette.red : .white
+    snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius ? WidgetPalette.red : .white
 }
 
 private struct WidgetBackground: View {

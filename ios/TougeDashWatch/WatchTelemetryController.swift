@@ -17,8 +17,14 @@ final class WatchTelemetryController: NSObject, ObservableObject, WCSessionDeleg
             snapshot = stored
         }
         #if DEBUG
-        if ProcessInfo.processInfo.environment["TOUGE_DASH_WATCH_PREVIEW"] == "1" {
+        let environment = ProcessInfo.processInfo.environment
+        if environment["TOUGE_DASH_WATCH_PREVIEW"] == "1" || environment["TOUGE_DASH_WATCH_ALERT_PREVIEW"] == "1" {
             var preview = WatchTelemetryPayload.preview
+            if environment["TOUGE_DASH_WATCH_ALERT_PREVIEW"] == "1" {
+                preview.coolantCelsius = 112
+                preview.oilTemperatureCelsius = 124
+                preview.hasCriticalWarning = true
+            }
             preview.updatedAt = .now.addingTimeInterval(300)
             snapshot = preview
         }
@@ -36,10 +42,13 @@ final class WatchTelemetryController: NSObject, ObservableObject, WCSessionDeleg
 
     private func ingest(_ data: Data) {
         guard let value = try? JSONDecoder().decode(WatchTelemetryPayload.self, from: data) else { return }
-        let shouldAlert = value.hasCriticalWarning && !snapshot.hasCriticalWarning
+        let shouldPlayTemperatureAlert = value.hasTemperatureWarning && !snapshot.hasTemperatureWarning
+        let shouldPlayEngineAlert = value.hasCriticalWarning && !snapshot.hasCriticalWarning
         snapshot = value
         UserDefaults.standard.set(data, forKey: Self.storedSnapshotKey)
-        if shouldAlert {
+        if shouldPlayTemperatureAlert {
+            WKInterfaceDevice.current().play(.failure)
+        } else if shouldPlayEngineAlert {
             WKInterfaceDevice.current().play(.notification)
         }
     }

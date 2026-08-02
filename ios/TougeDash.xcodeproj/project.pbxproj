@@ -27,6 +27,7 @@
 		D350C1D23C89BA0ACBD9A941 /* TelemetryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AB235F1E099FCAD2444AEC /* TelemetryController.swift */; };
 		D704435085305FE1920999EF /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		E7C3A817DFBB318DB2BA1366 /* EMUProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C864400F6D0621EB9AE0063F /* EMUProtocol.swift */; };
+		F3E8E9984021000DE8B68120 /* EngineAlertManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 697C6502047A8B29FFEA91EF /* EngineAlertManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -86,6 +87,7 @@
 		4755566114D5FAA70D71C3DF /* EMUProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EMUProtocolTests.swift; sourceTree = "<group>"; };
 		4F897E7BACCFC82DCC47CFE8 /* WatchDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchDashboardView.swift; sourceTree = "<group>"; };
 		61373911C45310F82868CE77 /* WatchTelemetryBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryBridge.swift; sourceTree = "<group>"; };
+		697C6502047A8B29FFEA91EF /* EngineAlertManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineAlertManager.swift; sourceTree = "<group>"; };
 		7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetrySnapshot.swift; sourceTree = "<group>"; };
 		81F7D2162918AB6BD8E89767 /* TougeDashWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashWatchApp.swift; sourceTree = "<group>"; };
 		867564BA0BCD96BE13BB6CF2 /* TougeDashWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TougeDashWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -208,6 +210,7 @@
 			children = (
 				8EB4599FA4D016749B9DEF63 /* BluetoothTelemetryService.swift */,
 				C864400F6D0621EB9AE0063F /* EMUProtocol.swift */,
+				697C6502047A8B29FFEA91EF /* EngineAlertManager.swift */,
 				F4AB235F1E099FCAD2444AEC /* TelemetryController.swift */,
 				61373911C45310F82868CE77 /* WatchTelemetryBridge.swift */,
 			);
@@ -374,6 +377,7 @@
 				C2FFF38884E04B9C3EAA6A67 /* BluetoothTelemetryService.swift in Sources */,
 				A013B1B7AB2E77C176694780 /* ContentView.swift in Sources */,
 				E7C3A817DFBB318DB2BA1366 /* EMUProtocol.swift in Sources */,
+				F3E8E9984021000DE8B68120 /* EngineAlertManager.swift in Sources */,
 				60AAEF7A1ECA24D0B7DB69EF /* TelemetryActivityManager.swift in Sources */,
 				D350C1D23C89BA0ACBD9A941 /* TelemetryController.swift in Sources */,
 				AC5764AE471942645415FCA0 /* TelemetrySnapshot.swift in Sources */,

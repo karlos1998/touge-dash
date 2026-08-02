@@ -89,6 +89,20 @@ na żywo, gdy aplikacja zegarkowa jest otwarta; `applicationContext` zapewnia
 również ostatnią znaną próbkę po chwilowej utracie łączności. Przejście w stan
 krytyczny wywołuje haptyczne ostrzeżenie.
 
+## Alerty temperatury
+
+Przy temperaturze płynu chłodniczego od 110°C albo oleju od 120°C aplikacja:
+
+- wysyła na iPhonie pilne powiadomienie z dźwiękiem,
+- uruchamia haptyczne ostrzeżenie w otwartej aplikacji Apple Watch,
+- zmienia kartę Live Activity i CarPlay na czerwony stan `TEMP ALERT`.
+
+Alert jest zatrzaskiwany i uzbraja się ponownie dopiero po spadku płynu do
+105°C lub oleju do 115°C, więc wahania pomiaru nie powodują serii
+powiadomień. iOS może również przekazać powiadomienie na Apple Watch zgodnie z
+ustawieniami mirroringu. Powiadomienie używa poziomu `timeSensitive`; tryb
+`critical`, omijający wyciszenie i Focus, wymaga osobnego entitlementu Apple.
+
 ## Diagnostyka pierwszego połączenia
 
 Po wybraniu `Bluetooth` ekran połączenia pokazuje:

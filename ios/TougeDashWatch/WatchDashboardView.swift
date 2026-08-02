@@ -41,9 +41,10 @@ struct WatchDashboardView: View {
             coolantPanel(snapshot: snapshot)
 
             if snapshot.hasCriticalWarning {
-                Label("ENGINE WARNING", systemImage: "exclamationmark.triangle.fill")
+                Label(snapshot.hasTemperatureWarning ? "TEMPERATURE ALERT" : "ENGINE WARNING", systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 9, weight: .black))
                     .foregroundStyle(Color.tougeOrange)
+                    .symbolEffect(.pulse, options: .repeating, isActive: snapshot.hasTemperatureWarning)
                     .transition(.opacity)
             }
         }
@@ -52,7 +53,9 @@ struct WatchDashboardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             RadialGradient(
-                colors: [Color.tougeNavy, Color.black],
+                colors: snapshot.hasTemperatureWarning
+                    ? [Color.tougeOrange.opacity(0.55), Color.tougeAlertNavy, Color.black]
+                    : [Color.tougeNavy, Color.black],
                 center: .topLeading,
                 startRadius: 0,
                 endRadius: 210
@@ -63,20 +66,21 @@ struct WatchDashboardView: View {
 
     private func header(snapshot: WatchTelemetryPayload) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: "gauge.with.dots.needle.67percent")
+            Image(systemName: snapshot.hasTemperatureWarning ? "exclamationmark.triangle.fill" : "gauge.with.dots.needle.67percent")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color.tougeCyan)
-            Text("TOUGE DASH")
+                .foregroundStyle(snapshot.hasTemperatureWarning ? Color.tougeOrange : Color.tougeCyan)
+                .symbolEffect(.pulse, options: .repeating, isActive: snapshot.hasTemperatureWarning)
+            Text(snapshot.hasTemperatureWarning ? "TEMP ALERT" : "TOUGE DASH")
                 .font(.system(size: 10, weight: .black))
                 .tracking(0.7)
-                .foregroundStyle(Color.tougeCyan)
+                .foregroundStyle(snapshot.hasTemperatureWarning ? Color.tougeOrange : Color.tougeCyan)
             Spacer(minLength: 2)
             Circle()
-                .fill(snapshot.isFresh ? Color.tougeMint : Color.gray)
+                .fill(snapshot.hasTemperatureWarning ? Color.tougeOrange : (snapshot.isFresh ? Color.tougeMint : Color.gray))
                 .frame(width: 6, height: 6)
-            Text(snapshot.isFresh ? "LIVE" : "WAIT")
+            Text(snapshot.hasTemperatureWarning ? "HOT" : (snapshot.isFresh ? "LIVE" : "WAIT"))
                 .font(.system(size: 8, weight: .black))
-                .foregroundStyle(snapshot.isFresh ? Color.tougeMint : Color.secondary)
+                .foregroundStyle(snapshot.hasTemperatureWarning ? Color.tougeOrange : (snapshot.isFresh ? Color.tougeMint : Color.secondary))
         }
     }
 
@@ -197,4 +201,5 @@ private extension Color {
     static let tougeIce = Color(red: 0.38, green: 0.75, blue: 1.00)
     static let tougeOrange = Color(red: 1.00, green: 0.23, blue: 0.12)
     static let tougeNavy = Color(red: 0.05, green: 0.12, blue: 0.20)
+    static let tougeAlertNavy = Color(red: 0.20, green: 0.025, blue: 0.03)
 }

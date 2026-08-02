@@ -116,4 +116,23 @@ final class EMUProtocolTests: XCTestCase {
 
         XCTAssertTrue(payload.hasCoolantWarning)
     }
+
+    func testTemperatureWarningsStartAtConfiguredLimits() {
+        var snapshot = TelemetrySnapshot.preview
+        snapshot.coolantCelsius = EngineTemperatureLimits.coolantWarningCelsius
+        snapshot.oilTemperatureCelsius = EngineTemperatureLimits.oilWarningCelsius - 1
+
+        XCTAssertTrue(snapshot.hasTemperatureWarning)
+
+        snapshot.coolantCelsius = EngineTemperatureLimits.coolantWarningCelsius - 1
+        snapshot.oilTemperatureCelsius = EngineTemperatureLimits.oilWarningCelsius
+
+        XCTAssertTrue(snapshot.hasTemperatureWarning)
+        XCTAssertTrue(WatchTelemetryPayload(snapshot: snapshot).hasTemperatureWarning)
+
+        snapshot.oilTemperatureCelsius = EngineTemperatureLimits.oilWarningCelsius - 1
+
+        XCTAssertFalse(snapshot.hasTemperatureWarning)
+        XCTAssertFalse(WatchTelemetryPayload(snapshot: snapshot).hasTemperatureWarning)
+    }
 }

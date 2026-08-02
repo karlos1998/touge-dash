@@ -79,7 +79,7 @@ private struct LandscapeDashboard: View {
                     OilTemperatureCard(temperature: snapshot.oilTemperatureCelsius)
                 }
                 HStack(spacing: 12) {
-                    MetricCard(title: "COOLANT", value: snapshot.coolantCelsius, unit: "°C", precision: 0, icon: "thermometer.high", tint: .tougeOrange, warning: snapshot.coolantCelsius > 108)
+                    MetricCard(title: "COOLANT", value: snapshot.coolantCelsius, unit: "°C", precision: 0, icon: "thermometer.high", tint: .tougeOrange, warning: snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius)
                     MetricCard(title: "BATTERY", value: snapshot.batteryVoltage, unit: "V", precision: 1, icon: "battery.100percent", tint: .tougeYellow, warning: snapshot.rpm > 500 && snapshot.batteryVoltage > 0 && snapshot.batteryVoltage < 11.5)
                     MetricCard(title: "OIL PRESS", value: snapshot.oilPressureBar, unit: "bar", precision: 1, icon: "oilcan.fill", tint: .tougeMint, warning: snapshot.rpm > 1_200 && snapshot.oilPressureBar < 0.5)
                 }
@@ -114,7 +114,7 @@ private struct PortraitDashboard: View {
 
             LazyVGrid(columns: columns, spacing: 12) {
                 MetricCard(title: "AFR", value: snapshot.afr, unit: "λ " + snapshot.lambda.formatted(.number.precision(.fractionLength(2))), precision: 1, icon: "waveform.path.ecg", tint: .tougeMint, warning: snapshot.afr > 0 && (snapshot.afr < 10.5 || snapshot.afr > 16))
-                MetricCard(title: "COOLANT", value: snapshot.coolantCelsius, unit: "°C", precision: 0, icon: "thermometer.high", tint: .tougeOrange, warning: snapshot.coolantCelsius > 108)
+                MetricCard(title: "COOLANT", value: snapshot.coolantCelsius, unit: "°C", precision: 0, icon: "thermometer.high", tint: .tougeOrange, warning: snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius)
                 MetricCard(title: "BATTERY", value: snapshot.batteryVoltage, unit: "V", precision: 1, icon: "battery.100percent", tint: .tougeYellow, warning: snapshot.rpm > 500 && snapshot.batteryVoltage > 0 && snapshot.batteryVoltage < 11.5)
                 MetricCard(title: "OIL PRESS", value: snapshot.oilPressureBar, unit: "bar", precision: 1, icon: "oilcan.fill", tint: .tougeMint, warning: snapshot.rpm > 1_200 && snapshot.oilPressureBar < 0.5)
             }
@@ -230,7 +230,7 @@ private struct MetricCard: View {
 private struct OilTemperatureCard: View {
     let temperature: Double
 
-    private var warning: Bool { temperature > 135 }
+    private var warning: Bool { temperature >= EngineTemperatureLimits.oilWarningCelsius }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
