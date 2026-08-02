@@ -34,6 +34,12 @@ struct WatchDashboardView: View {
 
             oilPanel(snapshot: snapshot)
 
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(height: 1)
+
+            coolantPanel(snapshot: snapshot)
+
             if snapshot.hasCriticalWarning {
                 Label("ENGINE WARNING", systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 9, weight: .black))
@@ -96,6 +102,26 @@ struct WatchDashboardView: View {
                     tint: snapshot.hasOilTemperatureWarning ? .tougeOrange : .tougeWarm
                 )
             }
+        }
+    }
+
+    private func coolantPanel(snapshot: WatchTelemetryPayload) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "thermometer.and.liquid.waves")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(snapshot.hasCoolantWarning ? Color.tougeOrange : Color.tougeIce)
+            Text("COOLANT")
+                .font(.system(size: 9, weight: .black))
+                .tracking(0.4)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Text(Int(snapshot.coolantCelsius).formatted(.number.grouping(.never)))
+                .font(.system(size: 21, weight: .black, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(snapshot.hasCoolantWarning ? Color.tougeOrange : Color.tougeIce)
+            Text("°C")
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -168,6 +194,7 @@ private extension Color {
     static let tougeCyan = Color(red: 0.08, green: 0.86, blue: 0.92)
     static let tougeMint = Color(red: 0.20, green: 0.89, blue: 0.60)
     static let tougeWarm = Color(red: 1.00, green: 0.36, blue: 0.22)
+    static let tougeIce = Color(red: 0.38, green: 0.75, blue: 1.00)
     static let tougeOrange = Color(red: 1.00, green: 0.23, blue: 0.12)
     static let tougeNavy = Color(red: 0.05, green: 0.12, blue: 0.20)
 }

@@ -7,6 +7,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
     var afr: Double
     var oilPressureBar: Double
     var oilTemperatureCelsius: Double
+    var coolantCelsius: Double
     var rpm: Double
     var hasCriticalWarning: Bool
     var updatedAt: Date
@@ -16,6 +17,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         afr: Double,
         oilPressureBar: Double,
         oilTemperatureCelsius: Double,
+        coolantCelsius: Double,
         rpm: Double,
         hasCriticalWarning: Bool,
         updatedAt: Date
@@ -24,6 +26,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         self.afr = afr
         self.oilPressureBar = oilPressureBar
         self.oilTemperatureCelsius = oilTemperatureCelsius
+        self.coolantCelsius = coolantCelsius
         self.rpm = rpm
         self.hasCriticalWarning = hasCriticalWarning
         self.updatedAt = updatedAt
@@ -34,6 +37,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         afr: 0,
         oilPressureBar: 0,
         oilTemperatureCelsius: 0,
+        coolantCelsius: 0,
         rpm: 0,
         hasCriticalWarning: false,
         updatedAt: .distantPast
@@ -44,6 +48,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         afr: 12.4,
         oilPressureBar: 4.2,
         oilTemperatureCelsius: 104,
+        coolantCelsius: 91,
         rpm: 6_420,
         hasCriticalWarning: false,
         updatedAt: .now
@@ -61,12 +66,17 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         oilTemperatureCelsius > 140
     }
 
+    var hasCoolantWarning: Bool {
+        coolantCelsius > 108
+    }
+
     #if os(iOS)
     init(snapshot: TelemetrySnapshot) {
         boostBar = snapshot.boostBar
         afr = snapshot.afr
         oilPressureBar = snapshot.oilPressureBar
         oilTemperatureCelsius = snapshot.oilTemperatureCelsius
+        coolantCelsius = snapshot.coolantCelsius
         rpm = snapshot.rpm
         hasCriticalWarning = snapshot.hasCriticalWarning
         updatedAt = snapshot.updatedAt

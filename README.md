@@ -65,14 +65,14 @@ Dokładniejsze informacje o podpisywaniu, BLE i diagnostyce są w
 Touge Dash nie jest pełną aplikacją CarPlay i nie pojawia się na liście ikon.
 Używa Live Activity w rozmiarze `ActivityFamily.small`. Po podłączeniu telefonu
 aktywność pojawia się w CarPlay Dashboard albo jako powiadomienie. Pokazuje
-ciśnienie oleju, boost, AFR i temperaturę oleju.
+ciśnienie i temperaturę oleju, boost, AFR oraz temperaturę płynu chłodniczego.
 
 ### Apple Watch
 
-Aplikacja zegarkowa pokazuje boost, AFR, ciśnienie i temperaturę oleju. iPhone
-przekazuje dane przez WatchConnectivity maksymalnie dwa razy na sekundę, a
-zegarek zachowuje ostatni odczyt po utracie połączenia. Stan krytyczny zmienia
-kolory i uruchamia haptyczne ostrzeżenie.
+Aplikacja zegarkowa pokazuje boost, AFR, ciśnienie i temperaturę oleju oraz
+temperaturę płynu chłodniczego. iPhone przekazuje dane przez WatchConnectivity
+maksymalnie dwa razy na sekundę, a zegarek zachowuje ostatni odczyt po utracie
+połączenia. Stan krytyczny zmienia kolory i uruchamia haptyczne ostrzeżenie.
 
 <p align="center">
   <img src="docs/screenshots/apple-watch.png" width="260" alt="Touge Dash na Apple Watch" />

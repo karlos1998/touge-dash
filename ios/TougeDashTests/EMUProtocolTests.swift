@@ -70,6 +70,7 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(payload.afr, 12.4)
         XCTAssertEqual(payload.oilPressureBar, 4.2)
         XCTAssertEqual(payload.oilTemperatureCelsius, 104)
+        XCTAssertEqual(payload.coolantCelsius, 91)
         XCTAssertFalse(payload.hasCriticalWarning)
     }
 
@@ -79,6 +80,7 @@ final class EMUProtocolTests: XCTestCase {
             afr: 14.7,
             oilPressureBar: 0.3,
             oilTemperatureCelsius: 100,
+            coolantCelsius: 90,
             rpm: 3_000,
             hasCriticalWarning: true,
             updatedAt: .now
@@ -88,6 +90,7 @@ final class EMUProtocolTests: XCTestCase {
             afr: 14.7,
             oilPressureBar: 4,
             oilTemperatureCelsius: 145,
+            coolantCelsius: 90,
             rpm: 3_000,
             hasCriticalWarning: true,
             updatedAt: .now
@@ -97,5 +100,20 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertFalse(lowPressure.hasOilTemperatureWarning)
         XCTAssertFalse(hotOil.hasOilPressureWarning)
         XCTAssertTrue(hotOil.hasOilTemperatureWarning)
+    }
+
+    func testWatchPayloadDetectsHotCoolant() {
+        let payload = WatchTelemetryPayload(
+            boostBar: 0,
+            afr: 14.7,
+            oilPressureBar: 4,
+            oilTemperatureCelsius: 100,
+            coolantCelsius: 112,
+            rpm: 3_000,
+            hasCriticalWarning: true,
+            updatedAt: .now
+        )
+
+        XCTAssertTrue(payload.hasCoolantWarning)
     }
 }

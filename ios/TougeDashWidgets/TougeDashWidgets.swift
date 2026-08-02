@@ -124,7 +124,7 @@ private struct MediumTelemetryWidget: View {
             VStack(spacing: 7) {
                 WidgetMetric(title: "BOOST", value: snapshot.boostBar.formatted(.number.precision(.fractionLength(2))), unit: "bar", tint: WidgetPalette.cyan)
                 WidgetMetric(title: "AFR", value: snapshot.afr.formatted(.number.precision(.fractionLength(1))), unit: "", tint: WidgetPalette.mint)
-                WidgetMetric(title: "COOLANT", value: snapshot.coolantCelsius.formatted(.number.precision(.fractionLength(0))), unit: "°C", tint: snapshot.coolantCelsius > 108 ? WidgetPalette.orange : .white)
+                WidgetMetric(title: "COOLANT", value: snapshot.coolantCelsius.formatted(.number.precision(.fractionLength(0))), unit: "°C", tint: coolantTint(for: snapshot))
             }
             .frame(maxWidth: .infinity)
 
@@ -202,7 +202,7 @@ struct TougeDashLiveActivity: Widget {
                     HStack {
                         LiveMetric(title: "AFR", value: context.state.telemetry.afr.formatted(.number.precision(.fractionLength(1))), tint: WidgetPalette.mint)
                         Spacer()
-                        LiveMetric(title: "COOLANT", value: Int(context.state.telemetry.coolantCelsius).formatted() + "°", tint: context.state.telemetry.coolantCelsius > 108 ? WidgetPalette.orange : .white)
+                        LiveMetric(title: "COOLANT", value: Int(context.state.telemetry.coolantCelsius).formatted() + "°", tint: coolantTint(for: context.state.telemetry))
                         Spacer()
                         LiveMetric(title: "OIL T", value: Int(context.state.telemetry.oilTemperatureCelsius).formatted(), unit: "°C", tint: oilTemperatureTint(for: context.state.telemetry))
                     }
@@ -279,7 +279,7 @@ private struct TelemetryActivityPanel: View {
                 ActivityMetricTile(
                     title: "BOOST",
                     value: snapshot.boostBar.formatted(.number.precision(.fractionLength(2))),
-                    unit: "bar",
+                    unit: "",
                     tint: WidgetPalette.cyan,
                     compact: compact
                 )
@@ -291,12 +291,20 @@ private struct TelemetryActivityPanel: View {
                     tint: WidgetPalette.mint,
                     compact: compact
                 )
+                if compact { ActivityMetricDivider() }
+                ActivityMetricTile(
+                    title: "COOL",
+                    value: Int(snapshot.coolantCelsius).formatted(.number.grouping(.never)),
+                    unit: "°C",
+                    tint: coolantTint(for: snapshot),
+                    compact: compact
+                )
             }
         }
         .padding(.horizontal, compact ? 10 : 14)
         .padding(.vertical, compact ? 7 : 11)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(connectionLabel), oil pressure \(snapshot.oilPressureBar) bar, boost \(snapshot.boostBar) bar, AFR \(snapshot.afr), oil temperature \(Int(snapshot.oilTemperatureCelsius)) degrees Celsius")
+        .accessibilityLabel("\(connectionLabel), oil pressure \(snapshot.oilPressureBar) bar, boost \(snapshot.boostBar) bar, AFR \(snapshot.afr), oil temperature \(Int(snapshot.oilTemperatureCelsius)) degrees Celsius, coolant temperature \(Int(snapshot.coolantCelsius)) degrees Celsius")
     }
 }
 
@@ -455,6 +463,10 @@ private func oilPressureTint(for snapshot: TelemetrySnapshot) -> Color {
 
 private func oilTemperatureTint(for snapshot: TelemetrySnapshot) -> Color {
     snapshot.oilTemperatureCelsius > 135 ? WidgetPalette.red : WidgetPalette.orange
+}
+
+private func coolantTint(for snapshot: TelemetrySnapshot) -> Color {
+    snapshot.coolantCelsius > 108 ? WidgetPalette.red : .white
 }
 
 private struct WidgetBackground: View {

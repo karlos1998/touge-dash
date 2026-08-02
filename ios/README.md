@@ -73,16 +73,21 @@ Touge Dash nie udaje pełnej aplikacji CarPlay i nie wymaga entitlementu z kateg
 - `Touge Dash` jako widget `systemSmall`, który można dodać na ekranie widgetów CarPlay,
 - Live Activity uruchamiana automatycznie razem z aplikacją; system pokazuje ją w CarPlay Dashboard lub jako powiadomienie. Przycisk `Stop card` pozwala ją ręcznie wyłączyć.
 
-Live Activity ma układ `ActivityFamily.small` z ciśnieniem oleju, boostem, AFR i temperaturą oleju. Na iOS 26 aktywność jest uruchamiana przed skanowaniem BLE, dzięki czemu CoreBluetooth zachowuje swoje uprawnienia również po zablokowaniu telefonu. Elementy na CarPlay są tylko informacyjne — system nie uruchomi aplikacji po stuknięciu karty, ponieważ projekt nie deklaruje pełnej aplikacji CarPlay.
+Live Activity ma układ `ActivityFamily.small` z ciśnieniem i temperaturą oleju,
+boostem, AFR oraz temperaturą płynu chłodniczego. Na iOS 26 aktywność jest
+uruchamiana przed skanowaniem BLE, dzięki czemu CoreBluetooth zachowuje swoje
+uprawnienia również po zablokowaniu telefonu. Elementy na CarPlay są tylko
+informacyjne — system nie uruchomi aplikacji po stuknięciu karty, ponieważ
+projekt nie deklaruje pełnej aplikacji CarPlay.
 
 ## Apple Watch
 
 Target `TougeDashWatch` jest osadzony w aplikacji iPhone. Po instalacji pojawi
 się na sparowanym zegarku automatycznie albo będzie dostępny w aplikacji Watch
-na iPhonie. Telemetria jest przesyłana na żywo, gdy aplikacja zegarkowa jest
-otwarta; `applicationContext` zapewnia również ostatnią znaną próbkę po
-chwilowej utracie łączności. Przejście w stan krytyczny wywołuje haptyczne
-ostrzeżenie.
+na iPhonie. Telemetria — wraz z temperaturą płynu chłodniczego — jest przesyłana
+na żywo, gdy aplikacja zegarkowa jest otwarta; `applicationContext` zapewnia
+również ostatnią znaną próbkę po chwilowej utracie łączności. Przejście w stan
+krytyczny wywołuje haptyczne ostrzeżenie.
 
 ## Diagnostyka pierwszego połączenia
 
