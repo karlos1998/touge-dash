@@ -111,6 +111,27 @@ final class CloudAccountService: ObservableObject {
         }
     }
 
+    func deleteAccount() async -> Bool {
+        guard session != nil else { return true }
+        isWorking = true
+        lastError = nil
+        defer { isWorking = false }
+        do {
+            let _: EmptyCloudResponse = try await sendAuthorized(
+                endpoint: "/api/v1/me",
+                method: "DELETE",
+                body: nil,
+                response: EmptyCloudResponse.self
+            )
+            session = nil
+            CloudCredentialStore.clear()
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
     func clearError() {
         lastError = nil
     }

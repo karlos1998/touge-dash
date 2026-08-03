@@ -116,7 +116,7 @@ private struct LocationRecordingCard: View {
                     .tint(.tougeCyan)
             }
 
-            Text("Po włączeniu każda próbka przejazdu może zawierać pozycję. Dane zostają wyłącznie na tym urządzeniu.")
+            Text("Po włączeniu każda próbka przejazdu może zawierać pozycję. Dane są przechowywane lokalnie, a przy aktywnym koncie także synchronizowane z Touge Dash Cloud.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 
@@ -426,15 +426,13 @@ private struct SelectedTelemetryStrip: View {
                     .foregroundStyle(Color.tougeCyan)
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    MomentValue(title: "SPEED", value: Int(sample.speedKPH).formatted(), unit: "km/h", tint: .tougeIce)
-                    MomentValue(title: "RPM", value: Int(sample.rpm).formatted(), unit: "rpm", tint: .tougeYellow)
-                    MomentValue(title: "BOOST", value: sample.boostBar.formatted(.number.precision(.fractionLength(2))), unit: "bar", tint: .tougeCyan)
-                    MomentValue(title: "OIL", value: Int(sample.oilTemperatureCelsius).formatted(), unit: "°C", tint: .tougeOrange)
-                    MomentValue(title: "COOLANT", value: Int(sample.coolantCelsius).formatted(), unit: "°C", tint: .tougeMint)
-                    MomentValue(title: "AFR", value: sample.afr.formatted(.number.precision(.fractionLength(1))), unit: "", tint: .white)
-                }
+            HStack(spacing: 7) {
+                MomentValue(title: "SPEED", value: Int(sample.speedKPH).formatted(), unit: "km/h", tint: .tougeIce)
+                MomentValue(title: "RPM", value: Int(sample.rpm).formatted(), unit: "rpm", tint: .tougeYellow)
+                MomentValue(title: "BOOST", value: sample.boostBar.formatted(.number.precision(.fractionLength(2))), unit: "bar", tint: .tougeCyan)
+                MomentValue(title: "OIL", value: Int(sample.oilTemperatureCelsius).formatted(), unit: "°C", tint: .tougeOrange)
+                MomentValue(title: "COOLANT", value: Int(sample.coolantCelsius).formatted(), unit: "°C", tint: .tougeMint)
+                MomentValue(title: "AFR", value: sample.afr.formatted(.number.precision(.fractionLength(1))), unit: "", tint: .white)
             }
         }
         .padding(14)
@@ -452,18 +450,24 @@ private struct MomentValue: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.system(size: 7, weight: .black))
-                .tracking(0.7)
+                .tracking(0.4)
                 .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             HStack(alignment: .lastTextBaseline, spacing: 3) {
                 Text(value)
-                    .font(.headline.monospacedDigit().weight(.black))
+                    .font(.system(size: 15, weight: .black, design: .rounded))
+                    .monospacedDigit()
                     .foregroundStyle(tint)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.65)
                 Text(unit)
                     .font(.system(size: 7, weight: .bold))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
-        .frame(width: 82, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

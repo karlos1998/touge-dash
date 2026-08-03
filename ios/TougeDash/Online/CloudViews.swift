@@ -6,6 +6,7 @@ struct CloudSyncCard: View {
     @ObservedObject var account: CloudAccountService
     @ObservedObject var sync: CloudSyncManager
     @State private var showingAuthentication = false
+    @State private var showingDeleteConfirmation = false
     @State private var vehicleName = ""
 
     var body: some View {
@@ -41,11 +42,19 @@ struct CloudSyncCard: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Wyloguj") {
-                        Task {
-                            await self.account.logout()
-                            await sync.accountDidChange()
+                    Menu {
+                        Link("Polityka prywatności", destination: privacyPolicyURL)
+                        Button("Wyloguj", systemImage: "rectangle.portrait.and.arrow.right") {
+                            Task {
+                                await self.account.logout()
+                                await sync.accountDidChange()
+                            }
                         }
+                        Button("Usuń konto", systemImage: "trash", role: .destructive) {
+                            showingDeleteConfirmation = true
+                        }
+                    } label: {
+                        Label("Konto", systemImage: "person.crop.circle")
                     }
                     .font(.caption.weight(.bold))
                 }
@@ -146,6 +155,22 @@ struct CloudSyncCard: View {
                 showingAuthentication = false
                 Task { await sync.accountDidChange() }
             }
+        }
+        .confirmationDialog(
+            "Usunąć konto i dane?",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Usuń konto bezpowrotnie", role: .destructive) {
+                Task {
+                    if await account.deleteAccount() {
+                        await sync.accountDidChange()
+                    }
+                }
+            }
+            Button("Anuluj", role: .cancel) {}
+        } message: {
+            Text("Z serwera zostaną usunięte konto, auta, przejazdy, lokalizacje, udostępnienia i aktywne sesje. Lokalna historia na tym iPhonie pozostanie do czasu usunięcia aplikacji.")
         }
     }
 
@@ -304,6 +329,10 @@ private struct CloudAuthenticationView: View {
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+
+                    Link("Polityka prywatności", destination: privacyPolicyURL)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.tougeCyan)
                 }
                 .padding(22)
                 .frame(maxWidth: 480)
@@ -404,6 +433,8 @@ private struct CloudAuthenticationView: View {
         }
     }
 }
+
+private let privacyPolicyURL = URL(string: "https://touge-dash.letscode.it/privacy")!
 
 private struct CloudTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {

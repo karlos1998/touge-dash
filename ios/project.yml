@@ -26,8 +26,11 @@ targets:
     sources:
       - path: TougeDash
       - path: Shared
+      - path: Config/PrivacyInfo.xcprivacy
+        buildPhase: resources
     resources:
       - path: TougeDash/Resources/Assets.xcassets
+      - path: Config/PrivacyInfo.xcprivacy
     info:
       path: Config/TougeDash-Info.plist
       properties:
@@ -38,10 +41,9 @@ targets:
           - CFBundleURLName: it.letscode.touge-dash.auth
             CFBundleURLSchemes:
               - tougedash
-        NSBluetoothAlwaysUsageDescription: Touge Dash uses Bluetooth to receive live engine data from your ECUMaster interface.
-        NSBluetoothPeripheralUsageDescription: Touge Dash uses Bluetooth to receive live engine data from your ECUMaster interface.
+        NSBluetoothAlwaysUsageDescription: Touge Dash używa Bluetooth do odbierania danych silnika z kompatybilnego interfejsu ECUMaster.
+        NSBluetoothPeripheralUsageDescription: Touge Dash używa Bluetooth do odbierania danych silnika z kompatybilnego interfejsu ECUMaster.
         NSLocationWhenInUseUsageDescription: Po włączeniu zapisu trasy Touge Dash zapisuje położenie razem z telemetrią silnika, także po zablokowaniu telefonu.
-        NSLocalNetworkUsageDescription: Touge Dash can discover compatible telemetry interfaces on your local network.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSSupportsLiveActivities: true
@@ -86,6 +88,10 @@ targets:
     sources:
       - path: TougeDashWidgets
       - path: Shared
+      - path: Config/Widgets/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    resources:
+      - path: Config/Widgets/PrivacyInfo.xcprivacy
     info:
       path: Config/TougeDashWidgets-Info.plist
       properties:
@@ -113,8 +119,11 @@ targets:
     sources:
       - path: TougeDashWatch
       - path: Shared/WatchTelemetryPayload.swift
+      - path: Config/Watch/PrivacyInfo.xcprivacy
+        buildPhase: resources
     resources:
       - path: TougeDash/Resources/Assets.xcassets
+      - path: Config/Watch/PrivacyInfo.xcprivacy
     info:
       path: Config/TougeDashWatch-Info.plist
       properties:

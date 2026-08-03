@@ -91,11 +91,21 @@ final class TelemetryController: ObservableObject {
     }
 
     var connectionLabel: String {
-        bluetooth.state.label
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_TELEMETRY"] == "1" {
+            return "EMULOGGER"
+        }
+        #endif
+        return bluetooth.state.label
     }
 
     var isConnected: Bool {
-        bluetooth.state.isConnected
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_TELEMETRY"] == "1" {
+            return true
+        }
+        #endif
+        return bluetooth.state.isConnected
     }
 
     func useBluetooth() {
