@@ -555,16 +555,17 @@ private struct HistoryChartCard: View {
                     Rectangle()
                         .fill(Color.clear)
                         .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 8)
                                 .onChanged { value in
-                                    guard let plotFrame = proxy.plotFrame else { return }
-                                    let frame = geometry[plotFrame]
-                                    let xPosition = value.location.x - frame.origin.x
-                                    guard xPosition >= 0,
-                                          xPosition <= frame.width,
-                                          let timestamp: Date = proxy.value(atX: xPosition) else { return }
-                                    selectedTime = timestamp
+                                    guard abs(value.translation.width) >= abs(value.translation.height) else { return }
+                                    selectTimestamp(at: value.location, proxy: proxy, geometry: geometry)
+                                }
+                        )
+                        .simultaneousGesture(
+                            SpatialTapGesture()
+                                .onEnded { value in
+                                    selectTimestamp(at: value.location, proxy: proxy, geometry: geometry)
                                 }
                         )
                 }
@@ -573,6 +574,16 @@ private struct HistoryChartCard: View {
         }
         .padding(16)
         .cardSurface(accent: series.first?.color ?? .tougeCyan)
+    }
+
+    private func selectTimestamp(at location: CGPoint, proxy: ChartProxy, geometry: GeometryProxy) {
+        guard let plotFrame = proxy.plotFrame else { return }
+        let frame = geometry[plotFrame]
+        let xPosition = location.x - frame.origin.x
+        guard xPosition >= 0,
+              xPosition <= frame.width,
+              let timestamp: Date = proxy.value(atX: xPosition) else { return }
+        selectedTime = timestamp
     }
 }
 
