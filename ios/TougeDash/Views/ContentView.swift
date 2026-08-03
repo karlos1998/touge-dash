@@ -95,10 +95,16 @@ private struct DashboardHeader: View {
 
             Spacer()
 
-            ConnectionBadge(
-                title: controller.connectionLabel,
-                isConnected: controller.isConnected
-            )
+            Button {
+                controller.showBluetoothDetails()
+            } label: {
+                ConnectionBadge(
+                    title: controller.connectionLabel,
+                    isConnected: controller.isConnected
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(localized("Połączenie z EMU"))
         }
     }
 }

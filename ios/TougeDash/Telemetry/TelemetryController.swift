@@ -109,12 +109,20 @@ final class TelemetryController: ObservableObject {
     }
 
     func useBluetooth() {
-        parser = EMUFrameParser()
-        accumulator = EMUTelemetryAccumulator()
-        parserStats = .init()
-        receivedBytes = 0
-        bluetooth.startScanning()
+        if !isConnected {
+            parser = EMUFrameParser()
+            accumulator = EMUTelemetryAccumulator()
+            parserStats = .init()
+            receivedBytes = 0
+        }
+        showBluetoothDetails()
+    }
+
+    func showBluetoothDetails() {
         showingDevicePicker = true
+        if !isConnected {
+            bluetooth.startScanning()
+        }
     }
 
     func connect(to device: DiscoveredTelemetryDevice) {
