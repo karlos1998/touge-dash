@@ -207,7 +207,9 @@ private struct CloudAuthenticationView: View {
     @State private var password = ""
     @State private var displayName = ""
     @State private var formError: String?
+#if DEBUG
     @State private var showingServer = false
+#endif
     @StateObject private var webAuthentication = CloudWebAuthenticationSession()
 
     var body: some View {
@@ -314,6 +316,7 @@ private struct CloudAuthenticationView: View {
                             .multilineTextAlignment(.center)
                     }
 
+#if DEBUG
                     DisclosureGroup("Adres serwera", isExpanded: $showingServer) {
                         VStack(spacing: 8) {
                             TextField("API · https://api.example.com", text: $account.serverAddress)
@@ -329,6 +332,7 @@ private struct CloudAuthenticationView: View {
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+#endif
 
                     Link("Polityka prywatności", destination: privacyPolicyURL)
                         .font(.caption.weight(.semibold))

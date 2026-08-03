@@ -24,6 +24,7 @@ final class CloudAccountService: ObservableObject {
     init(urlSession: URLSession = .shared) {
         self.urlSession = urlSession
         session = CloudCredentialStore.load()
+#if DEBUG
         serverAddress = Self.resolvedAddress(
             UserDefaults.standard.string(forKey: Defaults.serverAddress),
             productionAddress: Defaults.productionServerAddress
@@ -32,6 +33,10 @@ final class CloudAccountService: ObservableObject {
             UserDefaults.standard.string(forKey: Defaults.webAddress),
             productionAddress: Defaults.productionWebAddress
         )
+#else
+        serverAddress = Defaults.productionServerAddress
+        webAddress = Defaults.productionWebAddress
+#endif
         UserDefaults.standard.set(serverAddress, forKey: Defaults.serverAddress)
         UserDefaults.standard.set(webAddress, forKey: Defaults.webAddress)
     }
