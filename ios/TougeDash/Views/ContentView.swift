@@ -82,29 +82,57 @@ private struct LandscapeDashboard: View {
     let compact: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: compact ? 9 : 14) {
-            BoostHeroCard(snapshot: snapshot, compact: compact)
-                .frame(maxWidth: .infinity)
+        VStack(spacing: compact ? 9 : 12) {
+            EngineHealthCard(snapshot: snapshot, compact: compact, prominent: !compact)
+                .frame(minHeight: compact ? 112 : 180, maxHeight: compact ? 112 : .infinity)
 
-            VStack(spacing: compact ? 9 : 12) {
-                EngineHealthCard(snapshot: snapshot, compact: compact)
-                    .frame(maxHeight: .infinity)
-
-                HStack(spacing: compact ? 9 : 12) {
-                    MetricCard(title: "AFR", value: snapshot.afr, unit: "λ " + snapshot.lambda.formatted(.number.precision(.fractionLength(2))), precision: 1, icon: "waveform.path.ecg", tint: .tougeMint, warning: snapshot.afr > 0 && (snapshot.afr < 10.5 || snapshot.afr > 16), compact: compact)
-                    MetricCard(title: "BATTERY", value: snapshot.batteryVoltage, unit: "V", precision: 1, icon: "bolt.fill", tint: .tougeYellow, warning: snapshot.rpm > 500 && snapshot.batteryVoltage > 0 && snapshot.batteryVoltage < 11.5, compact: compact)
-                }
-
-                HStack(spacing: compact ? 7 : 10) {
-                    CompactMetric(title: "INJ", value: snapshot.injectorDutyPercent, suffix: "%", tint: .tougeOrange)
-                    CompactMetric(title: "TPS", value: snapshot.throttlePercent, suffix: "%", tint: .tougeCyan)
-                    CompactMetric(title: "IAT", value: snapshot.intakeCelsius, suffix: "°C", tint: .tougeBlue)
-                    CompactMetric(title: "FUEL", value: snapshot.fuelPressureBar, suffix: " bar", tint: .tougeMint, precision: 1)
-                }
+            HStack(spacing: compact ? 9 : 12) {
+                MetricCard(
+                    title: "BOOST",
+                    value: snapshot.boostBar,
+                    unit: "bar",
+                    precision: 2,
+                    icon: "wind",
+                    tint: .tougeCyan,
+                    warning: snapshot.boostBar > 1.6,
+                    compact: compact,
+                    prominent: !compact
+                )
+                MetricCard(
+                    title: "AFR",
+                    value: snapshot.afr,
+                    unit: "λ " + snapshot.lambda.formatted(.number.precision(.fractionLength(2))),
+                    precision: 1,
+                    icon: "waveform.path.ecg",
+                    tint: .tougeMint,
+                    warning: snapshot.afr > 0 && (snapshot.afr < 10.5 || snapshot.afr > 16),
+                    compact: compact,
+                    prominent: !compact
+                )
+                MetricCard(
+                    title: "BATTERY",
+                    value: snapshot.batteryVoltage,
+                    unit: "V",
+                    precision: 1,
+                    icon: "bolt.fill",
+                    tint: .tougeYellow,
+                    warning: snapshot.rpm > 500 && snapshot.batteryVoltage > 0 && snapshot.batteryVoltage < 11.5,
+                    compact: compact,
+                    prominent: !compact
+                )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minHeight: compact ? 88 : 145, maxHeight: compact ? 88 : .infinity)
+
+            HStack(spacing: compact ? 7 : 10) {
+                CompactMetric(title: "MAP", value: snapshot.mapKPa, suffix: " kPa", tint: .tougeIce, compact: compact)
+                CompactMetric(title: "TPS", value: snapshot.throttlePercent, suffix: "%", tint: .tougeCyan, compact: compact)
+                CompactMetric(title: "RPM", value: snapshot.rpm, suffix: "", tint: .white, compact: compact)
+                CompactMetric(title: "INJ", value: snapshot.injectorDutyPercent, suffix: "%", tint: .tougeOrange, compact: compact)
+                CompactMetric(title: "IAT", value: snapshot.intakeCelsius, suffix: "°C", tint: .tougeBlue, compact: compact)
+                CompactMetric(title: "FUEL", value: snapshot.fuelPressureBar, suffix: " bar", tint: .tougeMint, precision: 1, compact: compact)
+            }
         }
-        .frame(minHeight: compact ? 245 : 430)
+        .frame(minHeight: compact ? 245 : 430, maxHeight: .infinity)
     }
 }
 
@@ -267,6 +295,7 @@ private struct InlineTelemetry: View {
 private struct EngineHealthCard: View {
     let snapshot: TelemetrySnapshot
     let compact: Bool
+    var prominent = false
 
     private var oilPressureWarning: Bool {
         snapshot.rpm > 1_200 && snapshot.oilPressureBar > 0 && snapshot.oilPressureBar < 0.5
@@ -297,7 +326,8 @@ private struct EngineHealthCard: View {
                     icon: "oilcan.fill",
                     tint: .tougeMint,
                     warning: oilPressureWarning,
-                    compact: compact
+                    compact: compact,
+                    prominent: prominent
                 )
 
                 HealthDivider()
@@ -310,7 +340,8 @@ private struct EngineHealthCard: View {
                     icon: "thermometer.medium",
                     tint: .tougeOrange,
                     warning: snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius,
-                    compact: compact
+                    compact: compact,
+                    prominent: prominent
                 )
 
                 HealthDivider()
@@ -323,7 +354,8 @@ private struct EngineHealthCard: View {
                     icon: "thermometer.high",
                     tint: .tougeIce,
                     warning: snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius,
-                    compact: compact
+                    compact: compact,
+                    prominent: prominent
                 )
             }
             .frame(maxHeight: .infinity)
@@ -342,6 +374,7 @@ private struct HealthValue: View {
     let tint: Color
     let warning: Bool
     let compact: Bool
+    let prominent: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 5 : 8) {
@@ -359,7 +392,7 @@ private struct HealthValue: View {
 
             HStack(alignment: .lastTextBaseline, spacing: 3) {
                 Text(value.formatted(.number.precision(.fractionLength(precision))))
-                    .font(.system(size: compact ? 28 : 38, weight: .black, design: .rounded))
+                    .font(.system(size: compact ? 28 : (prominent ? 58 : 38), weight: .black, design: .rounded))
                     .fontWidth(.expanded)
                     .monospacedDigit()
                     .contentTransition(.numericText())
@@ -367,7 +400,7 @@ private struct HealthValue: View {
                     .lineLimit(1)
                     .foregroundStyle(warning ? Color.tougeRed : Color.white)
                 Text(unit)
-                    .font(.system(size: compact ? 8 : 10, weight: .black))
+                    .font(.system(size: compact ? 8 : (prominent ? 13 : 10), weight: .black))
                     .foregroundStyle(warning ? Color.tougeRed : tint)
             }
         }
@@ -415,6 +448,7 @@ private struct MetricCard: View {
     let tint: Color
     let warning: Bool
     var compact = false
+    var prominent = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 5 : 9) {
@@ -429,7 +463,7 @@ private struct MetricCard: View {
             }
             Spacer(minLength: 0)
             Text(value.formatted(.number.precision(.fractionLength(precision))))
-                .font(.system(size: compact ? 26 : 34, weight: .black, design: .rounded))
+                .font(.system(size: compact ? 26 : (prominent ? 52 : 34), weight: .black, design: .rounded))
                 .fontWidth(.expanded)
                 .monospacedDigit()
                 .contentTransition(.numericText())
@@ -451,21 +485,23 @@ private struct CompactMetric: View {
     let suffix: String
     let tint: Color
     var precision = 0
+    var compact = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(localized(title))
-                .font(.caption2.weight(.black))
+                .font(.system(size: compact ? 8 : 10, weight: .black))
                 .tracking(0.8)
                 .foregroundStyle(.secondary)
             Text(value.formatted(.number.precision(.fractionLength(precision))) + suffix)
-                .font(.headline.monospacedDigit().weight(.bold))
+                .font(.system(size: compact ? 15 : 18, weight: .bold, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(tint)
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(compact ? 9 : 12)
         .cardSurface(accent: tint)
     }
 }
