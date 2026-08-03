@@ -503,6 +503,12 @@ private struct ControlBar: View {
                     .font(.caption)
                     .foregroundStyle(Color.tougeOrange)
             }
+
+            if controller.isConnected {
+                Label("Szybki podgląd aktywny · ekran iPhone’a nie wygasi się automatycznie", systemImage: "bolt.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.tougeMint)
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 import AuthenticationServices
+import Foundation
 import SwiftUI
 
 struct CloudSyncCard: View {
@@ -75,20 +76,46 @@ struct CloudSyncCard: View {
                             .foregroundStyle(.tertiary)
                     }
                 } else if let vehicle = sync.activeVehicle {
-                    HStack {
-                        Label(vehicle.displayName, systemImage: "car.side.fill")
-                            .font(.subheadline.weight(.bold))
-                        Spacer()
-                        Text("\(sync.pendingSessions) OCZEKUJE")
-                            .font(.system(size: 8, weight: .black))
-                            .tracking(0.8)
-                            .foregroundStyle(sync.pendingSessions == 0 ? Color.tougeMint : Color.tougeOrange)
-                        Button {
-                            Task { await sync.syncNow() }
-                        } label: {
-                            Image(systemName: "arrow.triangle.2.circlepath")
+                    VStack(alignment: .leading, spacing: 11) {
+                        HStack {
+                            Label(vehicle.displayName, systemImage: "car.side.fill")
+                                .font(.subheadline.weight(.bold))
+                            Spacer()
+                            Button {
+                                Task { await sync.syncNow() }
+                            } label: {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                            }
+                            .disabled(sync.state == .syncing || sync.pendingSessions == 0)
+                            .accessibilityLabel("Synchronizuj teraz")
                         }
-                        .disabled(sync.state == .syncing)
+
+                        if let progress = sync.progress, sync.state == .syncing {
+                            ProgressView(value: progress.fraction)
+                                .tint(.tougeCyan)
+                            HStack {
+                                Text("\(progress.completedSamples.formatted()) / \(progress.totalSamples.formatted()) próbek")
+                                Spacer()
+                                Text(byteCount(progress.transferredBytes) + " wysłano")
+                            }
+                            .font(.caption2.monospacedDigit().weight(.bold))
+                            .foregroundStyle(.secondary)
+                        } else if sync.pendingSessions > 0 {
+                            HStack(spacing: 5) {
+                                Text("\(sync.pendingSessions) \(sync.pendingSessions == 1 ? "PRZEJAZD" : "PRZEJAZDY")")
+                                Text("·")
+                                Text("\(sync.pendingSamples.formatted()) PRÓBEK")
+                                Text("·")
+                                Text("OK. \(byteCount(sync.estimatedPendingBytes))")
+                            }
+                            .font(.system(size: 8, weight: .black))
+                            .tracking(0.55)
+                            .foregroundStyle(Color.tougeOrange)
+                        } else if sync.lastTransferBytes > 0 {
+                            Label("Wysłano \(byteCount(sync.lastTransferBytes))", systemImage: "checkmark.circle.fill")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(Color.tougeMint)
+                        }
                     }
                 } else {
                     Text("Połącz się z EMULOGGER, aby przypisać pierwsze auto.")
@@ -124,16 +151,23 @@ struct CloudSyncCard: View {
 
     @ViewBuilder
     private var statusBadge: some View {
-        let active = account.isAuthenticated && sync.state != .offline
+        let failed = if case .failed = sync.state { true } else { false }
+        let syncing = sync.state == .syncing
+        let active = account.isAuthenticated && sync.state != .offline && !failed
+        let color: Color = failed ? .tougeOrange : syncing ? .tougeCyan : active ? .tougeMint : .secondary
         HStack(spacing: 5) {
             Circle()
-                .fill(active ? Color.tougeMint : Color.secondary)
+                .fill(color)
                 .frame(width: 6, height: 6)
-            Text(active ? "ONLINE" : "LOCAL")
+            Text(failed ? "BŁĄD" : syncing ? "SYNC" : active ? "ONLINE" : "LOCAL")
                 .font(.system(size: 8, weight: .black))
                 .tracking(0.8)
         }
-        .foregroundStyle(active ? Color.tougeMint : .secondary)
+        .foregroundStyle(color)
+    }
+
+    private func byteCount(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 }
 

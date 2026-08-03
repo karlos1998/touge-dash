@@ -11,6 +11,7 @@ final class LocationTrackingService: NSObject, ObservableObject, @preconcurrency
     @Published private(set) var isTracking = false
 
     private let manager = CLLocationManager()
+    private var driveActive = false
 
     override init() {
         authorizationStatus = manager.authorizationStatus
@@ -18,13 +19,9 @@ final class LocationTrackingService: NSObject, ObservableObject, @preconcurrency
         manager.delegate = self
         manager.activityType = .automotiveNavigation
         manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter = 8
-        manager.pausesLocationUpdatesAutomatically = true
+        manager.distanceFilter = 3
+        manager.pausesLocationUpdatesAutomatically = false
         manager.showsBackgroundLocationIndicator = true
-
-        if isEnabled {
-            startIfAuthorized()
-        }
     }
 
     var isEnabled: Bool {
@@ -32,7 +29,12 @@ final class LocationTrackingService: NSObject, ObservableObject, @preconcurrency
     }
 
     var authorizationLabel: String {
-        switch authorizationStatus {
+        if isEnabled,
+           !driveActive,
+           authorizationStatus == .authorizedAlways || authorizationStatus == .authorizedWhenInUse {
+            return "Gotowy · GPS ruszy po połączeniu z autem"
+        }
+        return switch authorizationStatus {
         case .notDetermined: "Wymaga zgody"
         case .restricted: "Ograniczona"
         case .denied: "Wyłączona w Ustawieniach"
@@ -57,7 +59,7 @@ final class LocationTrackingService: NSObject, ObservableObject, @preconcurrency
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
-            startIfAuthorized()
+            if driveActive { startIfAuthorized() }
         case .denied, .restricted:
             lastError = "Włącz dostęp do lokalizacji dla Touge Dash w Ustawieniach iOS."
         @unknown default:
@@ -67,8 +69,19 @@ final class LocationTrackingService: NSObject, ObservableObject, @preconcurrency
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         authorizationStatus = manager.authorizationStatus
-        if isEnabled {
+        if isEnabled, driveActive {
             startIfAuthorized()
+        }
+    }
+
+    func setDriveActive(_ active: Bool) {
+        guard driveActive != active else { return }
+        driveActive = active
+        if active {
+            startIfAuthorized()
+        } else {
+            manager.stopUpdatingLocation()
+            isTracking = false
         }
     }
 
@@ -94,7 +107,7 @@ final class LocationTrackingService: NSObject, ObservableObject, @preconcurrency
     }
 
     private func startIfAuthorized() {
-        guard isEnabled,
+        guard isEnabled, driveActive,
               authorizationStatus == .authorizedAlways || authorizationStatus == .authorizedWhenInUse else { return }
         manager.allowsBackgroundLocationUpdates = true
         manager.startUpdatingLocation()

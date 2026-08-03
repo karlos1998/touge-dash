@@ -2,6 +2,22 @@ import Foundation
 import Network
 import SwiftData
 
+struct CloudSyncProgress: Equatable, Sendable {
+    let totalSessions: Int
+    let totalSamples: Int
+    var completedSessions: Int
+    var completedSamples: Int
+    var transferredBytes: Int64
+
+    var fraction: Double {
+        if totalSamples > 0 {
+            return min(1, Double(completedSamples) / Double(totalSamples))
+        }
+        guard totalSessions > 0 else { return 1 }
+        return min(1, Double(completedSessions) / Double(totalSessions))
+    }
+}
+
 @MainActor
 final class CloudSyncManager: ObservableObject {
     enum State: Equatable {
@@ -17,6 +33,10 @@ final class CloudSyncManager: ObservableObject {
     @Published private(set) var activeVehicle: CloudVehicle?
     @Published private(set) var pendingHardwareIdentifier: UUID?
     @Published private(set) var pendingSessions = 0
+    @Published private(set) var pendingSamples = 0
+    @Published private(set) var estimatedPendingBytes: Int64 = 0
+    @Published private(set) var progress: CloudSyncProgress?
+    @Published private(set) var lastTransferBytes: Int64 = 0
     @Published private(set) var lastSynchronizedAt: Date?
 
     private let account: CloudAccountService
@@ -28,7 +48,15 @@ final class CloudSyncManager: ObservableObject {
     private var vehicleLinks: [String: CloudVehicle]
     private var lastLiveUpload = Date.distantPast
     private var periodicTask: Task<Void, Never>?
+    private var isSynchronizing = false
     private static let vehicleLinksKey = "TougeDash.cloud.vehicleLinks"
+    private static let lastVehicleIdentifierKey = "TougeDash.cloud.lastVehicleIdentifier"
+    private static let estimatedBytesPerSample: Int64 = 420
+
+    private struct VehicleAssociation {
+        let hardwareIdentifier: UUID
+        let vehicle: CloudVehicle
+    }
 
     init(container: ModelContainer, account: CloudAccountService, locationTracker: LocationTrackingService) {
         self.account = account
@@ -40,6 +68,9 @@ final class CloudSyncManager: ObservableObject {
             vehicleLinks = links
         } else {
             vehicleLinks = [:]
+        }
+        if account.isAuthenticated {
+            _ = restoreActiveVehicle()
         }
         state = account.isAuthenticated ? .ready : .signedOut
         updatePendingCount()
@@ -56,6 +87,12 @@ final class CloudSyncManager: ObservableObject {
             }
         }
         monitor.start(queue: monitorQueue)
+        if activeVehicle != nil {
+            Task { [weak self] in
+                await Task.yield()
+                await self?.syncNow()
+            }
+        }
         periodicTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
@@ -78,7 +115,12 @@ final class CloudSyncManager: ObservableObject {
         case .signedOut: "Synchronizacja online jest wyłączona"
         case .waitingForVehicleName: "Nadaj nazwę podłączonemu autu"
         case .ready: lastSynchronizedAt.map { "Ostatnia synchronizacja \($0.formatted(date: .omitted, time: .shortened))" } ?? "Gotowy do synchronizacji"
-        case .syncing: "Synchronizuję archiwum…"
+        case .syncing:
+            if let progress {
+                "Wysyłam \(progress.completedSamples.formatted()) z \(progress.totalSamples.formatted()) próbek"
+            } else {
+                "Przygotowuję synchronizację…"
+            }
         case .failed(let message): message
         }
     }
@@ -86,11 +128,13 @@ final class CloudSyncManager: ObservableObject {
     func accountDidChange() async {
         guard account.isAuthenticated else {
             activeVehicle = nil
+            pendingHardwareIdentifier = nil
+            progress = nil
             state = .signedOut
             return
         }
         if let pendingHardwareIdentifier { await prepareVehicle(hardwareIdentifier: pendingHardwareIdentifier) }
-        else if activeVehicle != nil { await syncNow() }
+        else if restoreActiveVehicle() { await syncNow() }
         else { state = .ready }
     }
 
@@ -98,6 +142,7 @@ final class CloudSyncManager: ObservableObject {
         pendingHardwareIdentifier = hardwareIdentifier
         if let linked = vehicleLinks[vehicleLinkKey(hardwareIdentifier)] {
             activeVehicle = linked
+            rememberActiveVehicle(hardwareIdentifier)
             state = account.isAuthenticated ? .ready : .signedOut
             if account.isAuthenticated { await syncNow() }
         } else {
@@ -118,6 +163,8 @@ final class CloudSyncManager: ObservableObject {
             activeVehicle = vehicle
             vehicleLinks[vehicleLinkKey(hardwareIdentifier)] = vehicle
             persistVehicleLinks()
+            rememberActiveVehicle(hardwareIdentifier)
+            state = .ready
             await syncNow()
         } catch {
             state = .failed(error.localizedDescription)
@@ -127,30 +174,45 @@ final class CloudSyncManager: ObservableObject {
     func syncNow() async {
         guard account.isAuthenticated else { state = .signedOut; return }
         guard isNetworkAvailable else { state = .offline; return }
-        guard let vehicle = activeVehicle, let hardwareIdentifier = pendingHardwareIdentifier else {
+        guard !isSynchronizing else { return }
+        let associations = currentAccountAssociations()
+        guard !associations.isEmpty else {
             state = pendingHardwareIdentifier == nil ? .ready : .waitingForVehicleName
             return
         }
-        guard state != .syncing else { return }
+        isSynchronizing = true
+        defer { isSynchronizing = false }
         state = .syncing
         do {
-            let vehicleID = hardwareIdentifier
-            let descriptor = FetchDescriptor<DriveSession>(
-                predicate: #Predicate { session in
-                    session.vehicleID == vehicleID && session.syncStateRaw != "synced"
-                },
-                sortBy: [SortDescriptor(\DriveSession.startedAt)]
+            let queued = try pendingSessionEntries(for: associations)
+            let totalSamples = queued.reduce(0) { $0 + $1.session.sampleCount }
+            progress = CloudSyncProgress(
+                totalSessions: queued.count,
+                totalSamples: totalSamples,
+                completedSessions: 0,
+                completedSamples: 0,
+                transferredBytes: 0
             )
-            let sessions = try context.fetch(descriptor)
-            for session in sessions {
-                try await upload(session: session, vehicleID: vehicle.id)
+
+            for entry in queued {
+                try await upload(session: entry.session, vehicleID: entry.remoteVehicleID)
             }
             try context.save()
+            lastTransferBytes = progress?.transferredBytes ?? 0
             lastSynchronizedAt = .now
             state = .ready
             updatePendingCount()
         } catch {
             state = .failed(error.localizedDescription)
+            updatePendingCount()
+        }
+    }
+
+    func noteLocalSampleRecorded(sessionBecamePending: Bool) {
+        pendingSamples += 1
+        estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample
+        if sessionBecamePending {
+            pendingSessions += 1
         }
     }
 
@@ -198,36 +260,58 @@ final class CloudSyncManager: ObservableObject {
 
     private func upload(session: DriveSession, vehicleID: UUID) async throws {
         let samples = session.samples.sorted { $0.timestamp < $1.timestamp }
+        let uploadedRevision = max(1, session.revision)
+        let uploadedStartedAt = session.startedAt
+        let uploadedEndedAt = session.endedAt
+        let uploadedSampleCount = session.sampleCount
+        let uploadedDistanceMeters = session.distanceMeters
+        let uploadedMaxRPM = session.maxRPM
+        let uploadedMaxSpeedKPH = session.maxSpeedKPH
+        let uploadedMaxBoostBar = session.maxBoostBar
+        let uploadedMaxCoolantCelsius = session.maxCoolantCelsius
+        let uploadedMaxOilTemperatureCelsius = session.maxOilTemperatureCelsius
+        let uploadedMinimumOilPressureBar = session.minimumOilPressureBar
+        let uploadedContainsLocation = session.containsLocation
         let chunks = samples.isEmpty ? [[]] : stride(from: 0, to: samples.count, by: 2_000).map {
             Array(samples[$0..<min($0 + 2_000, samples.count)])
         }
         for chunk in chunks {
             let request = CloudSessionUpload(
                 id: session.id,
-                startedAt: session.startedAt,
-                endedAt: session.endedAt,
-                revision: max(1, session.revision),
-                sampleCount: session.sampleCount,
-                distanceMeters: session.distanceMeters,
-                maxRpm: session.maxRPM,
-                maxSpeedKph: session.maxSpeedKPH,
-                maxBoostBar: session.maxBoostBar,
-                maxCoolantCelsius: session.maxCoolantCelsius,
-                maxOilTemperatureCelsius: session.maxOilTemperatureCelsius,
-                minimumOilPressureBar: session.minimumOilPressureBar,
-                containsLocation: session.containsLocation,
+                startedAt: uploadedStartedAt,
+                endedAt: uploadedEndedAt,
+                revision: uploadedRevision,
+                sampleCount: uploadedSampleCount,
+                distanceMeters: uploadedDistanceMeters,
+                maxRpm: uploadedMaxRPM,
+                maxSpeedKph: uploadedMaxSpeedKPH,
+                maxBoostBar: uploadedMaxBoostBar,
+                maxCoolantCelsius: uploadedMaxCoolantCelsius,
+                maxOilTemperatureCelsius: uploadedMaxOilTemperatureCelsius,
+                minimumOilPressureBar: uploadedMinimumOilPressureBar,
+                containsLocation: uploadedContainsLocation,
                 samples: chunk.map(makeUpload)
             )
+            let encodedSize = try JSONEncoder.tougeDashCloud().encode(request).count
             let result: CloudSyncResult = try await account.send(
                 endpoint: "/api/v1/vehicles/\(vehicleID.uuidString)/sessions/sync",
                 body: request
             )
             session.remoteID = result.sessionId.uuidString
+            if var progress {
+                progress.completedSamples += chunk.count
+                progress.transferredBytes += Int64(encodedSize)
+                self.progress = progress
+            }
         }
-        session.syncState = .synced
         for sample in samples {
             sample.remoteID = sample.id.uuidString
             sample.syncState = .synced
+        }
+        session.syncState = session.revision == uploadedRevision ? .synced : .changedAfterSync
+        if var progress {
+            progress.completedSessions += 1
+            self.progress = progress
         }
     }
 
@@ -265,13 +349,75 @@ final class CloudSyncManager: ObservableObject {
     }
 
     private func updatePendingCount() {
-        let descriptor = FetchDescriptor<DriveSession>(predicate: #Predicate { $0.syncStateRaw != "synced" })
-        pendingSessions = (try? context.fetchCount(descriptor)) ?? 0
+        let associations = currentAccountAssociations()
+        let sessions: [DriveSession]
+        if associations.isEmpty {
+            let descriptor = FetchDescriptor<DriveSession>(predicate: #Predicate { $0.syncStateRaw != "synced" })
+            sessions = (try? context.fetch(descriptor)) ?? []
+        } else {
+            sessions = (try? pendingSessionEntries(for: associations).map(\.session)) ?? []
+        }
+        pendingSessions = sessions.count
+        pendingSamples = sessions.reduce(0) { $0 + $1.sampleCount }
+        estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample
     }
 
     private func persistVehicleLinks() {
         if let data = try? JSONEncoder.tougeDashCloud().encode(vehicleLinks) {
             UserDefaults.standard.set(data, forKey: Self.vehicleLinksKey)
         }
+    }
+
+    private func currentAccountAssociations() -> [VehicleAssociation] {
+        guard let accountID = account.account?.id.uuidString.lowercased() else { return [] }
+        let prefix = accountID + ":"
+        return vehicleLinks.compactMap { key, vehicle in
+            guard key.hasPrefix(prefix),
+                  let identifier = UUID(uuidString: String(key.dropFirst(prefix.count))) else { return nil }
+            return VehicleAssociation(hardwareIdentifier: identifier, vehicle: vehicle)
+        }
+        .sorted { $0.vehicle.createdAt < $1.vehicle.createdAt }
+    }
+
+    private func pendingSessionEntries(
+        for associations: [VehicleAssociation]
+    ) throws -> [(session: DriveSession, remoteVehicleID: UUID)] {
+        var result: [(DriveSession, UUID)] = []
+        for association in associations {
+            let hardwareIdentifier = association.hardwareIdentifier
+            let descriptor = FetchDescriptor<DriveSession>(
+                predicate: #Predicate { session in
+                    session.vehicleID == hardwareIdentifier && session.syncStateRaw != "synced"
+                }
+            )
+            result.append(contentsOf: try context.fetch(descriptor).map { ($0, association.vehicle.id) })
+        }
+        return result.sorted { $0.0.startedAt < $1.0.startedAt }
+    }
+
+    @discardableResult
+    private func restoreActiveVehicle() -> Bool {
+        let associations = currentAccountAssociations()
+        guard !associations.isEmpty else {
+            activeVehicle = nil
+            pendingHardwareIdentifier = nil
+            return false
+        }
+        let remembered = UserDefaults.standard.string(forKey: lastVehicleDefaultsKey())
+            .flatMap(UUID.init(uuidString:))
+        let selected = associations.first(where: { $0.hardwareIdentifier == remembered }) ?? associations.last!
+        pendingHardwareIdentifier = selected.hardwareIdentifier
+        activeVehicle = selected.vehicle
+        rememberActiveVehicle(selected.hardwareIdentifier)
+        return true
+    }
+
+    private func rememberActiveVehicle(_ hardwareIdentifier: UUID) {
+        UserDefaults.standard.set(hardwareIdentifier.uuidString, forKey: lastVehicleDefaultsKey())
+    }
+
+    private func lastVehicleDefaultsKey() -> String {
+        let accountID = account.account?.id.uuidString.lowercased() ?? "signed-out"
+        return "\(Self.lastVehicleIdentifierKey).\(accountID)"
     }
 }

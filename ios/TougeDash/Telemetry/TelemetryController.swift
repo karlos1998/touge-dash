@@ -30,8 +30,6 @@ final class TelemetryController: ObservableObject {
         locationTracker = historyRecorder.locationTracker
 
         #if DEBUG
-        UIApplication.shared.isIdleTimerDisabled = true
-
         let environment = ProcessInfo.processInfo.environment
         if environment["TOUGE_DASH_PREVIEW_TELEMETRY"] == "1" || environment["TOUGE_DASH_PREVIEW_ALERT"] == "1" {
             var preview = TelemetrySnapshot.preview
@@ -48,6 +46,8 @@ final class TelemetryController: ObservableObject {
         bluetooth.onBytes = { [weak self] data in self?.ingest(data) }
         bluetooth.onConnectionChanged = { [weak self] state in
             guard let self else { return }
+            self.locationTracker.setDriveActive(state.isConnected)
+            UIApplication.shared.isIdleTimerDisabled = state.isConnected
             if state.isConnected {
                 self.showingDevicePicker = false
                 if let identifier = self.bluetooth.connectedIdentifier {
@@ -138,7 +138,9 @@ final class TelemetryController: ObservableObject {
         snapshot = value
         watchBridge.enqueue(value)
         engineAlertManager.evaluate(value)
-        historyRecorder.record(value)
+        if let change = historyRecorder.record(value) {
+            cloudSync.noteLocalSampleRecorded(sessionBecamePending: change.sessionBecamePending)
+        }
         cloudSync.publishLive(value)
         let now = Date.now
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {

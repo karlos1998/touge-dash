@@ -24,10 +24,18 @@ final class TelemetryHistoryRecorder: ObservableObject {
         restoreRecentSession()
     }
 
-    func record(_ snapshot: TelemetrySnapshot, at timestamp: Date = .now) {
-        guard timestamp.timeIntervalSince(lastRecordedAt) >= Self.sampleInterval else { return }
+    struct RecordingChange: Equatable, Sendable {
+        let sessionBecamePending: Bool
+    }
 
+    @discardableResult
+    func record(_ snapshot: TelemetrySnapshot, at timestamp: Date = .now) -> RecordingChange? {
+        guard timestamp.timeIntervalSince(lastRecordedAt) >= Self.sampleInterval else { return nil }
+
+        let previousSessionID = activeSession?.id
         let session = resolveSession(at: timestamp)
+        let isNewSession = previousSessionID != session.id
+        let wasPending = !isNewSession && session.syncState != .synced
         let location = freshLocation(at: timestamp)
         let sample = TelemetryHistorySample(
             snapshot: snapshot,
@@ -44,6 +52,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
             try? context.save()
             lastSavedAt = timestamp
         }
+        return RecordingChange(sessionBecamePending: isNewSession || !wasPending)
     }
 
     func activateVehicle(_ id: UUID) {
@@ -147,7 +156,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
     private func freshLocation(at timestamp: Date) -> RecordedLocation? {
         guard locationTracker.isEnabled,
               let location = locationTracker.latestLocation,
-              abs(timestamp.timeIntervalSince(location.timestamp)) <= 15 else { return nil }
+              abs(timestamp.timeIntervalSince(location.timestamp)) <= 30 else { return nil }
         return location
     }
 

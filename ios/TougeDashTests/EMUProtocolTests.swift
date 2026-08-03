@@ -150,10 +150,10 @@ final class EMUProtocolTests: XCTestCase {
         let recorder = TelemetryHistoryRecorder(container: container, locationTracker: locationTracker)
         let start = Date(timeIntervalSince1970: 1_700_000_000)
 
-        recorder.record(.preview, at: start)
-        recorder.record(.preview, at: start.addingTimeInterval(0.4))
-        recorder.record(.preview, at: start.addingTimeInterval(1.1))
-        recorder.record(.preview, at: start.addingTimeInterval(TelemetryHistoryRecorder.newSessionGap + 2))
+        let firstChange = recorder.record(.preview, at: start)
+        let throttledChange = recorder.record(.preview, at: start.addingTimeInterval(0.4))
+        let sameSessionChange = recorder.record(.preview, at: start.addingTimeInterval(1.1))
+        let nextSessionChange = recorder.record(.preview, at: start.addingTimeInterval(TelemetryHistoryRecorder.newSessionGap + 2))
         recorder.saveNow()
 
         let sessions = try container.mainContext.fetch(FetchDescriptor<DriveSession>())
@@ -164,5 +164,29 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(sessions.map(\.sampleCount).reduce(0, +), 3)
         XCTAssertEqual(sessions.map(\.maxRPM).max(), TelemetrySnapshot.preview.rpm)
         XCTAssertEqual(sessions.map(\.maxBoostBar).max(), TelemetrySnapshot.preview.boostBar)
+        XCTAssertEqual(firstChange, .init(sessionBecamePending: true))
+        XCTAssertNil(throttledChange)
+        XCTAssertEqual(sameSessionChange, .init(sessionBecamePending: false))
+        XCTAssertEqual(nextSessionChange, .init(sessionBecamePending: true))
+    }
+
+    func testCloudSyncProgressTracksSamplesAndEmptySessions() {
+        let samples = CloudSyncProgress(
+            totalSessions: 2,
+            totalSamples: 1_000,
+            completedSessions: 1,
+            completedSamples: 250,
+            transferredBytes: 120_000
+        )
+        let emptySession = CloudSyncProgress(
+            totalSessions: 2,
+            totalSamples: 0,
+            completedSessions: 1,
+            completedSamples: 0,
+            transferredBytes: 1_200
+        )
+
+        XCTAssertEqual(samples.fraction, 0.25, accuracy: 0.001)
+        XCTAssertEqual(emptySession.fraction, 0.5, accuracy: 0.001)
     }
 }

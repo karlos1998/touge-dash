@@ -238,21 +238,24 @@ private struct SessionStat: View {
 private struct DriveSessionDetailView: View {
     let session: DriveSession
     @State private var selectedTime: Date?
+    @State private var cachedSamples: [TelemetryHistorySample] = []
+    @State private var chartSamples: [TelemetryHistorySample] = []
+    @State private var locatedSamples: [TelemetryHistorySample] = []
+    @State private var routeCoordinates: [CLLocationCoordinate2D] = []
+    @State private var routeHasMovement = false
     private let chartColumns = [GridItem(.adaptive(minimum: 460), spacing: 14)]
 
-    private var samples: [TelemetryHistorySample] {
-        session.samples.sorted { $0.timestamp < $1.timestamp }
-    }
-
-    private var chartSamples: [TelemetryHistorySample] {
-        samples.downsampled(maxPoints: 900)
-    }
-
     private var selectedSample: TelemetryHistorySample? {
-        guard let selectedTime else { return samples.last }
-        return samples.min {
-            abs($0.timestamp.timeIntervalSince(selectedTime)) < abs($1.timestamp.timeIntervalSince(selectedTime))
-        }
+        guard let selectedTime else { return cachedSamples.last }
+        return cachedSamples.nearest(to: selectedTime)
+    }
+
+    private var selectedCoordinate: CLLocationCoordinate2D? {
+        guard let selectedTime,
+              let sample = locatedSamples.nearest(to: selectedTime),
+              let latitude = sample.latitude,
+              let longitude = sample.longitude else { return routeCoordinates.last }
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
 
     var body: some View {
@@ -312,7 +315,11 @@ private struct DriveSessionDetailView: View {
                     }
 
                     if session.containsLocation {
-                        SessionRouteMap(samples: samples, selectedSample: selectedSample)
+                        SessionRouteMap(
+                            coordinates: routeCoordinates,
+                            selectedCoordinate: selectedCoordinate,
+                            hasMovement: routeHasMovement
+                        )
                     }
                 }
                 .frame(maxWidth: 1_200)
@@ -326,8 +333,21 @@ private struct DriveSessionDetailView: View {
                 .locale(Locale(identifier: "pl_PL"))
         ))
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            selectedTime = samples.last?.timestamp
+        .task {
+            let sorted = session.samples.sorted { $0.timestamp < $1.timestamp }
+            cachedSamples = sorted
+            chartSamples = sorted.downsampled(maxPoints: 300)
+            locatedSamples = sorted.filter { $0.latitude != nil && $0.longitude != nil }
+            routeCoordinates = locatedSamples.downsampled(maxPoints: 2_000).compactMap { sample in
+                guard let latitude = sample.latitude, let longitude = sample.longitude else { return nil }
+                return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            }
+            routeHasMovement = Set(routeCoordinates.map {
+                "\($0.latitude.formatted(.number.precision(.fractionLength(5)))):\($0.longitude.formatted(.number.precision(.fractionLength(5))))"
+            }).count > 1
+            if selectedTime == nil {
+                selectedTime = sorted.last?.timestamp
+            }
         }
     }
 }
@@ -448,10 +468,11 @@ private struct MomentValue: View {
 }
 
 private struct HistoryChartSeries: Identifiable {
-    let id = UUID()
     let name: String
     let color: Color
     let value: (TelemetryHistorySample) -> Double
+
+    var id: String { name }
 }
 
 private struct HistoryChartCard: View {
@@ -556,21 +577,10 @@ private struct HistoryChartCard: View {
 }
 
 private struct SessionRouteMap: View {
-    let samples: [TelemetryHistorySample]
-    let selectedSample: TelemetryHistorySample?
-
-    private var coordinates: [CLLocationCoordinate2D] {
-        samples.compactMap { sample in
-            guard let latitude = sample.latitude, let longitude = sample.longitude else { return nil }
-            return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        }
-    }
-
-    private var selectedCoordinate: CLLocationCoordinate2D? {
-        guard let latitude = selectedSample?.latitude,
-              let longitude = selectedSample?.longitude else { return nil }
-        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-    }
+    let coordinates: [CLLocationCoordinate2D]
+    let selectedCoordinate: CLLocationCoordinate2D?
+    let hasMovement: Bool
+    @State private var cameraPosition: MapCameraPosition = .automatic
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -579,16 +589,17 @@ private struct SessionRouteMap: View {
                     Text("TRASA")
                         .font(.system(size: 11, weight: .black))
                         .tracking(1.1)
-                    Text("Pozycja jest zsynchronizowana z kursorem wykresów")
+                    Text(hasMovement ? "Pozycja jest zsynchronizowana z kursorem wykresów" : "Zapisano pozycję postoju · trasa pojawi się po ruszeniu")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Image(systemName: "map.fill")
+                Label("\(coordinates.count)", systemImage: "map.fill")
+                    .font(.caption2.weight(.black))
                     .foregroundStyle(Color.tougeIce)
             }
 
-            Map {
+            Map(position: $cameraPosition) {
                 if coordinates.count > 1 {
                     MapPolyline(coordinates: coordinates)
                         .stroke(Color.tougeCyan, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
@@ -606,9 +617,29 @@ private struct SessionRouteMap: View {
             .mapStyle(.standard)
             .frame(height: 300)
             .clipShape(RoundedRectangle(cornerRadius: 14))
+            .onAppear(perform: updateCamera)
+            .onChange(of: coordinates.count) { _, _ in updateCamera() }
         }
         .padding(16)
         .cardSurface(accent: .tougeIce)
+    }
+
+    private func updateCamera() {
+        guard let first = coordinates.first else { return }
+        let latitudes = coordinates.map(\.latitude)
+        let longitudes = coordinates.map(\.longitude)
+        guard let minimumLatitude = latitudes.min(), let maximumLatitude = latitudes.max(),
+              let minimumLongitude = longitudes.min(), let maximumLongitude = longitudes.max() else { return }
+        let center = CLLocationCoordinate2D(
+            latitude: (minimumLatitude + maximumLatitude) / 2,
+            longitude: (minimumLongitude + maximumLongitude) / 2
+        )
+        let latitudeDelta = max(0.004, (maximumLatitude - minimumLatitude) * 1.35)
+        let longitudeDelta = max(0.004, (maximumLongitude - minimumLongitude) * 1.35)
+        cameraPosition = .region(MKCoordinateRegion(
+            center: coordinates.count == 1 ? first : center,
+            span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
+        ))
     }
 }
 
@@ -622,6 +653,27 @@ private extension Array where Element == TelemetryHistorySample {
             result.append(self[Swift.min(count - 1, Int((Double(index) * stride).rounded()))])
         }
         return result
+    }
+
+    func nearest(to timestamp: Date) -> TelemetryHistorySample? {
+        guard !isEmpty else { return nil }
+        var lower = 0
+        var upper = count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if self[middle].timestamp < timestamp {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
+        }
+        if lower == 0 { return self[0] }
+        if lower == count { return self[count - 1] }
+        let before = self[lower - 1]
+        let after = self[lower]
+        return abs(before.timestamp.timeIntervalSince(timestamp)) <= abs(after.timestamp.timeIntervalSince(timestamp))
+            ? before
+            : after
     }
 }
 
