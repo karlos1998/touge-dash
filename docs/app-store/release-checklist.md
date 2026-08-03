@@ -39,6 +39,6 @@
 
 - [x] Hardware-specific review notes are prepared.
 - [ ] Physical ECU/EMULOGGER demonstration video is recorded and attached.
-- [ ] Review account credentials are entered only in App Store Connect.
-- [ ] Review contact is available by phone and email.
+- [x] Review account credentials are entered only in App Store Connect.
+- [x] Review contact is available by phone and email.
 - [ ] Final build and all metadata are checked once more before `Submit for Review`.
