@@ -58,6 +58,9 @@ struct HistoryView: View {
                                 }
                             }
                         }
+
+                        ProductCreditFooter()
+                            .padding(.top, 8)
                     }
                     .frame(maxWidth: 1_000)
                     .frame(maxWidth: .infinity)
@@ -327,6 +330,9 @@ private struct DriveSessionDetailView: View {
                             hasMovement: routeHasMovement
                         )
                     }
+
+                    ProductCreditFooter()
+                        .padding(.top, 8)
                 }
                 .frame(maxWidth: 1_200)
                 .frame(maxWidth: .infinity)

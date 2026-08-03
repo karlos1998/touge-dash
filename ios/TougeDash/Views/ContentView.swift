@@ -25,6 +25,7 @@ struct ContentView: View {
                             compact: isCompactWide,
                             onShowHistory: isCompactWide ? onShowHistory : nil
                         )
+                        ProductCreditFooter(compact: isCompactWide)
                     }
                     .padding(.horizontal, max(16, min(28, proxy.size.width * 0.035)))
                     .padding(.vertical, isCompactWide ? 7 : 14)
@@ -36,6 +37,30 @@ struct ContentView: View {
         .sheet(isPresented: $controller.showingDevicePicker) {
             DevicePickerView(controller: controller)
         }
+    }
+}
+
+struct ProductCreditFooter: View {
+    var compact = false
+
+    private let website = URL(string: "https://letscode.it")!
+
+    var body: some View {
+        Link(destination: website) {
+            HStack(spacing: compact ? 3 : 4) {
+                Text(localized("Stworzono z sercem przez"))
+                Image(systemName: "heart.fill")
+                    .font(.system(size: compact ? 7 : 8, weight: .bold))
+                    .foregroundStyle(Color.tougeRed)
+                Text("Let's Code It — Karol Sójka")
+                    .foregroundStyle(Color.tougeCyan)
+            }
+            .font(.system(size: compact ? 7 : 9, weight: .semibold))
+            .foregroundStyle(.tertiary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+        }
+        .accessibilityLabel(localized("Stworzono z sercem przez Let's Code It — Karol Sójka"))
     }
 }
 
