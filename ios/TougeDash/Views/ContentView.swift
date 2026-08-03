@@ -48,10 +48,11 @@ struct ProductCreditFooter: View {
     var body: some View {
         Link(destination: website) {
             HStack(spacing: compact ? 3 : 4) {
-                Text(localized("Stworzono z sercem przez"))
+                Text(localized("Stworzono z"))
                 Image(systemName: "heart.fill")
                     .font(.system(size: compact ? 7 : 8, weight: .bold))
                     .foregroundStyle(Color.tougeRed)
+                Text(localized("przez"))
                 Text("Let's Code It — Karol Sójka")
                     .foregroundStyle(Color.tougeCyan)
             }
