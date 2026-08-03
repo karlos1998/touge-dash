@@ -1,0 +1,11 @@
+appId: it.letscode.touge-dash
+---
+- tapOn:
+    text: "Pozwalaj"
+    optional: true
+- tapOn:
+    text: "OK"
+    optional: true
+- tapOn:
+    text: "Pozwalaj"
+    optional: true

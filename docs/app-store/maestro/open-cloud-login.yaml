@@ -1,0 +1,9 @@
+appId: it.letscode.touge-dash
+---
+- tapOn:
+    id: "BackButton"
+    optional: true
+- tapOn: "Włącz synchronizację online"
+- extendedWaitUntil:
+    visible: "TOUGE DASH"
+    timeout: 5000

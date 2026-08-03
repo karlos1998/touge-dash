@@ -1,0 +1,4 @@
+appId: it.letscode.touge-dash
+---
+- tapOn: "Dashboard"
+- waitForAnimationToEnd

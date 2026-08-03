@@ -1,0 +1,7 @@
+appId: it.letscode.touge-dash
+---
+- swipe:
+    direction: UP
+    duration: 500
+- tapOn:
+    text: ".*próbek.*"
