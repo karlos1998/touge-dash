@@ -15,7 +15,7 @@ settings:
     SWIFT_VERSION: "6.0"
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "2"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     CLANG_ENABLE_MODULES: YES
 
@@ -36,6 +36,8 @@ targets:
       properties:
         CFBundleDisplayName: Touge Dash
         CFBundleName: TougeDash
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: it.letscode.touge-dash.auth
@@ -97,6 +99,8 @@ targets:
       properties:
         CFBundleDisplayName: Touge Dash Cards
         CFBundleName: TougeDashWidgets
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
@@ -122,13 +126,16 @@ targets:
       - path: Config/Watch/PrivacyInfo.xcprivacy
         buildPhase: resources
     resources:
-      - path: TougeDash/Resources/Assets.xcassets
+      - path: TougeDashWatch/Resources/WatchAssets.xcassets
       - path: Config/Watch/PrivacyInfo.xcprivacy
     info:
       path: Config/TougeDashWatch-Info.plist
       properties:
         CFBundleDisplayName: Touge Dash
         CFBundleName: TougeDashWatch
+        CFBundleIconName: AppIcon
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
         WKApplication: true
         WKCompanionAppBundleIdentifier: it.letscode.touge-dash

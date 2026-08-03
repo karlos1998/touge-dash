@@ -13,6 +13,7 @@
 		112733D2EDB08FD8A7923BD2 /* TougeDashWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = E697F34CB3FBBBECDE56B5FB /* TougeDashWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1B5AB2DCE6CC29A74145E2AD /* CloudModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26707E250162A5983CD8DFA1 /* CloudModels.swift */; };
 		2A3D137A597A3A7650DB483E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6D33CEAED617C652DE41B67A /* PrivacyInfo.xcprivacy */; };
+		2F5A43CF144D24A36986C752 /* WatchAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */; };
 		30A4F8895C5D5D7DCF993BBB /* CloudAccountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959C63DBA5B8A3C9E02CC0A2 /* CloudAccountService.swift */; };
 		32C08267B68F81BBDB3BE1A2 /* TougeDashWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 867564BA0BCD96BE13BB6CF2 /* TougeDashWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3BCB3D0B6BC454922D743146 /* WatchTelemetryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5EC0840422B283BEFAECA00 /* WatchTelemetryController.swift */; };
@@ -100,6 +101,7 @@
 		20B274E00E4B4234DED32AC0 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		26707E250162A5983CD8DFA1 /* CloudModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudModels.swift; sourceTree = "<group>"; };
 		2A31118FAAC584270E040350 /* TougeDashApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashApp.swift; sourceTree = "<group>"; };
+		3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = WatchAssets.xcassets; sourceTree = "<group>"; };
 		3EBA8A7B0FC46842A7032005 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		4077192963AFEE623364528E /* TougeDash.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TougeDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		426C277A095E02902C757197 /* TougeDashTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TougeDashTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -223,6 +225,7 @@
 		B5F56478D1D2B4D8F8E780A9 /* TougeDashWatch */ = {
 			isa = PBXGroup;
 			children = (
+				E2AF93E03E4848526FC796D4 /* Resources */,
 				81F7D2162918AB6BD8E89767 /* TougeDashWatchApp.swift */,
 				4F897E7BACCFC82DCC47CFE8 /* WatchDashboardView.swift */,
 				F5EC0840422B283BEFAECA00 /* WatchTelemetryController.swift */,
@@ -258,6 +261,14 @@
 				F31DF319B7913DE4E073912F /* CloudWebAuthenticationSession.swift */,
 			);
 			path = Online;
+			sourceTree = "<group>";
+		};
+		E2AF93E03E4848526FC796D4 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		E5A0A26113E52B9E4ADC1FEA = {
@@ -448,6 +459,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				824F62972F06FB510E22F6B3 /* PrivacyInfo.xcprivacy in Resources */,
+				2F5A43CF144D24A36986C752 /* WatchAssets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -596,7 +608,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -657,7 +669,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

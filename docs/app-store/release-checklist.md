@@ -9,9 +9,10 @@
 - [x] Account deletion is available inside the app and backed by `DELETE /api/v1/me`.
 - [x] iOS tests pass.
 - [x] Release archive validates without errors.
-- [ ] Version and build number are confirmed before upload.
+- [x] App Store Connect record is created for Apple ID `6797608558`.
+- [x] Version and build number are confirmed as `1.0 (2)`.
 - [x] App Store Connect IPA export succeeds with distribution signing.
-- [ ] Archive is uploaded to App Store Connect and finishes processing.
+- [ ] Uploaded build `1.0 (2)` finishes processing in App Store Connect.
 
 ## Production services
 
