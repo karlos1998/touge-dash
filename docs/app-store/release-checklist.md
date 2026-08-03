@@ -15,9 +15,9 @@
 
 ## Production services
 
-- [ ] `https://touge-dash.letscode.it/privacy` is publicly accessible.
-- [ ] `https://touge-dash.letscode.it/support` is publicly accessible.
-- [ ] Production API exposes and verifies account deletion.
+- [x] `https://touge-dash.letscode.it/privacy` is publicly accessible.
+- [x] `https://touge-dash.letscode.it/support` is publicly accessible.
+- [x] Production API exposes and verifies account deletion.
 - [ ] Sign in with Apple callback and production domain are verified.
 - [ ] Dedicated review account is created and contains representative data.
 
