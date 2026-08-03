@@ -4,13 +4,13 @@
 
 - [x] Production bundle identifiers and App Group are configured.
 - [x] `ITSAppUsesNonExemptEncryption` is set to `NO`.
-- [x] Bluetooth and optional location usage descriptions are present in Polish.
+- [x] Bluetooth and optional location usage descriptions are present in English and Polish.
 - [x] Privacy manifests are embedded in the iOS app, widget extension and watchOS app.
 - [x] Account deletion is available inside the app and backed by `DELETE /api/v1/me`.
 - [x] iOS tests pass.
 - [x] Release archive validates without errors.
 - [x] App Store Connect record is created for Apple ID `6797608558`.
-- [x] Version and build number are confirmed as `1.0 (2)`.
+- [ ] Version and build number are confirmed as `1.0 (3)`.
 - [x] App Store Connect IPA export succeeds with distribution signing.
 - [x] Uploaded build `1.0 (2)` finishes processing in App Store Connect.
 
@@ -24,7 +24,7 @@
 
 ## Product page
 
-- [x] Polish name, subtitle, description, promotional text and keywords are prepared.
+- [x] Polish and English name, subtitle, description, promotional text and keywords are prepared.
 - [x] Support, marketing and privacy URLs are selected.
 - [x] App Privacy answers are documented.
 - [x] App Privacy answers and privacy policy URL are published in App Store Connect.

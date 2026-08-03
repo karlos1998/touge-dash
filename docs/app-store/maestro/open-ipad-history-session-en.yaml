@@ -1,0 +1,10 @@
+appId: it.letscode.touge-dash
+---
+- setOrientation: LANDSCAPE_LEFT
+- tapOn:
+    text: "History"
+- tapOn:
+    text: ".*samples.*"
+- extendedWaitUntil:
+    visible: "DRIVE SESSION"
+    timeout: 5000

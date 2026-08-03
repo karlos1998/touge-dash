@@ -20,9 +20,9 @@ enum CloudPasswordPolicy {
         if value.rangeOfCharacter(from: .decimalDigits) != nil { score += 1 }
         let symbols = CharacterSet.alphanumerics.union(.whitespacesAndNewlines).inverted
         if value.count >= 14 || value.rangeOfCharacter(from: symbols) != nil { score += 1 }
-        let label = isValid(value)
+        let labelKey = isValid(value)
             ? ["Słabe", "Słabe", "W porządku", "Dobre", "Mocne"][score]
             : (score <= 1 ? "Słabe" : "Uzupełnij wymagania")
-        return (score, label)
+        return (score, localized(labelKey))
     }
 }

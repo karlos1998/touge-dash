@@ -12,6 +12,8 @@
 		0EBCD9A1BB5ED65085F937EC /* CloudWebAuthenticationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31DF319B7913DE4E073912F /* CloudWebAuthenticationSession.swift */; };
 		112733D2EDB08FD8A7923BD2 /* TougeDashWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = E697F34CB3FBBBECDE56B5FB /* TougeDashWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1B5AB2DCE6CC29A74145E2AD /* CloudModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26707E250162A5983CD8DFA1 /* CloudModels.swift */; };
+		29951B8FDF19A1D63CD3CDF8 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 32EF1DB4AE9E0F3919DE5F2F /* Localizable.strings */; };
+		299C268AE3198AFD790B2BE8 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 44D1AEB2A62A3DE8ABBB31EF /* Localizable.strings */; };
 		2A3D137A597A3A7650DB483E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6D33CEAED617C652DE41B67A /* PrivacyInfo.xcprivacy */; };
 		2F5A43CF144D24A36986C752 /* WatchAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */; };
 		30A4F8895C5D5D7DCF993BBB /* CloudAccountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959C63DBA5B8A3C9E02CC0A2 /* CloudAccountService.swift */; };
@@ -20,6 +22,7 @@
 		4423D8E79B07BC7DC7227C27 /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		571D08AD010FE11015D25FE5 /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		60AAEF7A1ECA24D0B7DB69EF /* TelemetryActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1F550E6FB4C529DD8B8D70 /* TelemetryActivityManager.swift */; };
+		6CD0077D0BC4E21C942B21FD /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = CE786C0F9400317AE609A8E4 /* InfoPlist.strings */; };
 		7350D55CCA9B21D83D6941E1 /* WatchDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F897E7BACCFC82DCC47CFE8 /* WatchDashboardView.swift */; };
 		7AF71B7D587FFBB02C0B1A35 /* TougeDashApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A31118FAAC584270E040350 /* TougeDashApp.swift */; };
 		824F62972F06FB510E22F6B3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 3EBA8A7B0FC46842A7032005 /* PrivacyInfo.xcprivacy */; };
@@ -35,6 +38,7 @@
 		AC5764AE471942645415FCA0 /* TelemetrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */; };
 		AC8C11B6916757CC66953A44 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E32E18F950BFA52335DE7A0D /* Assets.xcassets */; };
 		AF1310959A34802521674372 /* CloudPasswordPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 540345614ECEE8151C103CAD /* CloudPasswordPolicyTests.swift */; };
+		B34D767DA02419747471EA57 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */; };
 		C2FFF38884E04B9C3EAA6A67 /* BluetoothTelemetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB4599FA4D016749B9DEF63 /* BluetoothTelemetryService.swift */; };
 		C3A8602CE87BC00FAE6D1E32 /* TelemetryHistoryRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A3F10F3D557D89DA9A256A /* TelemetryHistoryRecorder.swift */; };
 		C44CA2A2FC8E0EE3137230C0 /* TougeDashWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6DF9230FC2BD86F85A70343 /* TougeDashWidgets.swift */; };
@@ -42,9 +46,12 @@
 		C9BA350DEC850C27A0902F2A /* TelemetrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */; };
 		D350C1D23C89BA0ACBD9A941 /* TelemetryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AB235F1E099FCAD2444AEC /* TelemetryController.swift */; };
 		D704435085305FE1920999EF /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
+		DE23EEF71ABEEECFD970D2B8 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */; };
 		E2D3EA6F1A250823543FCE12 /* LocationTrackingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC8734024210C5690446D7CB /* LocationTrackingService.swift */; };
 		E7C3A817DFBB318DB2BA1366 /* EMUProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C864400F6D0621EB9AE0063F /* EMUProtocol.swift */; };
 		F3E8E9984021000DE8B68120 /* EngineAlertManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 697C6502047A8B29FFEA91EF /* EngineAlertManager.swift */; };
+		F6FBEC893D3F5D887521A04E /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */; };
+		FFE5B49B570780A88D98C784 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5369B296EF83B5ED3D7D13CE /* Localizable.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -97,15 +104,19 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		1BAC4A1BBACF7C5FE52A713C /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1D1F550E6FB4C529DD8B8D70 /* TelemetryActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryActivityManager.swift; sourceTree = "<group>"; };
 		20B274E00E4B4234DED32AC0 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		26707E250162A5983CD8DFA1 /* CloudModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudModels.swift; sourceTree = "<group>"; };
 		2A31118FAAC584270E040350 /* TougeDashApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashApp.swift; sourceTree = "<group>"; };
+		2BEF1664EF73C11A88CEDB49 /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = WatchAssets.xcassets; sourceTree = "<group>"; };
+		390DDE5663561312036818FF /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3EBA8A7B0FC46842A7032005 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		4077192963AFEE623364528E /* TougeDash.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TougeDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		426C277A095E02902C757197 /* TougeDashTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TougeDashTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4755566114D5FAA70D71C3DF /* EMUProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EMUProtocolTests.swift; sourceTree = "<group>"; };
+		4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
 		4F897E7BACCFC82DCC47CFE8 /* WatchDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchDashboardView.swift; sourceTree = "<group>"; };
 		540345614ECEE8151C103CAD /* CloudPasswordPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPasswordPolicyTests.swift; sourceTree = "<group>"; };
 		61373911C45310F82868CE77 /* WatchTelemetryBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryBridge.swift; sourceTree = "<group>"; };
@@ -117,7 +128,9 @@
 		81F7D2162918AB6BD8E89767 /* TougeDashWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashWatchApp.swift; sourceTree = "<group>"; };
 		867564BA0BCD96BE13BB6CF2 /* TougeDashWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = TougeDashWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		8EB4599FA4D016749B9DEF63 /* BluetoothTelemetryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothTelemetryService.swift; sourceTree = "<group>"; };
+		90C8C98EFFBD36920D116D0E /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		959C63DBA5B8A3C9E02CC0A2 /* CloudAccountService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAccountService.swift; sourceTree = "<group>"; };
+		97630148259D8776DD8E7BD5 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		9E791078ECAA3EBD6D0CDB63 /* TougeDashRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashRootView.swift; sourceTree = "<group>"; };
 		B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryPayload.swift; sourceTree = "<group>"; };
 		B6DF9230FC2BD86F85A70343 /* TougeDashWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashWidgets.swift; sourceTree = "<group>"; };
@@ -125,12 +138,15 @@
 		C7A3F10F3D557D89DA9A256A /* TelemetryHistoryRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryHistoryRecorder.swift; sourceTree = "<group>"; };
 		C864400F6D0621EB9AE0063F /* EMUProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EMUProtocol.swift; sourceTree = "<group>"; };
 		D642E0E53B986134A1AD69DA /* CloudSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncManager.swift; sourceTree = "<group>"; };
+		D665D4EDDED532A21F6CE081 /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		D8B13510CE4FA317F340E83B /* CloudViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudViews.swift; sourceTree = "<group>"; };
 		DA1B6F75BEE169D2AC7626A3 /* HistoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryModels.swift; sourceTree = "<group>"; };
+		E0283F8F27A9276CBEC6AA4F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		E32E18F950BFA52335DE7A0D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E697F34CB3FBBBECDE56B5FB /* TougeDashWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TougeDashWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EC8734024210C5690446D7CB /* LocationTrackingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationTrackingService.swift; sourceTree = "<group>"; };
 		F1D4BDC1640C2CC10C5B971C /* CloudCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCredentialStore.swift; sourceTree = "<group>"; };
+		F289D7AADCD698F390E191DE /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		F31DF319B7913DE4E073912F /* CloudWebAuthenticationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudWebAuthenticationSession.swift; sourceTree = "<group>"; };
 		F4AB235F1E099FCAD2444AEC /* TelemetryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryController.swift; sourceTree = "<group>"; };
 		F5EC0840422B283BEFAECA00 /* WatchTelemetryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryController.swift; sourceTree = "<group>"; };
@@ -172,6 +188,8 @@
 		2CEEA1877963B97AB8CC7E1A /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				CE786C0F9400317AE609A8E4 /* InfoPlist.strings */,
+				44D1AEB2A62A3DE8ABBB31EF /* Localizable.strings */,
 				E32E18F950BFA52335DE7A0D /* Assets.xcassets */,
 			);
 			path = Resources;
@@ -185,9 +203,18 @@
 			path = Activities;
 			sourceTree = "<group>";
 		};
+		4DE5104FA5037ACF0698477E /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				5369B296EF83B5ED3D7D13CE /* Localizable.strings */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		5A547565DF6B79DB0CEA1A2F /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */,
 				7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */,
 				B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */,
 			);
@@ -244,6 +271,7 @@
 		C385C2ED5F87824556024D6D /* TougeDashWidgets */ = {
 			isa = PBXGroup;
 			children = (
+				4DE5104FA5037ACF0698477E /* Resources */,
 				B6DF9230FC2BD86F85A70343 /* TougeDashWidgets.swift */,
 			);
 			path = TougeDashWidgets;
@@ -266,6 +294,7 @@
 		E2AF93E03E4848526FC796D4 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				32EF1DB4AE9E0F3919DE5F2F /* Localizable.strings */,
 				3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */,
 			);
 			path = Resources;
@@ -428,6 +457,7 @@
 			knownRegions = (
 				Base,
 				en,
+				pl,
 			);
 			mainGroup = E5A0A26113E52B9E4ADC1FEA;
 			minimizedProjectReferenceProxies = 1;
@@ -450,6 +480,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				AC8C11B6916757CC66953A44 /* Assets.xcassets in Resources */,
+				6CD0077D0BC4E21C942B21FD /* InfoPlist.strings in Resources */,
+				299C268AE3198AFD790B2BE8 /* Localizable.strings in Resources */,
 				2A3D137A597A3A7650DB483E /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -458,6 +490,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				29951B8FDF19A1D63CD3CDF8 /* Localizable.strings in Resources */,
 				824F62972F06FB510E22F6B3 /* PrivacyInfo.xcprivacy in Resources */,
 				2F5A43CF144D24A36986C752 /* WatchAssets.xcassets in Resources */,
 			);
@@ -467,6 +500,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FFE5B49B570780A88D98C784 /* Localizable.strings in Resources */,
 				0445B54FD5520FC04D8FF0DA /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -487,6 +521,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F6FBEC893D3F5D887521A04E /* AppLocalization.swift in Sources */,
 				A9615A0E213F94BEF515418D /* TougeDashWatchApp.swift in Sources */,
 				7350D55CCA9B21D83D6941E1 /* WatchDashboardView.swift in Sources */,
 				3BCB3D0B6BC454922D743146 /* WatchTelemetryController.swift in Sources */,
@@ -498,6 +533,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DE23EEF71ABEEECFD970D2B8 /* AppLocalization.swift in Sources */,
 				C2FFF38884E04B9C3EAA6A67 /* BluetoothTelemetryService.swift in Sources */,
 				30A4F8895C5D5D7DCF993BBB /* CloudAccountService.swift in Sources */,
 				93B92EBD25C2A7DD562B0349 /* CloudCredentialStore.swift in Sources */,
@@ -527,6 +563,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B34D767DA02419747471EA57 /* AppLocalization.swift in Sources */,
 				C9BA350DEC850C27A0902F2A /* TelemetrySnapshot.swift in Sources */,
 				C44CA2A2FC8E0EE3137230C0 /* TougeDashWidgets.swift in Sources */,
 				571D08AD010FE11015D25FE5 /* WatchTelemetryPayload.swift in Sources */,
@@ -552,6 +589,45 @@
 			targetProxy = F54F7DDFF7E094F93830229E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		32EF1DB4AE9E0F3919DE5F2F /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				E0283F8F27A9276CBEC6AA4F /* en */,
+				390DDE5663561312036818FF /* pl */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		44D1AEB2A62A3DE8ABBB31EF /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				1BAC4A1BBACF7C5FE52A713C /* en */,
+				F289D7AADCD698F390E191DE /* pl */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		5369B296EF83B5ED3D7D13CE /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				97630148259D8776DD8E7BD5 /* en */,
+				D665D4EDDED532A21F6CE081 /* pl */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		CE786C0F9400317AE609A8E4 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				90C8C98EFFBD36920D116D0E /* en */,
+				2BEF1664EF73C11A88CEDB49 /* pl */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		136E6549ACDCA4CD1A681D6B /* Release */ = {
@@ -608,7 +684,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -669,7 +745,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

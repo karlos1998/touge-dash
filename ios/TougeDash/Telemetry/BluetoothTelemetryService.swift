@@ -26,11 +26,11 @@ enum BluetoothConnectionState: Equatable, Sendable {
     var label: String {
         switch self {
         case .unavailable(let reason): reason
-        case .ready: "Gotowy"
-        case .scanning: "Skanowanie"
-        case .connecting(let name): "Łączenie: \(name)"
+        case .ready: localized("Gotowy")
+        case .scanning: localized("Skanowanie")
+        case .connecting(let name): String(format: localized("Łączenie: %@"), name)
         case .connected(let name): name
-        case .disconnected(let reason): reason ?? "Rozłączono"
+        case .disconnected(let reason): reason ?? localized("Rozłączono")
         }
     }
 
@@ -102,13 +102,13 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
             peripherals[peripheral.identifier] = peripheral
             devices = [remembered]
             attemptedAutomaticConnection = true
-            appendDiagnostic("Connecting to remembered ECUMaster interface")
+            appendDiagnostic(localized("Connecting to remembered ECUMaster interface"))
             connect(to: remembered)
             return
         }
 
         setState(.scanning)
-        appendDiagnostic("Scanning only for ECUMaster BLE interfaces")
+        appendDiagnostic(localized("Scanning only for ECUMaster BLE interfaces"))
         central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
     }
 
@@ -126,7 +126,11 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         connectedPeripheral = peripheral
         peripheral.delegate = self
         setState(.connecting(device.name))
-        appendDiagnostic("Connecting to \(device.name) [\(device.id.uuidString)]")
+        appendDiagnostic(String(
+            format: localized("Connecting to %@ [%@]"),
+            device.name,
+            device.id.uuidString
+        ))
         if peripheral.state == .connected {
             activateConnectedPeripheral(peripheral)
             return
@@ -170,7 +174,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         }
         UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: lastPeripheralKey)
         setState(.connected(name))
-        appendDiagnostic("Connected; discovering GATT services")
+        appendDiagnostic(localized("Connected; discovering GATT services"))
         bluetoothDebugLog("connected name=\(name) id=\(peripheral.identifier.uuidString)")
         peripheral.discoverServices(nil)
     }
@@ -220,12 +224,12 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
             }
             setState(.ready)
             if shouldScan { startScanning() }
-        case .poweredOff: setState(.unavailable("Bluetooth wyłączony"))
-        case .unauthorized: setState(.unavailable("Brak uprawnienia Bluetooth"))
-        case .unsupported: setState(.unavailable("BLE offline"))
-        case .resetting: setState(.unavailable("Restart Bluetooth"))
-        case .unknown: setState(.unavailable("Nieznany stan Bluetooth"))
-        @unknown default: setState(.unavailable("Bluetooth niedostępny"))
+        case .poweredOff: setState(.unavailable(localized("Bluetooth wyłączony")))
+        case .unauthorized: setState(.unavailable(localized("Brak uprawnienia Bluetooth")))
+        case .unsupported: setState(.unavailable(localized("BLE unsupported")))
+        case .resetting: setState(.unavailable(localized("Restart Bluetooth")))
+        case .unknown: setState(.unavailable(localized("Nieznany stan Bluetooth")))
+        @unknown default: setState(.unavailable(localized("Bluetooth niedostępny")))
         }
     }
 
@@ -236,7 +240,7 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         rssi RSSI: NSNumber
     ) {
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
-        let name = advertisedName ?? peripheral.name ?? "Unknown BLE device"
+        let name = advertisedName ?? peripheral.name ?? localized("Unknown BLE device")
         guard Self.isECUMasterAdvertisement(name: name, advertisementData: advertisementData) else { return }
         bluetoothDebugLog("accepted ECUMaster device name=\(name)")
         let item = DiscoveredTelemetryDevice(
@@ -265,7 +269,10 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         bluetoothDebugLog("connection failed name=\(peripheral.name ?? "unknown") error=\(error?.localizedDescription ?? "unknown")")
-        appendDiagnostic("Connection failed: \(error?.localizedDescription ?? "unknown error")")
+        appendDiagnostic(String(
+            format: localized("Connection failed: %@"),
+            error?.localizedDescription ?? localized("unknown error")
+        ))
         setState(.disconnected(error?.localizedDescription))
         connectedPeripheral = nil
         if shouldScan { startScanning() }
@@ -273,7 +280,10 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         bluetoothDebugLog("disconnected name=\(peripheral.name ?? "unknown") error=\(error?.localizedDescription ?? "none")")
-        appendDiagnostic("Disconnected: \(error?.localizedDescription ?? "connection closed")")
+        appendDiagnostic(String(
+            format: localized("Disconnected: %@"),
+            error?.localizedDescription ?? localized("connection closed")
+        ))
         setState(.disconnected(error?.localizedDescription))
         connectedPeripheral = nil
         if shouldScan { startScanning() }
@@ -286,7 +296,10 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         peripheral.delegate = self
         peripherals[peripheral.identifier] = peripheral
         bluetoothDebugLog("restored name=\(peripheral.name ?? "unknown") state=\(peripheral.state.rawValue)")
-        appendDiagnostic("Restored Bluetooth connection to \(peripheral.name ?? peripheral.identifier.uuidString)")
+        appendDiagnostic(String(
+            format: localized("Restored Bluetooth connection to %@"),
+            peripheral.name ?? peripheral.identifier.uuidString
+        ))
         if peripheral.state == .connected {
             activateConnectedPeripheral(peripheral)
         }
@@ -296,25 +309,29 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
 extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error {
-            appendDiagnostic("Service discovery error: \(error.localizedDescription)")
+            appendDiagnostic(String(format: localized("Service discovery error: %@"), error.localizedDescription))
             return
         }
         for service in peripheral.services ?? [] {
             bluetoothDebugLog("service \(service.uuid.uuidString)")
-            appendDiagnostic("Service \(service.uuid.uuidString)")
+            appendDiagnostic(String(format: localized("Service %@"), service.uuid.uuidString))
             peripheral.discoverCharacteristics(nil, for: service)
         }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let error {
-            appendDiagnostic("Characteristic discovery error: \(error.localizedDescription)")
+            appendDiagnostic(String(format: localized("Characteristic discovery error: %@"), error.localizedDescription))
             return
         }
         for characteristic in service.characteristics ?? [] {
             let properties = characteristic.properties
             bluetoothDebugLog("characteristic \(characteristic.uuid.uuidString) properties=\(properties.rawValue)")
-            appendDiagnostic("Characteristic \(characteristic.uuid.uuidString) properties=\(properties.rawValue)")
+            appendDiagnostic(String(
+                format: localized("Characteristic %@ properties=%lld"),
+                characteristic.uuid.uuidString,
+                Int64(properties.rawValue)
+            ))
             if properties.contains(.notify) || properties.contains(.indicate) {
                 peripheral.setNotifyValue(true, for: characteristic)
             }
@@ -326,15 +343,19 @@ extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
         if let error {
-            appendDiagnostic("Notification error for \(characteristic.uuid.uuidString): \(error.localizedDescription)")
+            appendDiagnostic(String(
+                format: localized("Notification error for %@: %@"),
+                characteristic.uuid.uuidString,
+                error.localizedDescription
+            ))
         } else {
-            appendDiagnostic("Subscribed to \(characteristic.uuid.uuidString)")
+            appendDiagnostic(String(format: localized("Subscribed to %@"), characteristic.uuid.uuidString))
         }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error {
-            appendDiagnostic("Value error: \(error.localizedDescription)")
+            appendDiagnostic(String(format: localized("Value error: %@"), error.localizedDescription))
             return
         }
         guard let value = characteristic.value, !value.isEmpty else { return }

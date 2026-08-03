@@ -1,5 +1,6 @@
 name: TougeDash
 options:
+  developmentLanguage: en
   bundleIdPrefix: it.letscode
   deploymentTarget:
     iOS: "26.0"
@@ -15,7 +16,7 @@ settings:
     SWIFT_VERSION: "6.0"
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "2"
+    CURRENT_PROJECT_VERSION: "3"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     CLANG_ENABLE_MODULES: YES
 
@@ -30,6 +31,8 @@ targets:
         buildPhase: resources
     resources:
       - path: TougeDash/Resources/Assets.xcassets
+      - path: TougeDash/Resources/en.lproj
+      - path: TougeDash/Resources/pl.lproj
       - path: Config/PrivacyInfo.xcprivacy
     info:
       path: Config/TougeDash-Info.plist
@@ -43,9 +46,9 @@ targets:
           - CFBundleURLName: it.letscode.touge-dash.auth
             CFBundleURLSchemes:
               - tougedash
-        NSBluetoothAlwaysUsageDescription: Touge Dash używa Bluetooth do odbierania danych silnika z kompatybilnego interfejsu ECUMaster.
-        NSBluetoothPeripheralUsageDescription: Touge Dash używa Bluetooth do odbierania danych silnika z kompatybilnego interfejsu ECUMaster.
-        NSLocationWhenInUseUsageDescription: Po włączeniu zapisu trasy Touge Dash zapisuje położenie razem z telemetrią silnika, także po zablokowaniu telefonu.
+        NSBluetoothAlwaysUsageDescription: Touge Dash uses Bluetooth to receive engine data from a compatible ECUMaster interface.
+        NSBluetoothPeripheralUsageDescription: Touge Dash uses Bluetooth to receive engine data from a compatible ECUMaster interface.
+        NSLocationWhenInUseUsageDescription: When route recording is enabled, Touge Dash records location with engine telemetry, including while the phone is locked.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSSupportsLiveActivities: true
@@ -93,6 +96,8 @@ targets:
       - path: Config/Widgets/PrivacyInfo.xcprivacy
         buildPhase: resources
     resources:
+      - path: TougeDashWidgets/Resources/en.lproj
+      - path: TougeDashWidgets/Resources/pl.lproj
       - path: Config/Widgets/PrivacyInfo.xcprivacy
     info:
       path: Config/TougeDashWidgets-Info.plist
@@ -123,10 +128,13 @@ targets:
     sources:
       - path: TougeDashWatch
       - path: Shared/WatchTelemetryPayload.swift
+      - path: Shared/AppLocalization.swift
       - path: Config/Watch/PrivacyInfo.xcprivacy
         buildPhase: resources
     resources:
       - path: TougeDashWatch/Resources/WatchAssets.xcassets
+      - path: TougeDashWatch/Resources/en.lproj
+      - path: TougeDashWatch/Resources/pl.lproj
       - path: Config/Watch/PrivacyInfo.xcprivacy
     info:
       path: Config/TougeDashWatch-Info.plist

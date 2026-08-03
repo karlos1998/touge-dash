@@ -105,7 +105,7 @@ private struct LocationRecordingCard: View {
                     Text("ZAPIS TRASY")
                         .font(.system(size: 12, weight: .black))
                         .tracking(1)
-                    Text(locationTracker.isTracking ? "GPS aktywny · zapis działa w tle" : locationTracker.authorizationLabel)
+                    Text(localized(locationTracker.isTracking ? "GPS aktywny · zapis działa w tle" : locationTracker.authorizationLabel))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -161,10 +161,13 @@ private struct DriveSessionRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(session.startedAt.formatted(
                         Date.FormatStyle(date: .abbreviated, time: .shortened)
-                            .locale(Locale(identifier: "pl_PL"))
                     ))
                         .font(.headline.weight(.black))
-                    Text("\(formatDuration(session.duration)) · \(session.sampleCount.formatted()) próbek")
+                    Text(String(
+                        format: localized("%@ · %@ próbek"),
+                        formatDuration(session.duration),
+                        session.sampleCount.formatted()
+                    ))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -195,7 +198,10 @@ private struct DriveSessionRow: View {
 
             if session.distanceMeters > 0 {
                 Label(
-                    (session.distanceMeters / 1_000).formatted(.number.precision(.fractionLength(1))) + " km zapisanej trasy",
+                    String(
+                        format: localized("%@ km zapisanej trasy"),
+                        (session.distanceMeters / 1_000).formatted(.number.precision(.fractionLength(1)))
+                    ),
                     systemImage: "point.topleft.down.to.point.bottomright.curvepath"
                 )
                 .font(.caption2.weight(.bold))
@@ -215,7 +221,7 @@ private struct SessionStat: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: 7, weight: .black))
                 .tracking(0.5)
                 .lineLimit(1)
@@ -330,7 +336,6 @@ private struct DriveSessionDetailView: View {
         }
         .navigationTitle(session.startedAt.formatted(
             Date.FormatStyle(date: .abbreviated, time: .omitted)
-                .locale(Locale(identifier: "pl_PL"))
         ))
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -365,7 +370,6 @@ private struct SessionDetailHeader: View {
                         .foregroundStyle(Color.tougeCyan)
                     Text(session.startedAt.formatted(
                         Date.FormatStyle(date: .complete, time: .shortened)
-                            .locale(Locale(identifier: "pl_PL"))
                     ))
                         .font(.title3.weight(.black))
                 }
@@ -394,7 +398,7 @@ private struct HeaderSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: 7, weight: .black))
                 .tracking(0.6)
                 .foregroundStyle(.tertiary)
@@ -448,7 +452,7 @@ private struct MomentValue: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: 7, weight: .black))
                 .tracking(0.4)
                 .foregroundStyle(.tertiary)
@@ -499,10 +503,10 @@ private struct HistoryChartCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
+                    Text(localized(title))
                         .font(.system(size: 11, weight: .black))
                         .tracking(1.1)
-                    Text(subtitle)
+                    Text(localized(subtitle))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -511,7 +515,7 @@ private struct HistoryChartCard: View {
                     ForEach(series) { item in
                         HStack(spacing: 4) {
                             Circle().fill(item.color).frame(width: 6, height: 6)
-                            Text(item.name)
+                            Text(localized(item.name))
                         }
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.secondary)
@@ -523,9 +527,9 @@ private struct HistoryChartCard: View {
                 ForEach(series) { item in
                     ForEach(samples) { sample in
                         LineMark(
-                            x: .value("Czas", sample.timestamp),
+                            x: .value(localized("Czas"), sample.timestamp),
                             y: .value(item.name, item.value(sample)),
-                            series: .value("Seria", item.name)
+                            series: .value(localized("Seria"), localized(item.name))
                         )
                         .foregroundStyle(item.color)
                         .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
@@ -534,7 +538,7 @@ private struct HistoryChartCard: View {
                 }
 
                 if let selectedTime {
-                    RuleMark(x: .value("Wybrany czas", selectedTime))
+                    RuleMark(x: .value(localized("Wybrany czas"), selectedTime))
                         .foregroundStyle(Color.white.opacity(0.62))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                 }
@@ -604,7 +608,7 @@ private struct SessionRouteMap: View {
                     Text("TRASA")
                         .font(.system(size: 11, weight: .black))
                         .tracking(1.1)
-                    Text(hasMovement ? "Pozycja jest zsynchronizowana z kursorem wykresów" : "Zapisano pozycję postoju · trasa pojawi się po ruszeniu")
+                    Text(localized(hasMovement ? "Pozycja jest zsynchronizowana z kursorem wykresów" : "Zapisano pozycję postoju · trasa pojawi się po ruszeniu"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

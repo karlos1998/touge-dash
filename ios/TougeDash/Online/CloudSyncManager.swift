@@ -111,15 +111,21 @@ final class CloudSyncManager: ObservableObject {
 
     var statusLabel: String {
         switch state {
-        case .offline: "Brak internetu · dane zostają na iPhonie"
-        case .signedOut: "Synchronizacja online jest wyłączona"
-        case .waitingForVehicleName: "Nadaj nazwę podłączonemu autu"
-        case .ready: lastSynchronizedAt.map { "Ostatnia synchronizacja \($0.formatted(date: .omitted, time: .shortened))" } ?? "Gotowy do synchronizacji"
+        case .offline: localized("Brak internetu · dane zostają na iPhonie")
+        case .signedOut: localized("Synchronizacja online jest wyłączona")
+        case .waitingForVehicleName: localized("Nadaj nazwę podłączonemu autu")
+        case .ready: lastSynchronizedAt.map {
+            String(format: localized("Ostatnia synchronizacja %@"), $0.formatted(date: .omitted, time: .shortened))
+        } ?? localized("Gotowy do synchronizacji")
         case .syncing:
             if let progress {
-                "Wysyłam \(progress.completedSamples.formatted()) z \(progress.totalSamples.formatted()) próbek"
+                String(
+                    format: localized("Wysyłam %@ z %@ próbek"),
+                    progress.completedSamples.formatted(),
+                    progress.totalSamples.formatted()
+                )
             } else {
-                "Przygotowuję synchronizację…"
+                localized("Przygotowuję synchronizację…")
             }
         case .failed(let message): message
         }

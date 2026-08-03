@@ -247,7 +247,10 @@ final class CloudAccountService: ObservableObject {
         if http.statusCode == 401 { throw CloudAPIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
             let payload = try? JSONDecoder.tougeDashCloud().decode(CloudAPIErrorPayload.self, from: data)
-            throw CloudAPIError.server(status: http.statusCode, message: payload?.message ?? "Błąd serwera (\(http.statusCode)).")
+            throw CloudAPIError.server(
+                status: http.statusCode,
+                message: payload?.message ?? String(format: localized("Błąd serwera (%d)."), http.statusCode)
+            )
         }
         if Response.self == EmptyCloudResponse.self {
             return EmptyCloudResponse() as! Response

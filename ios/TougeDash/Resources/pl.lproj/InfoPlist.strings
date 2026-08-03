@@ -1,0 +1,3 @@
+"NSBluetoothAlwaysUsageDescription" = "Touge Dash używa Bluetooth do odbierania danych silnika z kompatybilnego interfejsu ECUMaster.";
+"NSBluetoothPeripheralUsageDescription" = "Touge Dash używa Bluetooth do odbierania danych silnika z kompatybilnego interfejsu ECUMaster.";
+"NSLocationWhenInUseUsageDescription" = "Po włączeniu zapisu trasy Touge Dash zapisuje położenie razem z telemetrią silnika, także po zablokowaniu telefonu.";

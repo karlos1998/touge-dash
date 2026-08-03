@@ -246,7 +246,7 @@ private struct InlineTelemetry: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: 8, weight: .black))
                 .tracking(0.8)
                 .foregroundStyle(.tertiary)
@@ -349,7 +349,7 @@ private struct HealthValue: View {
                 Image(systemName: icon)
                     .font(.system(size: compact ? 9 : 11, weight: .bold))
                     .foregroundStyle(warning ? Color.tougeRed : tint)
-                Text(title)
+                Text(localized(title))
                     .font(.system(size: compact ? 7 : 8, weight: .black))
                     .tracking(0.7)
                     .lineLimit(1)
@@ -394,7 +394,7 @@ private struct StatusTag: View {
                 .fill(tint)
                 .frame(width: 5, height: 5)
                 .shadow(color: tint.opacity(0.8), radius: 4)
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: 8, weight: .black))
                 .tracking(0.7)
         }
@@ -419,7 +419,7 @@ private struct MetricCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 5 : 9) {
             HStack {
-                Text(title)
+                Text(localized(title))
                     .font(.caption2.weight(.black))
                     .tracking(1)
                     .foregroundStyle(.secondary)
@@ -454,7 +454,7 @@ private struct CompactMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
+            Text(localized(title))
                 .font(.caption2.weight(.black))
                 .tracking(0.8)
                 .foregroundStyle(.secondary)
@@ -520,7 +520,7 @@ private struct ActionLabel: View {
     let compact: Bool
 
     var body: some View {
-        Label(title, systemImage: icon)
+        Label(localized(title), systemImage: icon)
             .font(.subheadline.weight(.bold))
             .lineLimit(1)
             .minimumScaleFactor(0.75)
@@ -542,7 +542,7 @@ private struct ConnectionBadge: View {
                 .fill(isConnected ? Color.tougeMint : Color.tougeRed)
                 .frame(width: 7, height: 7)
                 .shadow(color: (isConnected ? Color.tougeMint : Color.tougeRed).opacity(0.8), radius: 5)
-            Text(title.uppercased())
+            Text(localized(title).uppercased())
                 .font(.caption2.weight(.black))
                 .lineLimit(1)
         }
@@ -598,7 +598,11 @@ private struct DevicePickerView: View {
                 if !controller.bluetooth.diagnostics.isEmpty {
                     Section("Protocol") {
                         LabeledContent("Received") {
-                            Text("\(controller.bluetooth.receivedPacketCount) packets · \(controller.receivedBytes) bytes")
+                            Text(String(
+                                format: localized("%@ packets · %@ bytes"),
+                                controller.bluetooth.receivedPacketCount.formatted(),
+                                controller.receivedBytes.formatted()
+                            ))
                                 .monospacedDigit()
                         }
                         LabeledContent("Valid frames") {

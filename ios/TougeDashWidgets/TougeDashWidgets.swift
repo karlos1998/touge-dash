@@ -93,7 +93,10 @@ private struct SmallTelemetryWidget: View {
                         .font(.caption.monospacedDigit().weight(.bold))
                 }
                 Spacer()
-                Text("OIL " + Int(snapshot.oilTemperatureCelsius).formatted() + "°")
+                Text(String(
+                    format: localized("OIL %@°"),
+                    Int(snapshot.oilTemperatureCelsius).formatted()
+                ))
                     .font(.caption.monospacedDigit().weight(.black))
                     .foregroundStyle(snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius ? WidgetPalette.red : WidgetPalette.cyan)
             }
@@ -151,7 +154,7 @@ private struct WidgetMetric: View {
 
     var body: some View {
         HStack(alignment: .lastTextBaseline) {
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: 8, weight: .black))
                 .foregroundStyle(.secondary)
             Spacer()
@@ -221,7 +224,10 @@ struct TougeDashLiveActivity: Widget {
                     .foregroundStyle(oilTemperatureTint(for: context.state.telemetry))
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
-                    .accessibilityLabel("Oil temperature \(Int(context.state.telemetry.oilTemperatureCelsius)) degrees Celsius")
+                    .accessibilityLabel(String(
+                        format: localized("Oil temperature %lld degrees Celsius"),
+                        Int64(context.state.telemetry.oilTemperatureCelsius)
+                    ))
             } minimal: {
                 Image(systemName: "oilcan.fill")
                     .foregroundStyle(oilPressureTint(for: context.state.telemetry))
@@ -260,7 +266,7 @@ private struct TelemetryActivityPanel: View {
                 Image(systemName: snapshot.hasTemperatureWarning ? "exclamationmark.triangle.fill" : "gauge.with.dots.needle.67percent")
                     .foregroundStyle(snapshot.hasTemperatureWarning ? WidgetPalette.red : WidgetPalette.cyan)
                     .symbolEffect(.pulse, options: .repeating, isActive: snapshot.hasTemperatureWarning)
-                Text(snapshot.hasTemperatureWarning ? "TEMP ALERT" : "TOUGE DASH")
+                Text(localized(snapshot.hasTemperatureWarning ? "TEMP ALERT" : "TOUGE DASH"))
                     .font(.system(size: compact ? 9 : 11, weight: .black))
                     .tracking(0.8)
                     .foregroundStyle(snapshot.hasTemperatureWarning ? WidgetPalette.red : WidgetPalette.cyan)
@@ -273,7 +279,7 @@ private struct TelemetryActivityPanel: View {
                 Circle()
                     .fill(snapshot.hasTemperatureWarning ? WidgetPalette.red : (snapshot.isFresh ? WidgetPalette.mint : Color.gray))
                     .frame(width: 6, height: 6)
-                Text(snapshot.hasTemperatureWarning ? "ALERT" : (snapshot.isFresh ? "LIVE" : "STALE"))
+                Text(localized(snapshot.hasTemperatureWarning ? "ALERT" : (snapshot.isFresh ? "LIVE" : "STALE")))
                     .font(.system(size: 8, weight: .black))
                     .foregroundStyle(snapshot.hasTemperatureWarning ? WidgetPalette.red : (snapshot.isFresh ? WidgetPalette.mint : .secondary))
             }
@@ -319,7 +325,16 @@ private struct TelemetryActivityPanel: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(connectionLabel), oil pressure \(snapshot.oilPressureBar) bar, boost \(snapshot.boostBar) bar, AFR \(snapshot.afr), oil temperature \(Int(snapshot.oilTemperatureCelsius)) degrees Celsius, coolant temperature \(Int(snapshot.coolantCelsius)) degrees Celsius")
+        .accessibilityLabel(
+            connectionLabel + ", " + String(
+                format: localized("Oil pressure %.1f bar, boost %.2f bar, AFR %.1f, oil temperature %lld degrees Celsius, coolant temperature %lld degrees Celsius"),
+                snapshot.oilPressureBar,
+                snapshot.boostBar,
+                snapshot.afr,
+                Int64(snapshot.oilTemperatureCelsius),
+                Int64(snapshot.coolantCelsius)
+            )
+        )
     }
 }
 
@@ -401,7 +416,7 @@ private struct ActivityMetricTile: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: compact ? 7 : 8, weight: .black))
                 .tracking(0.3)
                 .foregroundStyle(.secondary)
@@ -451,7 +466,7 @@ private struct LiveMetric: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: 8, weight: .black))
                 .foregroundStyle(.secondary)
             HStack(alignment: .lastTextBaseline, spacing: 2) {

@@ -18,9 +18,14 @@ final class WatchTelemetryController: NSObject, ObservableObject, WCSessionDeleg
         }
         #if DEBUG
         let environment = ProcessInfo.processInfo.environment
-        if environment["TOUGE_DASH_WATCH_PREVIEW"] == "1" || environment["TOUGE_DASH_WATCH_ALERT_PREVIEW"] == "1" {
+        let arguments = ProcessInfo.processInfo.arguments
+        let showsPreview = environment["TOUGE_DASH_WATCH_PREVIEW"] == "1"
+            || arguments.contains("--touge-watch-preview")
+        let showsAlertPreview = environment["TOUGE_DASH_WATCH_ALERT_PREVIEW"] == "1"
+            || arguments.contains("--touge-watch-alert-preview")
+        if showsPreview || showsAlertPreview {
             var preview = WatchTelemetryPayload.preview
-            if environment["TOUGE_DASH_WATCH_ALERT_PREVIEW"] == "1" {
+            if showsAlertPreview {
                 preview.coolantCelsius = 112
                 preview.oilTemperatureCelsius = 124
                 preview.hasCriticalWarning = true

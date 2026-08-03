@@ -106,10 +106,13 @@ enum CloudAPIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidServerAddress: "Nieprawidłowy adres serwera."
-        case .invalidResponse: "Serwer zwrócił nieprawidłową odpowiedź."
-        case .unauthorized: "Sesja wygasła. Zaloguj się ponownie."
-        case .server(_, let message): message
+        case .invalidServerAddress: localized("Nieprawidłowy adres serwera.")
+        case .invalidResponse: localized("Serwer zwrócił nieprawidłową odpowiedź.")
+        case .unauthorized: localized("Sesja wygasła. Zaloguj się ponownie.")
+        case .server(let status, let message):
+            Locale.current.language.languageCode?.identifier == "pl"
+                ? message
+                : String(format: localized("Błąd serwera (%d)."), status)
         }
     }
 }

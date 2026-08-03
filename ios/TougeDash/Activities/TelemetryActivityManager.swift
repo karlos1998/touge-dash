@@ -20,7 +20,7 @@ final class TelemetryActivityManager: ObservableObject {
 
     func start(with snapshot: TelemetrySnapshot, connectionLabel: String) async {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
-            lastError = "Live Activities are disabled in Settings"
+            lastError = localized("Live Activities are disabled in Settings")
             return
         }
         if activity != nil {
@@ -91,7 +91,7 @@ final class TelemetryActivityManager: ObservableObject {
         guard let activity else { return }
         let finalState = TelemetryActivityAttributes.ContentState(
             telemetry: SharedTelemetryStore.load(),
-            connectionLabel: "Drive ended"
+            connectionLabel: localized("Drive ended")
         )
         await activity.end(ActivityContent(state: finalState, staleDate: nil), dismissalPolicy: .immediate)
         self.activity = nil

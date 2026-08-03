@@ -36,7 +36,7 @@ final class EngineAlertManager: NSObject, UNUserNotificationCenterDelegate {
 
     private func postTemperatureNotification(_ snapshot: TelemetrySnapshot) {
         let content = UNMutableNotificationContent()
-        content.title = "Touge Dash — wysoka temperatura"
+        content.title = localized("Touge Dash — wysoka temperatura")
         content.body = warningDescription(for: snapshot)
         content.sound = .default
         content.interruptionLevel = .timeSensitive
@@ -51,12 +51,12 @@ final class EngineAlertManager: NSObject, UNUserNotificationCenterDelegate {
     private func warningDescription(for snapshot: TelemetrySnapshot) -> String {
         var warnings: [String] = []
         if snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius {
-            warnings.append("Płyn chłodniczy: \(Int(snapshot.coolantCelsius))°C")
+            warnings.append(String(format: localized("Płyn chłodniczy: %d°C"), Int(snapshot.coolantCelsius)))
         }
         if snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius {
-            warnings.append("Olej: \(Int(snapshot.oilTemperatureCelsius))°C")
+            warnings.append(String(format: localized("Olej: %d°C"), Int(snapshot.oilTemperatureCelsius)))
         }
-        return warnings.joined(separator: " • ") + ". Zatrzymaj auto i sprawdź silnik."
+        return warnings.joined(separator: " • ") + ". " + localized("Zatrzymaj auto i sprawdź silnik.")
     }
 
     nonisolated func userNotificationCenter(

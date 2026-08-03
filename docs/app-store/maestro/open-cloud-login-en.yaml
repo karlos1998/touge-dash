@@ -1,0 +1,7 @@
+appId: it.letscode.touge-dash
+---
+- tapOn: "History"
+- tapOn: "Enable online sync"
+- extendedWaitUntil:
+    visible: "TOUGE DASH"
+    timeout: 5000

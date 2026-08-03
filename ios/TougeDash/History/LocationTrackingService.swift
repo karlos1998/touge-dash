@@ -32,15 +32,15 @@ final class LocationTrackingService: NSObject, ObservableObject, @preconcurrency
         if isEnabled,
            !driveActive,
            authorizationStatus == .authorizedAlways || authorizationStatus == .authorizedWhenInUse {
-            return "Gotowy · GPS ruszy po połączeniu z autem"
+            return localized("Gotowy · GPS ruszy po połączeniu z autem")
         }
         return switch authorizationStatus {
-        case .notDetermined: "Wymaga zgody"
-        case .restricted: "Ograniczona"
-        case .denied: "Wyłączona w Ustawieniach"
-        case .authorizedAlways: "Zawsze"
-        case .authorizedWhenInUse: "Podczas używania"
-        @unknown default: "Nieznana"
+        case .notDetermined: localized("Wymaga zgody")
+        case .restricted: localized("Ograniczona")
+        case .denied: localized("Wyłączona w Ustawieniach")
+        case .authorizedAlways: localized("Zawsze")
+        case .authorizedWhenInUse: localized("Podczas używania")
+        @unknown default: localized("Nieznana")
         }
     }
 
@@ -61,7 +61,7 @@ final class LocationTrackingService: NSObject, ObservableObject, @preconcurrency
         case .authorizedAlways, .authorizedWhenInUse:
             if driveActive { startIfAuthorized() }
         case .denied, .restricted:
-            lastError = "Włącz dostęp do lokalizacji dla Touge Dash w Ustawieniach iOS."
+            lastError = localized("Włącz dostęp do lokalizacji dla Touge Dash w Ustawieniach iOS.")
         @unknown default:
             break
         }

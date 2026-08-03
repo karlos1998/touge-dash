@@ -1,0 +1,15 @@
+"RPM, boost and essential EMU engine telemetry at a glance." = "RPM, doładowanie i najważniejsze parametry silnika z EMU.";
+"BOOST" = "BOOST";
+"OIL" = "OLEJ";
+"OIL P" = "CIŚ. OLEJU";
+"OIL T" = "TEMP. OLEJU";
+"OIL TEMP" = "TEMP. OLEJU";
+"COOLANT" = "PŁYN";
+"COOL" = "PŁYN";
+"TEMP ALERT" = "ALERT TEMP.";
+"ALERT" = "ALERT";
+"LIVE" = "LIVE";
+"STALE" = "NIEAKTUALNE";
+"Oil temperature %lld degrees Celsius" = "Temperatura oleju: %lld stopni Celsjusza";
+"Oil pressure %.1f bar, boost %.2f bar, AFR %.1f, oil temperature %lld degrees Celsius, coolant temperature %lld degrees Celsius" = "Ciśnienie oleju %.1f bara, doładowanie %.2f bara, AFR %.1f, temperatura oleju %lld stopni Celsjusza, temperatura płynu %lld stopni Celsjusza";
+"OIL %@°" = "OLEJ %@°";

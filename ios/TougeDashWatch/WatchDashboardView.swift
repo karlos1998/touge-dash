@@ -41,7 +41,7 @@ struct WatchDashboardView: View {
             coolantPanel(snapshot: snapshot)
 
             if snapshot.hasCriticalWarning {
-                Label(snapshot.hasTemperatureWarning ? "TEMPERATURE ALERT" : "ENGINE WARNING", systemImage: "exclamationmark.triangle.fill")
+                Label(localized(snapshot.hasTemperatureWarning ? "TEMPERATURE ALERT" : "ENGINE WARNING"), systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 9, weight: .black))
                     .foregroundStyle(Color.tougeOrange)
                     .symbolEffect(.pulse, options: .repeating, isActive: snapshot.hasTemperatureWarning)
@@ -70,7 +70,7 @@ struct WatchDashboardView: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(snapshot.hasTemperatureWarning ? Color.tougeOrange : Color.tougeCyan)
                 .symbolEffect(.pulse, options: .repeating, isActive: snapshot.hasTemperatureWarning)
-            Text(snapshot.hasTemperatureWarning ? "TEMP ALERT" : "TOUGE DASH")
+            Text(localized(snapshot.hasTemperatureWarning ? "TEMP ALERT" : "TOUGE DASH"))
                 .font(.system(size: 10, weight: .black))
                 .tracking(0.7)
                 .foregroundStyle(snapshot.hasTemperatureWarning ? Color.tougeOrange : Color.tougeCyan)
@@ -78,7 +78,7 @@ struct WatchDashboardView: View {
             Circle()
                 .fill(snapshot.hasTemperatureWarning ? Color.tougeOrange : (snapshot.isFresh ? Color.tougeMint : Color.gray))
                 .frame(width: 6, height: 6)
-            Text(snapshot.hasTemperatureWarning ? "HOT" : (snapshot.isFresh ? "LIVE" : "WAIT"))
+            Text(localized(snapshot.hasTemperatureWarning ? "HOT" : (snapshot.isFresh ? "LIVE" : "WAIT")))
                 .font(.system(size: 8, weight: .black))
                 .foregroundStyle(snapshot.hasTemperatureWarning ? Color.tougeOrange : (snapshot.isFresh ? Color.tougeMint : Color.secondary))
         }
@@ -138,7 +138,7 @@ private struct WatchMetric: View {
 
     var body: some View {
         VStack(spacing: 1) {
-            Text(title)
+            Text(localized(title))
                 .font(.system(size: 9, weight: .black))
                 .tracking(0.4)
                 .foregroundStyle(.secondary)

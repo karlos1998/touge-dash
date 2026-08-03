@@ -103,17 +103,25 @@ struct CloudSyncCard: View {
                             ProgressView(value: progress.fraction)
                                 .tint(.tougeCyan)
                             HStack {
-                                Text("\(progress.completedSamples.formatted()) / \(progress.totalSamples.formatted()) próbek")
+                                Text(String(
+                                    format: localized("%@ / %@ próbek"),
+                                    progress.completedSamples.formatted(),
+                                    progress.totalSamples.formatted()
+                                ))
                                 Spacer()
-                                Text(byteCount(progress.transferredBytes) + " wysłano")
+                                Text(String(format: localized("%@ wysłano"), byteCount(progress.transferredBytes)))
                             }
                             .font(.caption2.monospacedDigit().weight(.bold))
                             .foregroundStyle(.secondary)
                         } else if sync.pendingSessions > 0 {
                             HStack(spacing: 5) {
-                                Text("\(sync.pendingSessions) \(sync.pendingSessions == 1 ? "PRZEJAZD" : "PRZEJAZDY")")
+                                Text(String(
+                                    format: localized("%@ %@"),
+                                    sync.pendingSessions.formatted(),
+                                    localized(sync.pendingSessions == 1 ? "PRZEJAZD" : "PRZEJAZDY")
+                                ))
                                 Text("·")
-                                Text("\(sync.pendingSamples.formatted()) PRÓBEK")
+                                Text(String(format: localized("%@ PRÓBEK"), sync.pendingSamples.formatted()))
                                 Text("·")
                                 Text("OK. \(byteCount(sync.estimatedPendingBytes))")
                             }
@@ -121,7 +129,7 @@ struct CloudSyncCard: View {
                             .tracking(0.55)
                             .foregroundStyle(Color.tougeOrange)
                         } else if sync.lastTransferBytes > 0 {
-                            Label("Wysłano \(byteCount(sync.lastTransferBytes))", systemImage: "checkmark.circle.fill")
+                            Label(String(format: localized("Wysłano %@"), byteCount(sync.lastTransferBytes)), systemImage: "checkmark.circle.fill")
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(Color.tougeMint)
                         }
@@ -184,7 +192,7 @@ struct CloudSyncCard: View {
             Circle()
                 .fill(color)
                 .frame(width: 6, height: 6)
-            Text(failed ? "BŁĄD" : syncing ? "SYNC" : active ? "ONLINE" : "LOCAL")
+            Text(localized(failed ? "BŁĄD" : syncing ? "SYNC" : active ? "ONLINE" : "LOCAL"))
                 .font(.system(size: 8, weight: .black))
                 .tracking(0.8)
         }
@@ -223,7 +231,7 @@ private struct CloudAuthenticationView: View {
                         Text("TOUGE DASH")
                             .font(.title2.weight(.black))
                             .tracking(2)
-                        Text(mode == .login ? "Zaloguj się do swojego garażu" : "Utwórz konto")
+                        Text(localized(mode == .login ? "Zaloguj się do swojego garażu" : "Utwórz konto"))
                             .foregroundStyle(.secondary)
                     }
                     .padding(.bottom, 8)
@@ -243,7 +251,7 @@ private struct CloudAuthenticationView: View {
                             .textContentType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .keyboardType(.emailAddress)
-                        SecureField(mode == .login ? "Hasło" : "Hasło · minimum 10 znaków", text: $password)
+                        SecureField(localized(mode == .login ? "Hasło" : "Hasło · minimum 10 znaków"), text: $password)
                             .textContentType(mode == .login ? .password : .newPassword)
                     }
                     .textFieldStyle(CloudTextFieldStyle())
@@ -274,7 +282,7 @@ private struct CloudAuthenticationView: View {
                             if success { onAuthenticated() }
                         }
                     } label: {
-                        Text(account.isWorking ? "ŁĄCZĘ…" : mode == .login ? "ZALOGUJ" : "UTWÓRZ KONTO")
+                        Text(localized(account.isWorking ? "ŁĄCZĘ…" : mode == .login ? "ZALOGUJ" : "UTWÓRZ KONTO"))
                             .font(.system(size: 12, weight: .black))
                             .tracking(1)
                             .frame(maxWidth: .infinity)
@@ -363,17 +371,17 @@ private struct CloudAuthenticationView: View {
     private var validationMessage: String? {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedEmail.contains("@") || !trimmedEmail.contains(".") {
-            return "Podaj poprawny adres e-mail."
+            return localized("Podaj poprawny adres e-mail.")
         }
         if password.isEmpty {
-            return "Podaj hasło."
+            return localized("Podaj hasło.")
         }
         if mode == .register {
             if displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                return "Podaj nazwę wyświetlaną."
+                return localized("Podaj nazwę wyświetlaną.")
             }
             if !CloudPasswordPolicy.isValid(password) {
-                return "Hasło musi mieć 10–72 znaki oraz zawierać literę i cyfrę."
+                return localized("Hasło musi mieć 10–72 znaki oraz zawierać literę i cyfrę.")
             }
         }
         return nil
@@ -402,7 +410,7 @@ private struct CloudAuthenticationView: View {
     }
 
     private func passwordRequirement(_ title: String, _ met: Bool) -> some View {
-        Label(title, systemImage: met ? "checkmark.circle.fill" : "circle")
+        Label(localized(title), systemImage: met ? "checkmark.circle.fill" : "circle")
             .font(.caption2.weight(.semibold))
             .foregroundStyle(met ? Color.tougeMint : .secondary)
     }
@@ -459,7 +467,7 @@ private struct ProviderButton: View {
         Button(action: action) {
             HStack {
                 Text(icon).font(.headline.weight(.black))
-                Text(title).font(.subheadline.weight(.bold))
+                Text(localized(title)).font(.subheadline.weight(.bold))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 44)
