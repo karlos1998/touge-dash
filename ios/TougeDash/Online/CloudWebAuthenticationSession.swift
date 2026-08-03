@@ -47,9 +47,13 @@ final class CloudWebAuthenticationSession: NSObject, ObservableObject, ASWebAuth
     }
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow) ?? ASPresentationAnchor()
+        let windowScenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let keyWindow = windowScenes.flatMap(\.windows).first(where: \.isKeyWindow) {
+            return keyWindow
+        }
+        guard let windowScene = windowScenes.first else {
+            preconditionFailure("Web authentication requires an active window scene.")
+        }
+        return ASPresentationAnchor(windowScene: windowScene)
     }
 }

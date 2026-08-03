@@ -14,3 +14,28 @@ final class CloudPasswordPolicyTests: XCTestCase {
         XCTAssertEqual(CloudPasswordPolicy.strength("Touge-Dash-42").label, "Mocne")
     }
 }
+
+final class CloudAccountServiceTests: XCTestCase {
+    func testProductionAddressReplacesMissingAndLocalDevelopmentValues() {
+        let production = "https://touge-dash-engine.letscode.it"
+
+        XCTAssertEqual(CloudAccountService.resolvedAddress(nil, productionAddress: production), production)
+        XCTAssertEqual(
+            CloudAccountService.resolvedAddress("http://localhost:8181", productionAddress: production),
+            production
+        )
+        XCTAssertEqual(
+            CloudAccountService.resolvedAddress("http://127.0.0.1:8181", productionAddress: production),
+            production
+        )
+    }
+
+    func testCustomRemoteAddressIsPreserved() {
+        let custom = "https://staging-touge-dash.example.com"
+
+        XCTAssertEqual(
+            CloudAccountService.resolvedAddress(custom, productionAddress: "https://touge-dash-engine.letscode.it"),
+            custom
+        )
+    }
+}

@@ -5,6 +5,8 @@ final class CloudAccountService: ObservableObject {
     private enum Defaults {
         static let serverAddress = "TougeDash.cloud.serverAddress"
         static let webAddress = "TougeDash.cloud.webAddress"
+        static let productionServerAddress = "https://touge-dash-engine.letscode.it"
+        static let productionWebAddress = "https://touge-dash.letscode.it"
     }
 
     @Published private(set) var session: CloudAuthSession?
@@ -22,14 +24,30 @@ final class CloudAccountService: ObservableObject {
     init(urlSession: URLSession = .shared) {
         self.urlSession = urlSession
         session = CloudCredentialStore.load()
-        serverAddress = UserDefaults.standard.string(forKey: Defaults.serverAddress)
-            ?? "http://localhost:8181"
-        webAddress = UserDefaults.standard.string(forKey: Defaults.webAddress)
-            ?? "http://localhost:4200"
+        serverAddress = Self.resolvedAddress(
+            UserDefaults.standard.string(forKey: Defaults.serverAddress),
+            productionAddress: Defaults.productionServerAddress
+        )
+        webAddress = Self.resolvedAddress(
+            UserDefaults.standard.string(forKey: Defaults.webAddress),
+            productionAddress: Defaults.productionWebAddress
+        )
+        UserDefaults.standard.set(serverAddress, forKey: Defaults.serverAddress)
+        UserDefaults.standard.set(webAddress, forKey: Defaults.webAddress)
     }
 
     var isAuthenticated: Bool { session != nil }
     var account: CloudAccount? { session?.account }
+
+    nonisolated static func resolvedAddress(_ storedAddress: String?, productionAddress: String) -> String {
+        guard let storedAddress = storedAddress?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !storedAddress.isEmpty,
+              let host = URLComponents(string: storedAddress)?.host?.lowercased(),
+              !["localhost", "127.0.0.1", "::1"].contains(host) else {
+            return productionAddress
+        }
+        return storedAddress
+    }
 
     func register(email: String, password: String, displayName: String) async -> Bool {
         await authenticate(endpoint: "/api/v1/auth/register", body: [
