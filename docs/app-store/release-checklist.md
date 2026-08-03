@@ -20,7 +20,7 @@
 - [x] `https://touge-dash.letscode.it/support` is publicly accessible.
 - [x] Production API exposes and verifies account deletion.
 - [ ] Sign in with Apple callback and production domain are verified.
-- [ ] Dedicated review account is created and contains representative data.
+- [x] Dedicated review account is created and contains representative data.
 
 ## Product page
 
@@ -30,6 +30,7 @@
 - [x] iPhone 6.9-inch screenshots are prepared without an alpha channel.
 - [x] iPad 13-inch screenshots are prepared without an alpha channel.
 - [x] Apple Watch screenshots are prepared without an alpha channel.
+- [x] iPhone, iPad and Apple Watch screenshots are uploaded to version `1.0`.
 - [ ] Age rating questionnaire is completed.
 - [ ] Availability, price and manual release are configured.
 

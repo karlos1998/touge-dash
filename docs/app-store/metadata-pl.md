@@ -7,7 +7,7 @@
 - Kategoria główna: `Narzędzia`
 - Kategoria dodatkowa: `Sport`
 - Copyright: `2026 TrueCode Sp. z o.o.`
-- SKU: `touge-dash-ios-001`
+- SKU: `touge-dash-ios-2026`
 - Wersja: `1.0`
 - Cena: bezpłatna
 - Sposób wydania: ręczne opublikowanie po akceptacji
@@ -71,4 +71,3 @@ Touge Dash jest niezależnym projektem i nie jest powiązany ani autoryzowany pr
 ## Prawa do treści
 
 Aplikacja nie odtwarza ani nie agreguje treści osób trzecich. Nazwy ECUMaster, EMU Black i EMULOGGER są używane wyłącznie do opisania zgodności technicznej. W aplikacji i na stronie pomocy znajduje się informacja, że projekt jest niezależny i nieautoryzowany przez producenta.
-

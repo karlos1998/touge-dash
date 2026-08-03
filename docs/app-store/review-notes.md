@@ -18,9 +18,12 @@ The app remains usable without the hardware: the reviewer can inspect navigation
 
 ## Review account
 
-A dedicated production review account will be entered in the App Review Information fields in App Store Connect. Its password is intentionally not stored in this repository.
+A dedicated production review account will be entered in the App Review Information fields in App Store Connect:
 
-The account uses the same production environment as the submitted build and contains a sample vehicle and recorded session. It can be used through email and password without access to a third-party social account.
+- email: `appreview-6797608558@letscode.it`,
+- password: stored in the macOS Keychain item `TougeDash-AppReview` and intentionally not stored in this repository.
+
+The account uses the same production environment as the submitted build and contains the `Auto demonstracyjne` vehicle with a 240-sample recorded session and GPS route. It can be used through email and password without access to a third-party social account.
 
 ## Suggested review flow
 
@@ -41,4 +44,3 @@ Touge Dash is not a certified gauge. The app tells users to compare readings wit
 - physical-hardware review video URL or App Review attachment,
 - review account email and password,
 - contact phone number available during the review window.
-
