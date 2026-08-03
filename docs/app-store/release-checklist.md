@@ -10,9 +10,9 @@
 - [x] iOS tests pass.
 - [x] Release archive validates without errors.
 - [x] App Store Connect record is created for Apple ID `6797608558`.
-- [ ] Version and build number are confirmed as `1.0 (3)`.
+- [x] Version and build number are confirmed as `1.0 (3)`.
 - [x] App Store Connect IPA export succeeds with distribution signing.
-- [x] Uploaded build `1.0 (2)` finishes processing in App Store Connect.
+- [x] Uploaded build `1.0 (3)` finishes processing and is selected for version `1.0`.
 
 ## Production services
 
