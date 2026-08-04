@@ -98,7 +98,7 @@ private struct SmallTelemetryWidget: View {
                     Int(snapshot.oilTemperatureCelsius).formatted()
                 ))
                     .font(.caption.monospacedDigit().weight(.black))
-                    .foregroundStyle(snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius ? WidgetPalette.red : WidgetPalette.cyan)
+                    .foregroundStyle(snapshot.hasOilTemperatureWarning ? WidgetPalette.red : WidgetPalette.cyan)
             }
         }
     }
@@ -134,7 +134,7 @@ private struct MediumTelemetryWidget: View {
             VStack(spacing: 1) {
                 Text(Int(snapshot.oilTemperatureCelsius).formatted() + "°")
                     .font(.system(size: 39, weight: .black, design: .rounded))
-                    .foregroundStyle(snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius ? WidgetPalette.red : WidgetPalette.cyan)
+                    .foregroundStyle(snapshot.hasOilTemperatureWarning ? WidgetPalette.red : WidgetPalette.cyan)
                 Text("OIL TEMP")
                     .font(.system(size: 8, weight: .black))
                     .foregroundStyle(.secondary)
@@ -492,11 +492,11 @@ private func oilPressureTint(for snapshot: TelemetrySnapshot) -> Color {
 }
 
 private func oilTemperatureTint(for snapshot: TelemetrySnapshot) -> Color {
-    snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius ? WidgetPalette.red : WidgetPalette.orange
+    snapshot.hasOilTemperatureWarning ? WidgetPalette.red : WidgetPalette.orange
 }
 
 private func coolantTint(for snapshot: TelemetrySnapshot) -> Color {
-    snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius ? WidgetPalette.red : .white
+    snapshot.hasCoolantWarning ? WidgetPalette.red : .white
 }
 
 private struct WidgetBackground: View {

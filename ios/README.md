@@ -9,6 +9,7 @@ Natywna aplikacja SwiftUI do podglądu telemetrii ECUMaster EMU Black. Projekt z
 - lokalną historię przejazdów, interaktywne wykresy i opcjonalny zapis GPS,
 - automatyczne raporty incydentów z buforem 30 s przed i 60 s po zdarzeniu,
 - notatki przypięte do dokładnego momentu telemetrii,
+- konfigurowalne reguły per auto z synchronizacją owner/mechanic i obsługą konfliktów,
 - opcjonalne konto i kolejkę synchronizacji Touge Dash Cloud,
 - mały i średni widget,
 - Live Activity ze specjalnym małym układem dla CarPlay,
@@ -72,10 +73,18 @@ Nowy EMULOGGER wymaga jednorazowego nadania nazwy.
 
 Niezależny bufor incydentów pobiera do 25 próbek/s. Reguły mają krótkie czasy
 potwierdzenia, dzięki czemu pojedynczy błędny pakiet nie tworzy raportu. Po
-wykryciu niskiego ciśnienia oleju przy wysokich obrotach, ubogiej mieszanki pod
-boostem, overboostu, przegrzania lub spadku napięcia aplikacja zachowuje
+wykryciu niskiego ciśnienia oleju lub paliwa, ubogiej mieszanki pod boostem,
+overboostu, temperatury płynu/oleju albo spadku napięcia aplikacja zachowuje
 30 sekund wcześniejszych danych i kolejne 60 sekund. Jeśli połączenie zostanie
 przerwane wcześniej, zapisuje dostępny fragment zamiast go odrzucać.
+
+Zakładka `Alerty` pozwala ustawić te progi osobno dla każdego auta, wyłączyć
+nieużywany kanał i dobrać czas potwierdzenia warunku. Ustawienia działają
+lokalnie bez internetu, a po zalogowaniu są wersjonowane i synchronizowane z
+panelem WWW. Właściciel oraz mechanik mogą je edytować; konflikt dwóch zmian
+wymaga świadomego wyboru wersji zamiast cichego nadpisania. Te same progi sterują
+raportami, kolorami dashboardu, Live Activity/CarPlay, Apple Watchem i
+powiadomieniami temperaturowymi.
 
 Każdy raport ma zsynchronizowane wykresy, warunki pracy, mapę i notatki. Notatkę
 można dodać również do dowolnego momentu zwykłego przejazdu. Przejazdy, raporty
@@ -154,15 +163,15 @@ krytyczny wywołuje haptyczne ostrzeżenie.
 
 ## Alerty temperatury
 
-Przy temperaturze płynu chłodniczego od 110°C albo oleju od 120°C aplikacja:
+Po przekroczeniu progów temperatury skonfigurowanych dla danego auta aplikacja:
 
 - wysyła na iPhonie pilne powiadomienie z dźwiękiem,
 - uruchamia haptyczne ostrzeżenie w otwartej aplikacji Apple Watch,
 - zmienia kartę Live Activity i CarPlay na czerwony stan `TEMP ALERT`.
 
-Alert jest zatrzaskiwany i uzbraja się ponownie dopiero po spadku płynu do
-105°C lub oleju do 115°C, więc wahania pomiaru nie powodują serii
-powiadomień. iOS może również przekazać powiadomienie na Apple Watch zgodnie z
+Alert jest zatrzaskiwany i uzbraja się ponownie dopiero po spadku temperatury
+o co najmniej 5°C poniżej ustawionego limitu, więc wahania pomiaru nie powodują
+serii powiadomień. iOS może również przekazać powiadomienie na Apple Watch zgodnie z
 ustawieniami mirroringu. Powiadomienie używa poziomu `timeSensitive`; tryb
 `critical`, omijający wyciszenie i Focus, wymaga osobnego entitlementu Apple.
 

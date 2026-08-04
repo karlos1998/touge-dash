@@ -7,15 +7,31 @@ struct IncidentCaptureEngine: Sendable {
         var preTriggerDuration: TimeInterval = 30
         var postTriggerDuration: TimeInterval = 60
         var cooldown: TimeInterval = 300
+        var lowOilPressureEnabled = true
         var lowOilPressureBar = 1.5
         var lowOilMinimumRPM = 3_000.0
+        var lowOilDuration: TimeInterval = 0.75
+        var leanUnderBoostEnabled = true
         var leanAFR = 13.5
         var leanMinimumBoostBar = 0.5
+        var leanDuration: TimeInterval = 0.5
+        var overboostEnabled = true
         var overboostBar = 1.5
+        var overboostDuration: TimeInterval = 0.5
+        var highCoolantTemperatureEnabled = true
         var coolantTemperatureCelsius = 110.0
+        var coolantDuration: TimeInterval = 2
+        var highOilTemperatureEnabled = true
         var oilTemperatureCelsius = 120.0
+        var oilTemperatureDuration: TimeInterval = 2
+        var lowBatteryVoltageEnabled = true
         var lowBatteryVoltage = 11.5
         var lowBatteryMinimumRPM = 800.0
+        var lowBatteryDuration: TimeInterval = 3
+        var lowFuelPressureEnabled = false
+        var lowFuelPressureBar = 2.5
+        var lowFuelPressureMinimumRPM = 1_500.0
+        var lowFuelPressureDuration: TimeInterval = 1
 
         static let standard = Configuration()
     }
@@ -48,7 +64,7 @@ struct IncidentCaptureEngine: Sendable {
         var samples: [CapturedTelemetryPoint]
     }
 
-    let configuration: Configuration
+    private(set) var configuration: Configuration
     private var preTriggerBuffer: [CapturedTelemetryPoint] = []
     private var activeCaptures: [IncidentKind: ActiveCapture] = [:]
     private var conditionStartedAt: [IncidentKind: Date] = [:]
@@ -122,6 +138,12 @@ struct IncidentCaptureEngine: Sendable {
         lastAcceptedAt = .distantPast
     }
 
+    mutating func updateConfiguration(_ configuration: Configuration) {
+        guard self.configuration != configuration else { return }
+        self.configuration = configuration
+        conditionStartedAt.removeAll()
+    }
+
     private func complete(_ capture: ActiveCapture) -> CompletedIncident {
         CompletedIncident(
             id: capture.id,
@@ -137,7 +159,8 @@ struct IncidentCaptureEngine: Sendable {
 
     private func matchingRules(for point: CapturedTelemetryPoint) -> [RuleMatch] {
         var matches: [RuleMatch] = []
-        if point.rpm >= configuration.lowOilMinimumRPM,
+        if configuration.lowOilPressureEnabled,
+           point.rpm >= configuration.lowOilMinimumRPM,
            point.oilPressureBar > 0,
            point.oilPressureBar < configuration.lowOilPressureBar {
             matches.append(RuleMatch(
@@ -146,10 +169,11 @@ struct IncidentCaptureEngine: Sendable {
                 value: point.oilPressureBar,
                 threshold: configuration.lowOilPressureBar,
                 unit: "bar",
-                debounce: 0.75
+                debounce: configuration.lowOilDuration
             ))
         }
-        if point.boostBar >= configuration.leanMinimumBoostBar,
+        if configuration.leanUnderBoostEnabled,
+           point.boostBar >= configuration.leanMinimumBoostBar,
            point.afr > configuration.leanAFR {
             matches.append(RuleMatch(
                 kind: .leanUnderBoost,
@@ -157,39 +181,43 @@ struct IncidentCaptureEngine: Sendable {
                 value: point.afr,
                 threshold: configuration.leanAFR,
                 unit: "AFR",
-                debounce: 0.5
+                debounce: configuration.leanDuration
             ))
         }
-        if point.boostBar > configuration.overboostBar {
+        if configuration.overboostEnabled, point.boostBar > configuration.overboostBar {
             matches.append(RuleMatch(
                 kind: .overboost,
                 severity: .critical,
                 value: point.boostBar,
                 threshold: configuration.overboostBar,
                 unit: "bar",
-                debounce: 0.5
+                debounce: configuration.overboostDuration
             ))
         }
-        if point.coolantCelsius >= configuration.coolantTemperatureCelsius {
+        if configuration.highCoolantTemperatureEnabled,
+           point.coolantCelsius >= configuration.coolantTemperatureCelsius {
             matches.append(RuleMatch(
-                kind: .engineOverheat,
+                kind: .highCoolantTemperature,
                 severity: .critical,
                 value: point.coolantCelsius,
                 threshold: configuration.coolantTemperatureCelsius,
                 unit: "°C",
-                debounce: 2
+                debounce: configuration.coolantDuration
             ))
-        } else if point.oilTemperatureCelsius >= configuration.oilTemperatureCelsius {
+        }
+        if configuration.highOilTemperatureEnabled,
+           point.oilTemperatureCelsius >= configuration.oilTemperatureCelsius {
             matches.append(RuleMatch(
-                kind: .engineOverheat,
+                kind: .highOilTemperature,
                 severity: .critical,
                 value: point.oilTemperatureCelsius,
                 threshold: configuration.oilTemperatureCelsius,
                 unit: "°C",
-                debounce: 2
+                debounce: configuration.oilTemperatureDuration
             ))
         }
-        if point.rpm >= configuration.lowBatteryMinimumRPM,
+        if configuration.lowBatteryVoltageEnabled,
+           point.rpm >= configuration.lowBatteryMinimumRPM,
            point.batteryVoltage > 0,
            point.batteryVoltage < configuration.lowBatteryVoltage {
             matches.append(RuleMatch(
@@ -198,7 +226,20 @@ struct IncidentCaptureEngine: Sendable {
                 value: point.batteryVoltage,
                 threshold: configuration.lowBatteryVoltage,
                 unit: "V",
-                debounce: 3
+                debounce: configuration.lowBatteryDuration
+            ))
+        }
+        if configuration.lowFuelPressureEnabled,
+           point.rpm >= configuration.lowFuelPressureMinimumRPM,
+           point.fuelPressureBar > 0,
+           point.fuelPressureBar < configuration.lowFuelPressureBar {
+            matches.append(RuleMatch(
+                kind: .lowFuelPressure,
+                severity: .critical,
+                value: point.fuelPressureBar,
+                threshold: configuration.lowFuelPressureBar,
+                unit: "bar",
+                debounce: configuration.lowFuelPressureDuration
             ))
         }
         return matches
@@ -214,13 +255,20 @@ final class TelemetryIncidentRecorder: ObservableObject {
     private let locationTracker: LocationTrackingService
     private var vehicleID: UUID
     private var engine = IncidentCaptureEngine()
+    private let alertRules: VehicleAlertRuleStore
     private var lastSessionID: UUID?
 
-    init(container: ModelContainer, locationTracker: LocationTrackingService) {
+    init(
+        container: ModelContainer,
+        locationTracker: LocationTrackingService,
+        alertRules: VehicleAlertRuleStore
+    ) {
         context = ModelContext(container)
         context.autosaveEnabled = false
         self.locationTracker = locationTracker
+        self.alertRules = alertRules
         vehicleID = LocalVehicleIdentity.resolve()
+        alertRules.activateVehicle(vehicleID)
         refreshPendingCount()
     }
 
@@ -228,6 +276,7 @@ final class TelemetryIncidentRecorder: ObservableObject {
         guard id != vehicleID else { return }
         persist(engine.finishActiveCaptures(), sessionID: lastSessionID)
         vehicleID = id
+        alertRules.activateVehicle(id)
         lastSessionID = nil
         engine.reset()
         refreshPendingCount()
@@ -235,6 +284,7 @@ final class TelemetryIncidentRecorder: ObservableObject {
 
     func record(_ snapshot: TelemetrySnapshot, sessionID: UUID, at timestamp: Date = .now) {
         lastSessionID = sessionID
+        engine.updateConfiguration(alertRules.rules(for: vehicleID).incidentConfiguration)
         let location = freshLocation(at: timestamp)
         let point = CapturedTelemetryPoint(snapshot: snapshot, timestamp: timestamp, location: location)
         persist(engine.ingest(point), sessionID: sessionID)
@@ -278,5 +328,38 @@ final class TelemetryIncidentRecorder: ObservableObject {
     private func refreshPendingCount() {
         let descriptor = FetchDescriptor<DriveIncident>(predicate: #Predicate { $0.syncStateRaw != "synced" })
         pendingIncidentCount = (try? context.fetchCount(descriptor)) ?? 0
+    }
+}
+
+private extension VehicleAlertRules {
+    var incidentConfiguration: IncidentCaptureEngine.Configuration {
+        var configuration = IncidentCaptureEngine.Configuration.standard
+        configuration.cooldown = TimeInterval(cooldownSeconds)
+        configuration.lowOilPressureEnabled = lowOilPressureEnabled
+        configuration.lowOilPressureBar = minimumOilPressureBar
+        configuration.lowOilMinimumRPM = lowOilMinimumRPM
+        configuration.lowOilDuration = lowOilDurationSeconds
+        configuration.leanUnderBoostEnabled = leanUnderBoostEnabled
+        configuration.leanAFR = maximumAFR
+        configuration.leanMinimumBoostBar = leanMinimumBoostBar
+        configuration.leanDuration = leanDurationSeconds
+        configuration.overboostEnabled = overboostEnabled
+        configuration.overboostBar = maximumBoostBar
+        configuration.overboostDuration = overboostDurationSeconds
+        configuration.highCoolantTemperatureEnabled = highCoolantTemperatureEnabled
+        configuration.coolantTemperatureCelsius = maximumCoolantCelsius
+        configuration.coolantDuration = coolantDurationSeconds
+        configuration.highOilTemperatureEnabled = highOilTemperatureEnabled
+        configuration.oilTemperatureCelsius = maximumOilTemperatureCelsius
+        configuration.oilTemperatureDuration = oilTemperatureDurationSeconds
+        configuration.lowBatteryVoltageEnabled = lowBatteryVoltageEnabled
+        configuration.lowBatteryVoltage = minimumBatteryVoltage
+        configuration.lowBatteryMinimumRPM = lowBatteryMinimumRPM
+        configuration.lowBatteryDuration = lowBatteryDurationSeconds
+        configuration.lowFuelPressureEnabled = lowFuelPressureEnabled
+        configuration.lowFuelPressureBar = minimumFuelPressureBar
+        configuration.lowFuelPressureMinimumRPM = lowFuelPressureMinimumRPM
+        configuration.lowFuelPressureDuration = lowFuelPressureDurationSeconds
+        return configuration
     }
 }

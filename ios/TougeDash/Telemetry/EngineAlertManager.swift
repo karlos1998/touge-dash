@@ -13,20 +13,22 @@ final class EngineAlertManager: NSObject, UNUserNotificationCenterDelegate {
         notificationCenter.requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
-    func evaluate(_ snapshot: TelemetrySnapshot) {
-        let coolantIsHot = snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius
-        let oilIsHot = snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius
+    func evaluate(_ snapshot: TelemetrySnapshot, rules: VehicleAlertRules) {
+        let coolantIsHot = snapshot.hasCoolantWarning
+        let oilIsHot = snapshot.hasOilTemperatureWarning
         let shouldNotify = (coolantIsHot && !coolantAlertLatched) || (oilIsHot && !oilAlertLatched)
 
         if coolantIsHot {
             coolantAlertLatched = true
-        } else if snapshot.coolantCelsius <= EngineTemperatureLimits.coolantResetCelsius {
+        } else if !rules.highCoolantTemperatureEnabled ||
+                    snapshot.coolantCelsius <= rules.maximumCoolantCelsius - 5 {
             coolantAlertLatched = false
         }
 
         if oilIsHot {
             oilAlertLatched = true
-        } else if snapshot.oilTemperatureCelsius <= EngineTemperatureLimits.oilResetCelsius {
+        } else if !rules.highOilTemperatureEnabled ||
+                    snapshot.oilTemperatureCelsius <= rules.maximumOilTemperatureCelsius - 5 {
             oilAlertLatched = false
         }
 
@@ -50,10 +52,10 @@ final class EngineAlertManager: NSObject, UNUserNotificationCenterDelegate {
 
     private func warningDescription(for snapshot: TelemetrySnapshot) -> String {
         var warnings: [String] = []
-        if snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius {
+        if snapshot.hasCoolantWarning {
             warnings.append(String(format: localized("Płyn chłodniczy: %d°C"), Int(snapshot.coolantCelsius)))
         }
-        if snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius {
+        if snapshot.hasOilTemperatureWarning {
             warnings.append(String(format: localized("Olej: %d°C"), Int(snapshot.oilTemperatureCelsius)))
         }
         return warnings.joined(separator: " • ") + ". " + localized("Zatrzymaj auto i sprawdź silnik.")

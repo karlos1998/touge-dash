@@ -38,6 +38,7 @@ zasobów z oficjalnego eDash.
 - lokalna historia przejazdów z interaktywnymi wykresami i opcjonalną trasą GPS,
 - automatyczne raporty incydentów obejmujące 30 sekund przed i 60 sekund po zdarzeniu,
 - notatki przypinane do dokładnego momentu przejazdu,
+- Centrum alertów z progami per auto, pracą offline i synchronizacją zmian mechanika,
 - opcjonalne konto i synchronizacja historii z Touge Dash Cloud,
 - logowanie e-mail/hasło, Sign in with Apple oraz bezpieczny handoff Google/Facebook z panelu WWW,
 - Live Activity uruchamiana automatycznie razem z aplikacją,
@@ -90,8 +91,13 @@ zdarzenia i 60 sekund po nim. Wykrywane są:
 - niskie ciśnienie oleju przy wysokich obrotach,
 - zbyt uboga mieszanka pod doładowaniem,
 - overboost,
-- temperatura płynu od 110°C albo oleju od 120°C,
+- osobne progi temperatury płynu i oleju,
+- niskie ciśnienie paliwa, jeśli kanał został włączony,
 - niskie napięcie podczas pracy silnika.
+
+Wszystkie progi, warunki obrotów i czas potwierdzenia można ustawić per auto w
+Centrum alertów. Konfiguracja działa offline i synchronizuje się z panelem WWW,
+gdzie może ją również zmienić mechanik mający dostęp do auta.
 
 Raport zawiera wykresy, warunki wyzwolenia, trasę GPS i notatki dodane do
 konkretnej próbki. Właściciel może utworzyć wygasający link i wysłać go
@@ -130,9 +136,9 @@ ciśnienie i temperaturę oleju, boost, AFR oraz temperaturę płynu chłodnicze
 Aplikacja zegarkowa pokazuje boost, AFR, ciśnienie i temperaturę oleju oraz
 temperaturę płynu chłodniczego. iPhone przekazuje dane przez WatchConnectivity
 maksymalnie dwa razy na sekundę, a zegarek zachowuje ostatni odczyt po utracie
-połączenia. Po przekroczeniu 110°C płynu lub 120°C oleju zegarek zmienia kolory
-i uruchamia haptyczne ostrzeżenie. Ten sam alert wyświetla pilne powiadomienie
-na iPhonie oraz zmienia kartę Live Activity i CarPlay na czerwoną.
+połączenia. Po przekroczeniu progów temperatury ustawionych dla danego auta
+zegarek zmienia kolory i uruchamia haptyczne ostrzeżenie. Ten sam alert wyświetla
+pilne powiadomienie na iPhonie oraz zmienia kartę Live Activity i CarPlay na czerwoną.
 
 <p align="center">
   <img src="docs/screenshots/carplay-temperature-alert.png" width="340" alt="Alert temperatury w CarPlay" />

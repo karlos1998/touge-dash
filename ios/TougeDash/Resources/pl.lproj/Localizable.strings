@@ -109,3 +109,8 @@
 "%@ NOTATEK" = "%@ NOTATEK";
 "Touge Dash rozpocznie przejazd po odebraniu danych z EMU i zapisze 10 próbek na sekundę." = "Touge Dash rozpocznie przejazd po odebraniu danych z EMU i zapisze 10 próbek na sekundę.";
 "Nie udało się odczytać wszystkich lokalnych próbek. Synchronizacja spróbuje ponownie." = "Nie udało się odczytać wszystkich lokalnych próbek. Synchronizacja spróbuje ponownie.";
+"Alerty" = "Alerty";
+"Centrum alertów" = "Centrum alertów";
+"Wysoka temperatura płynu" = "Wysoka temperatura płynu";
+"Wysoka temperatura oleju" = "Wysoka temperatura oleju";
+"Niskie ciśnienie paliwa" = "Niskie ciśnienie paliwa";

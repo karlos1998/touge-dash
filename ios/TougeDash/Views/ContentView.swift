@@ -148,7 +148,7 @@ private struct LandscapeDashboard: View {
                     precision: 1,
                     icon: "bolt.fill",
                     tint: .tougeYellow,
-                    warning: snapshot.rpm > 500 && snapshot.batteryVoltage > 0 && snapshot.batteryVoltage < 11.5,
+                    warning: snapshot.hasBatteryVoltageWarning,
                     compact: compact,
                     prominent: !compact
                 )
@@ -183,7 +183,7 @@ private struct PortraitDashboard: View {
 
             LazyVGrid(columns: columns, spacing: 12) {
                 MetricCard(title: "AFR", value: snapshot.afr, unit: "λ " + snapshot.lambda.formatted(.number.precision(.fractionLength(2))), precision: 1, icon: "waveform.path.ecg", tint: .tougeMint, warning: snapshot.afr > 0 && (snapshot.afr < 10.5 || snapshot.afr > 16))
-                MetricCard(title: "BATTERY", value: snapshot.batteryVoltage, unit: "V", precision: 1, icon: "bolt.fill", tint: .tougeYellow, warning: snapshot.rpm > 500 && snapshot.batteryVoltage > 0 && snapshot.batteryVoltage < 11.5)
+                MetricCard(title: "BATTERY", value: snapshot.batteryVoltage, unit: "V", precision: 1, icon: "bolt.fill", tint: .tougeYellow, warning: snapshot.hasBatteryVoltageWarning)
             }
             .frame(height: 145)
 
@@ -371,7 +371,7 @@ private struct EngineHealthCard: View {
                     precision: 0,
                     icon: "thermometer.medium",
                     tint: .tougeOrange,
-                    warning: snapshot.oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius,
+                    warning: snapshot.hasOilTemperatureWarning,
                     compact: compact,
                     prominent: prominent
                 )
@@ -385,7 +385,7 @@ private struct EngineHealthCard: View {
                     precision: 0,
                     icon: "thermometer.high",
                     tint: .tougeIce,
-                    warning: snapshot.coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius,
+                    warning: snapshot.hasCoolantWarning,
                     compact: compact,
                     prominent: prominent
                 )

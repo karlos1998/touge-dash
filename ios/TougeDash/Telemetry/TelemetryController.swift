@@ -94,7 +94,9 @@ final class TelemetryController: ObservableObject {
         watchBridge.enqueue(snapshot)
         #if DEBUG
         if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_ALERT"] == "1" {
-            engineAlertManager.evaluate(snapshot)
+            let rules = cloudSync.alertRules.activeRules
+            snapshot = rules.applyingWarningState(to: snapshot)
+            engineAlertManager.evaluate(snapshot, rules: rules)
         }
         #endif
     }
@@ -161,10 +163,12 @@ final class TelemetryController: ObservableObject {
         publish(accumulator.snapshot)
     }
 
-    private func publish(_ value: TelemetrySnapshot) {
+    private func publish(_ rawValue: TelemetrySnapshot) {
+        let rules = cloudSync.alertRules.activeRules
+        let value = rules.applyingWarningState(to: rawValue)
         snapshot = value
         watchBridge.enqueue(value)
-        engineAlertManager.evaluate(value)
+        engineAlertManager.evaluate(value, rules: rules)
         if let change = historyRecorder.record(value) {
             cloudSync.noteLocalSampleRecorded(sessionBecamePending: change.sessionBecamePending)
         }

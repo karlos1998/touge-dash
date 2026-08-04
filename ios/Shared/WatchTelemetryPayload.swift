@@ -17,6 +17,8 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
     var coolantCelsius: Double
     var rpm: Double
     var hasCriticalWarning: Bool
+    var configuredOilTemperatureWarning: Bool?
+    var configuredCoolantWarning: Bool?
     var updatedAt: Date
 
     init(
@@ -70,11 +72,11 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
     }
 
     var hasOilTemperatureWarning: Bool {
-        oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius
+        configuredOilTemperatureWarning ?? (oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius)
     }
 
     var hasCoolantWarning: Bool {
-        coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius
+        configuredCoolantWarning ?? (coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius)
     }
 
     var hasTemperatureWarning: Bool {
@@ -90,6 +92,8 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         coolantCelsius = snapshot.coolantCelsius
         rpm = snapshot.rpm
         hasCriticalWarning = snapshot.hasCriticalWarning
+        configuredOilTemperatureWarning = snapshot.hasOilTemperatureWarning
+        configuredCoolantWarning = snapshot.hasCoolantWarning
         updatedAt = snapshot.updatedAt
     }
     #endif

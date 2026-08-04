@@ -46,6 +46,13 @@ struct TougeDashRootView: View {
                     Label("Historia", systemImage: "chart.xyaxis.line")
                 }
                 .tag(1)
+
+            AlertCenterView(cloudSync: cloudSync)
+                .toolbarVisibility(compactLandscape ? .hidden : .automatic, for: .tabBar)
+                .tabItem {
+                    Label("Alerty", systemImage: "exclamationmark.shield.fill")
+                }
+                .tag(2)
         }
         .tint(.tougeCyan)
         .preferredColorScheme(.dark)

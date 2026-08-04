@@ -23,7 +23,13 @@ struct TougeDashApp: App {
                 locationTracker: locationTracker
             )
             let account = CloudAccountService()
-            let sync = CloudSyncManager(container: container, account: account, locationTracker: locationTracker)
+            let alertRules = VehicleAlertRuleStore()
+            let sync = CloudSyncManager(
+                container: container,
+                account: account,
+                locationTracker: locationTracker,
+                alertRules: alertRules
+            )
             #if DEBUG
             if ProcessInfo.processInfo.environment["TOUGE_DASH_HISTORY_PREVIEW"] == "1" {
                 historyRecorder.seedPreviewDataIfNeeded()
@@ -32,7 +38,11 @@ struct TougeDashApp: App {
             modelContainer = container
             _cloudAccount = StateObject(wrappedValue: account)
             _cloudSync = StateObject(wrappedValue: sync)
-            let incidentRecorder = TelemetryIncidentRecorder(container: container, locationTracker: locationTracker)
+            let incidentRecorder = TelemetryIncidentRecorder(
+                container: container,
+                locationTracker: locationTracker,
+                alertRules: alertRules
+            )
             incidentRecorder.onIncidentStored = { sampleCount in
                 sync.noteLocalIncidentRecorded(sampleCount: sampleCount)
             }

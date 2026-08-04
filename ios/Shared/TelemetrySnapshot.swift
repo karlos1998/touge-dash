@@ -18,6 +18,10 @@ struct TelemetrySnapshot: Codable, Hashable, Sendable {
     var injectorDutyPercent: Double = 0
     var speedKPH: Double = 0
     var checkEngineMask: UInt16 = 0
+    var configuredCoolantWarning: Bool?
+    var configuredOilTemperatureWarning: Bool?
+    var configuredBatteryVoltageWarning: Bool?
+    var configuredCriticalWarning: Bool?
     var updatedAt: Date = .now
 
     static let preview = TelemetrySnapshot(
@@ -42,14 +46,22 @@ struct TelemetrySnapshot: Codable, Hashable, Sendable {
 
     var isFresh: Bool { Date().timeIntervalSince(updatedAt) < 2.5 }
     var hasCheckEngine: Bool { checkEngineMask != 0 }
+    var hasCoolantWarning: Bool {
+        configuredCoolantWarning ?? (coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius)
+    }
+    var hasOilTemperatureWarning: Bool {
+        configuredOilTemperatureWarning ?? (oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius)
+    }
+    var hasBatteryVoltageWarning: Bool {
+        configuredBatteryVoltageWarning ?? (rpm > 500 && batteryVoltage > 0 && batteryVoltage < 11.5)
+    }
     var hasTemperatureWarning: Bool {
-        coolantCelsius >= EngineTemperatureLimits.coolantWarningCelsius ||
-            oilTemperatureCelsius >= EngineTemperatureLimits.oilWarningCelsius
+        hasCoolantWarning || hasOilTemperatureWarning
     }
     var hasCriticalWarning: Bool {
-        hasCheckEngine || hasTemperatureWarning ||
+        configuredCriticalWarning ?? (hasCheckEngine || hasTemperatureWarning ||
             (rpm > 1_200 && oilPressureBar > 0 && oilPressureBar < 0.5) ||
-            (rpm > 500 && batteryVoltage > 0 && batteryVoltage < 11.5)
+            hasBatteryVoltageWarning)
     }
 }
 

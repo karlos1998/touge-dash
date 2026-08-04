@@ -13,6 +13,9 @@ enum IncidentKind: String, Codable, CaseIterable, Sendable {
     case leanUnderBoost = "LEAN_UNDER_BOOST"
     case overboost = "OVERBOOST"
     case engineOverheat = "ENGINE_OVERHEAT"
+    case highCoolantTemperature = "HIGH_COOLANT_TEMPERATURE"
+    case highOilTemperature = "HIGH_OIL_TEMPERATURE"
+    case lowFuelPressure = "LOW_FUEL_PRESSURE"
     case lowBatteryVoltage = "LOW_BATTERY_VOLTAGE"
 
     var title: String {
@@ -21,6 +24,9 @@ enum IncidentKind: String, Codable, CaseIterable, Sendable {
         case .leanUnderBoost: localized("Uboga mieszanka pod boostem")
         case .overboost: localized("Przekroczone doładowanie")
         case .engineOverheat: localized("Przegrzanie silnika")
+        case .highCoolantTemperature: localized("Wysoka temperatura płynu")
+        case .highOilTemperature: localized("Wysoka temperatura oleju")
+        case .lowFuelPressure: localized("Niskie ciśnienie paliwa")
         case .lowBatteryVoltage: localized("Niskie napięcie")
         }
     }
@@ -31,6 +37,9 @@ enum IncidentKind: String, Codable, CaseIterable, Sendable {
         case .leanUnderBoost: "aqi.medium"
         case .overboost: "gauge.with.dots.needle.100percent"
         case .engineOverheat: "thermometer.high"
+        case .highCoolantTemperature: "thermometer.and.liquid.waves"
+        case .highOilTemperature: "oilcan.fill"
+        case .lowFuelPressure: "fuelpump.fill"
         case .lowBatteryVoltage: "battery.25percent"
         }
     }
@@ -360,13 +369,13 @@ struct RecordedLocation: Codable, Hashable, Sendable {
 enum LocalVehicleIdentity {
     private static let defaultsKey = "tougeDash.localVehicleID"
 
-    static func resolve() -> UUID {
-        if let rawValue = UserDefaults.standard.string(forKey: defaultsKey),
+    static func resolve(defaults: UserDefaults = .standard) -> UUID {
+        if let rawValue = defaults.string(forKey: defaultsKey),
            let id = UUID(uuidString: rawValue) {
             return id
         }
         let id = UUID()
-        UserDefaults.standard.set(id.uuidString, forKey: defaultsKey)
+        defaults.set(id.uuidString, forKey: defaultsKey)
         return id
     }
 }

@@ -50,6 +50,7 @@ final class CloudSyncManager: ObservableObject {
 
     private let account: CloudAccountService
     private let locationTracker: LocationTrackingService
+    let alertRules: VehicleAlertRuleStore
     private let context: ModelContext
     private let monitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "it.letscode.touge-dash.cloud-network")
@@ -67,9 +68,15 @@ final class CloudSyncManager: ObservableObject {
         let vehicle: CloudVehicle
     }
 
-    init(container: ModelContainer, account: CloudAccountService, locationTracker: LocationTrackingService) {
+    init(
+        container: ModelContainer,
+        account: CloudAccountService,
+        locationTracker: LocationTrackingService,
+        alertRules: VehicleAlertRuleStore
+    ) {
         self.account = account
         self.locationTracker = locationTracker
+        self.alertRules = alertRules
         context = ModelContext(container)
         context.autosaveEnabled = false
         if let data = UserDefaults.standard.data(forKey: Self.vehicleLinksKey),
@@ -155,6 +162,7 @@ final class CloudSyncManager: ObservableObject {
 
     func prepareVehicle(hardwareIdentifier: UUID) async {
         pendingHardwareIdentifier = hardwareIdentifier
+        alertRules.activateVehicle(hardwareIdentifier)
         if let linked = vehicleLinks[vehicleLinkKey(hardwareIdentifier)] {
             activeVehicle = linked
             rememberActiveVehicle(hardwareIdentifier)
@@ -176,6 +184,7 @@ final class CloudSyncManager: ObservableObject {
                 body: Request(hardwareIdentifier: hardwareIdentifier.uuidString, proposedName: name)
             )
             activeVehicle = vehicle
+            alertRules.activateVehicle(hardwareIdentifier)
             vehicleLinks[vehicleLinkKey(hardwareIdentifier)] = vehicle
             persistVehicleLinks()
             rememberActiveVehicle(hardwareIdentifier)
@@ -226,6 +235,13 @@ final class CloudSyncManager: ObservableObject {
                 try await upload(annotation: entry.annotation, vehicleID: entry.remoteVehicleID)
             }
             try context.save()
+
+            // Alert configuration is synchronized after telemetry so a rules-only
+            // failure can never prevent a recorded drive from reaching the server.
+            for association in associations {
+                try await synchronizeAlertRules(for: association)
+            }
+
             lastTransferBytes = progress?.transferredBytes ?? 0
             lastSynchronizedAt = .now
             state = .ready
@@ -256,6 +272,25 @@ final class CloudSyncManager: ObservableObject {
     func noteLocalAnnotationRecorded() {
         pendingAnnotations += 1
         estimatedPendingBytes += 512
+        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
+            Task { await syncNow() }
+        }
+    }
+
+    func saveAlertRules(_ rules: VehicleAlertRules) {
+        let vehicleID = alertRules.activeVehicleID
+        alertRules.saveLocally(rules, for: vehicleID)
+        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
+            Task { await syncNow() }
+        }
+    }
+
+    func acceptRemoteAlertRules() {
+        alertRules.acceptRemoteConflict(for: alertRules.activeVehicleID)
+    }
+
+    func keepLocalAlertRules() {
+        alertRules.keepLocalAfterConflict(for: alertRules.activeVehicleID)
         if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
             Task { await syncNow() }
         }
@@ -369,6 +404,33 @@ final class CloudSyncManager: ObservableObject {
             progress.completedSessions += 1
             self.progress = progress
         }
+    }
+
+    private func synchronizeAlertRules(for association: VehicleAssociation) async throws {
+        let endpoint = "/api/v1/vehicles/\(association.vehicle.id.uuidString)/alert-configuration"
+        let local = alertRules.record(for: association.hardwareIdentifier)
+        if association.vehicle.role == "VIEWER" {
+            let remote: CloudVehicleAlertConfiguration = try await account.get(endpoint: endpoint)
+            alertRules.markUploaded(remote, for: association.hardwareIdentifier)
+            return
+        }
+        if local.dirty {
+            do {
+                let remote: CloudVehicleAlertConfiguration = try await account.send(
+                    endpoint: endpoint,
+                    method: "PUT",
+                    body: CloudVehicleAlertConfigurationUpdate(rules: local.rules, revision: local.revision)
+                )
+                alertRules.markUploaded(remote, for: association.hardwareIdentifier)
+                return
+            } catch CloudAPIError.server(let status, _) where status == 409 {
+                let remote: CloudVehicleAlertConfiguration = try await account.get(endpoint: endpoint)
+                alertRules.applyRemote(remote, to: association.hardwareIdentifier)
+                return
+            }
+        }
+        let remote: CloudVehicleAlertConfiguration = try await account.get(endpoint: endpoint)
+        alertRules.applyRemote(remote, to: association.hardwareIdentifier)
     }
 
     private func sessionSamples(sessionID: UUID, offset: Int, limit: Int) throws -> [TelemetryHistorySample] {
