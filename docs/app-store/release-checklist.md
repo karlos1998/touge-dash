@@ -10,9 +10,9 @@
 - [x] iOS tests pass.
 - [x] Release archive validates without errors.
 - [x] App Store Connect record is created for Apple ID `6797608558`.
-- [x] Version and build number are confirmed as `1.0 (3)`.
+- [x] Version and build number are confirmed as `1.0 (5)`.
 - [x] App Store Connect IPA export succeeds with distribution signing.
-- [x] Uploaded build `1.0 (3)` finishes processing and is selected for version `1.0`.
+- [x] Uploaded build `1.0 (5)` finishes processing and is selected for version `1.0`.
 
 ## Production services
 
@@ -38,7 +38,8 @@
 ## App Review
 
 - [x] Hardware-specific review notes are prepared.
-- [ ] Physical ECU/EMULOGGER demonstration video is recorded and attached.
+- [x] Physical ECU/EMULOGGER demonstration video is recorded and attached privately.
 - [x] Review account credentials are entered only in App Store Connect.
 - [x] Review contact is available by phone and email.
-- [ ] Final build and all metadata are checked once more before `Submit for Review`.
+- [x] Final build and all metadata are checked once more before `Submit for Review`.
+- [x] Version `1.0 (5)` is submitted with status `Waiting for Review`.

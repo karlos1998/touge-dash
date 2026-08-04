@@ -12,7 +12,7 @@ Live engine values require all of the following:
 
 The app automatically discovers and reconnects to the compatible interface. It intentionally does not present the reviewer with a list of unrelated Bluetooth devices.
 
-Because this hardware and a running vehicle are difficult to provide to App Review, a screen recording made with the physical ECU, EMULOGGER and iPhone will be attached in App Store Connect. The recording demonstrates automatic connection, live dashboard updates, history recording, Live Activity and Apple Watch updates.
+Because this hardware and a running vehicle are difficult to provide to App Review, a private recording made with the physical ECU, EMULOGGER, iPhone and iPad is attached in App Store Connect. The recording demonstrates automatic connection, live read-only dashboard updates, connection diagnostics and local drive history.
 
 The app remains usable without the hardware: the reviewer can inspect navigation, account functionality, permissions, existing synchronized vehicle data in the web dashboard and account deletion. No feature requires payment or an in-app purchase.
 
@@ -39,8 +39,8 @@ GPS recording is off by default. Location is requested only after the user expli
 
 Touge Dash is not a certified gauge. The app tells users to compare readings with the ECU manufacturer's software and not to interact with the app in a way that distracts them while driving.
 
-## Attachments before submission
+## Submission attachments
 
-- physical-hardware review video URL or App Review attachment,
+- private physical-hardware App Review attachment: `Touge-Dash-App-Review-Hardware-Demo.mp4`,
 - review account email and password,
 - contact phone number available during the review window.
