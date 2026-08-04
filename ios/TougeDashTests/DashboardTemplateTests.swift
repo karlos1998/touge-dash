@@ -43,6 +43,38 @@ final class DashboardTemplateTests: XCTestCase {
         })
     }
 
+    func testEveryWidgetKindAndSpanFitsACompactLandscapeGrid() {
+        let widgets = DashboardWidgetKind.allCases.flatMap { kind in
+            DashboardWidgetSpan.allCases.filter { $0 != .hidden }.enumerated().map { index, span in
+                DashboardWidget(
+                    kind: kind,
+                    metrics: kind == .group ? [.oilPressure, .oilTemperature, .coolant] : [.boost],
+                    portraitSpan: .full,
+                    landscapeSpan: span,
+                    portraitOrder: index
+                )
+            }
+        }
+        let rows = DashboardGridLayout.rows(for: widgets, isWide: true)
+
+        XCTAssertFalse(rows.isEmpty)
+        XCTAssertTrue(rows.allSatisfy { row in
+            row.reduce(0) { $0 + $1.landscapeSpan.rawValue } <= 12
+        })
+        for widget in widgets {
+            XCTAssertGreaterThan(DashboardGridLayout.height(for: widget, isWide: true, compact: true), 0)
+            XCTAssertLessThanOrEqual(DashboardGridLayout.height(for: widget, isWide: true, compact: true), 150)
+        }
+    }
+
+    func testViewportUsesLandscapeOnlyForActuallyHorizontalScreens() {
+        XCTAssertTrue(DashboardViewport(size: CGSize(width: 844, height: 390)).usesLandscapeLayout)
+        XCTAssertTrue(DashboardViewport(size: CGSize(width: 844, height: 390)).isCompactLandscape)
+        XCTAssertFalse(DashboardViewport(size: CGSize(width: 390, height: 844)).usesLandscapeLayout)
+        XCTAssertFalse(DashboardViewport(size: CGSize(width: 1024, height: 1366)).usesLandscapeLayout)
+        XCTAssertTrue(DashboardViewport(size: CGSize(width: 1366, height: 1024)).usesLandscapeLayout)
+    }
+
     @MainActor
     func testLocalTemplatesPersistAndNewestServerVersionWins() throws {
         let suite = "TougeDashTests.dashboard.\(UUID().uuidString)"

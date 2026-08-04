@@ -12,8 +12,9 @@ struct ContentView: View {
             DashboardBackground()
 
             GeometryReader { proxy in
-                let isWide = proxy.size.width > 680
-                let isCompactWide = isWide && proxy.size.height < 600
+                let viewport = DashboardViewport(size: proxy.size)
+                let isWide = viewport.usesLandscapeLayout
+                let isCompactWide = viewport.isCompactLandscape
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: isCompactWide ? 8 : 16) {
@@ -43,8 +44,9 @@ struct ContentView: View {
                         )
                         ProductCreditFooter(compact: isCompactWide)
                     }
-                    .padding(.horizontal, max(16, min(28, proxy.size.width * 0.035)))
+                    .padding(.horizontal, viewport.horizontalPadding)
                     .padding(.vertical, isCompactWide ? 7 : 14)
+                    .frame(maxWidth: proxy.size.width)
                     .frame(minHeight: proxy.size.height, alignment: .top)
                 }
             }
@@ -53,6 +55,23 @@ struct ContentView: View {
         .sheet(isPresented: $controller.showingDevicePicker) {
             DevicePickerView(controller: controller)
         }
+    }
+}
+
+struct DashboardViewport: Equatable {
+    let size: CGSize
+
+    var usesLandscapeLayout: Bool {
+        size.width > size.height && size.width >= 680
+    }
+
+    var isCompactLandscape: Bool {
+        usesLandscapeLayout && size.height < 600
+    }
+
+    var horizontalPadding: CGFloat {
+        if isCompactLandscape { return 12 }
+        return max(16, min(28, size.width * 0.035))
     }
 }
 

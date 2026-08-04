@@ -37,6 +37,18 @@ final class DashboardTemplateStore: ObservableObject {
             initialRecords = [.factory()]
         }
 
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TOUGE_DASH_DASHBOARD_STRESS_PREVIEW"] == "1" {
+            var stress = DashboardTemplateRecord.factory()
+            if let boostIndex = stress.definition.widgets.firstIndex(where: { $0.primaryMetric == .boost }) {
+                stress.definition.widgets[boostIndex].kind = .gauge
+                stress.definition.widgets[boostIndex].wideKind = nil
+                stress.definition.widgets[boostIndex].landscapeSpan = .third
+            }
+            initialRecords = [stress]
+        }
+        #endif
+
         if initialRecords.allSatisfy({ $0.deletedAt != nil }) {
             initialRecords.append(.factory())
         }

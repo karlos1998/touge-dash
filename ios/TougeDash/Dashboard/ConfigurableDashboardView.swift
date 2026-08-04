@@ -23,55 +23,78 @@ struct ConfigurableDashboardView: View {
     }
 
     var body: some View {
-        Grid(horizontalSpacing: compact ? 8 : 12, verticalSpacing: compact ? 8 : 12) {
+        let spacing: CGFloat = compact ? 8 : 12
+        VStack(spacing: spacing) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                GridRow {
-                    ForEach(row) { widget in
-                        DashboardWidgetView(
-                            widget: widget,
-                            snapshot: snapshot,
-                            telemetryBuffer: telemetryBuffer,
-                            isWide: isWide,
-                            compact: compact
-                        )
-                        .frame(height: height(for: widget))
-                        .gridCellColumns(span(for: widget).rawValue)
-                    }
+                DashboardGridRow(
+                    widgets: row,
+                    snapshot: snapshot,
+                    telemetryBuffer: telemetryBuffer,
+                    isWide: isWide,
+                    compact: compact,
+                    spacing: spacing
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
 
-                    let occupied = row.reduce(0) { $0 + span(for: $1).rawValue }
-                    if occupied < 12 {
-                        Color.clear
-                            .frame(height: 1)
-                            .gridCellColumns(12 - occupied)
-                    }
+private struct DashboardGridRow: View {
+    let widgets: [DashboardWidget]
+    let snapshot: TelemetrySnapshot
+    @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
+    let isWide: Bool
+    let compact: Bool
+    let spacing: CGFloat
+
+    private var occupiedColumns: Int {
+        widgets.reduce(0) { $0 + span(for: $1) }
+    }
+
+    private var height: CGFloat {
+        widgets.map { DashboardGridLayout.height(for: $0, isWide: isWide, compact: compact) }.max() ?? 0
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let columnWidth = max(0, (proxy.size.width - (spacing * 11)) / 12)
+
+            HStack(alignment: .top, spacing: spacing) {
+                ForEach(widgets) { widget in
+                    DashboardWidgetView(
+                        widget: widget,
+                        snapshot: snapshot,
+                        telemetryBuffer: telemetryBuffer,
+                        isWide: isWide,
+                        compact: compact
+                    )
+                    .frame(
+                        width: width(for: span(for: widget), columnWidth: columnWidth),
+                        height: DashboardGridLayout.height(for: widget, isWide: isWide, compact: compact)
+                    )
+                    .clipped()
+                }
+
+                if occupiedColumns < 12 {
+                    Color.clear
+                        .frame(
+                            width: width(for: 12 - occupiedColumns, columnWidth: columnWidth),
+                            height: 1
+                        )
+                        .accessibilityHidden(true)
                 }
             }
         }
+        .frame(height: height)
     }
 
-    private func span(for widget: DashboardWidget) -> DashboardWidgetSpan {
-        isWide ? widget.landscapeSpan : widget.portraitSpan
+    private func span(for widget: DashboardWidget) -> Int {
+        (isWide ? widget.landscapeSpan : widget.portraitSpan).rawValue
     }
 
-    private func height(for widget: DashboardWidget) -> CGFloat {
-        let kind = isWide ? (widget.wideKind ?? widget.kind) : widget.kind
-        if compact {
-            switch kind {
-            case .hero: return 150
-            case .group: return 112
-            case .value, .gauge, .chart: return 96
-            case .compact: return 54
-            }
-        } else {
-            switch kind {
-            case .hero: return isWide ? 215 : 250
-            case .group: return isWide ? 180 : 190
-            case .value: return 145
-            case .gauge: return 210
-            case .chart: return 220
-            case .compact: return 70
-            }
-        }
+    private func width(for columns: Int, columnWidth: CGFloat) -> CGFloat {
+        (columnWidth * CGFloat(columns)) + (spacing * CGFloat(max(0, columns - 1)))
     }
 }
 
@@ -99,6 +122,27 @@ enum DashboardGridLayout {
         }
         if !current.isEmpty { result.append(current) }
         return result
+    }
+
+    static func height(for widget: DashboardWidget, isWide: Bool, compact: Bool) -> CGFloat {
+        let kind = isWide ? (widget.wideKind ?? widget.kind) : widget.kind
+        if compact {
+            switch kind {
+            case .hero: return 150
+            case .group: return 112
+            case .value, .gauge, .chart: return 96
+            case .compact: return 54
+            }
+        } else {
+            switch kind {
+            case .hero: return isWide ? 215 : 250
+            case .group: return isWide ? 180 : 190
+            case .value: return 145
+            case .gauge: return 210
+            case .chart: return 220
+            case .compact: return 70
+            }
+        }
     }
 }
 
