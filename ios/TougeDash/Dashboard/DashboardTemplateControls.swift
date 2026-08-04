@@ -299,8 +299,12 @@ private struct DashboardWidgetEditorRow: View {
 
             Picker(localized("Kolor"), selection: $widget.accent) {
                 ForEach(DashboardAccent.allCases) { accent in
-                    Label(accent.title, systemImage: "circle.fill")
-                        .foregroundStyle(accent.color)
+                    HStack(spacing: 9) {
+                        Circle()
+                            .fill(accent.color)
+                            .frame(width: 12, height: 12)
+                        Text(accent.title)
+                    }
                         .tag(accent)
                 }
             }
