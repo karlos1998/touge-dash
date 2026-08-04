@@ -75,6 +75,9 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     private var attemptedAutomaticConnection = false
     private var hasTriedRememberedPeripheral = false
     private var connectionTimeoutTask: Task<Void, Never>?
+    private var totalPacketCount = 0
+    private var totalByteCount = 0
+    private var lastCounterPublishAt = Date.distantPast
     private let lastPeripheralKey = "TougeDash.lastECUMasterPeripheral"
     private let debugLogURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("tougedash-ble.log")
@@ -114,6 +117,9 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         devices = []
         peripherals = [:]
         attemptedAutomaticConnection = false
+        totalPacketCount = 0
+        totalByteCount = 0
+        lastCounterPublishAt = .distantPast
         receivedPacketCount = 0
         receivedByteCount = 0
         lastPacketHex = ""
@@ -445,14 +451,21 @@ extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
             return
         }
         guard let value = characteristic.value, !value.isEmpty else { return }
-        receivedPacketCount += 1
-        receivedByteCount += value.count
-        lastPacketHex = value.prefix(40).map { String(format: "%02X", $0) }.joined(separator: " ")
-        if receivedPacketCount <= 10 || receivedPacketCount.isMultiple(of: 100) {
-            bluetoothDebugLog("RX #\(receivedPacketCount) [\(characteristic.uuid.uuidString)] \(lastPacketHex)")
+        totalPacketCount += 1
+        totalByteCount += value.count
+        let packetHex = value.prefix(40).map { String(format: "%02X", $0) }.joined(separator: " ")
+        if totalPacketCount <= 10 || totalPacketCount.isMultiple(of: 100) {
+            bluetoothDebugLog("RX #\(totalPacketCount) [\(characteristic.uuid.uuidString)] \(packetHex)")
         }
-        if receivedPacketCount <= 10 || receivedPacketCount.isMultiple(of: 100) {
-            appendDiagnostic("RX #\(receivedPacketCount) [\(characteristic.uuid.uuidString)] \(lastPacketHex)")
+        if totalPacketCount <= 10 || totalPacketCount.isMultiple(of: 100) {
+            appendDiagnostic("RX #\(totalPacketCount) [\(characteristic.uuid.uuidString)] \(packetHex)")
+        }
+        let now = Date.now
+        if totalPacketCount == 1 || now.timeIntervalSince(lastCounterPublishAt) >= 0.2 {
+            receivedPacketCount = totalPacketCount
+            receivedByteCount = totalByteCount
+            lastPacketHex = packetHex
+            lastCounterPublishAt = now
         }
         onBytes?(value)
     }

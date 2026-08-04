@@ -30,6 +30,12 @@ struct ContentView: View {
                             isWide: isWide,
                             compact: isCompactWide
                         )
+                        .transaction { transaction in
+                            if controller.videoRecorder.isRecording {
+                                transaction.animation = nil
+                                transaction.disablesAnimations = true
+                            }
+                        }
                         ControlBar(
                             controller: controller,
                             compact: isCompactWide,

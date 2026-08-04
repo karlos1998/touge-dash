@@ -3,6 +3,13 @@ import Foundation
 import UIKit
 import WidgetKit
 
+enum TelemetryUpdateCadence {
+    static let processingInterval: TimeInterval = 1.0 / 25.0
+    static let normalDisplayInterval: TimeInterval = 1.0 / 20.0
+    static let recordingDisplayInterval: TimeInterval = 1.0 / 8.0
+    static let diagnosticsInterval: TimeInterval = 0.2
+}
+
 @MainActor
 final class TelemetryController: ObservableObject {
     @Published private(set) var snapshot = SharedTelemetryStore.load()
@@ -25,6 +32,14 @@ final class TelemetryController: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private var lastSharedWrite = Date.distantPast
     private var lastWidgetReload = Date.distantPast
+    private var lastTelemetryProcess = Date.distantPast
+    private var lastSnapshotPublish = Date.distantPast
+    private var lastDiagnosticsPublish = Date.distantPast
+    private var lastVideoHeartbeat = Date.distantPast
+    private var lastVideoSessionID: UUID?
+    private var totalReceivedBytes = 0
+    private var pendingRawSnapshot: TelemetrySnapshot?
+    private var telemetryDrainTask: Task<Void, Never>?
 
     init(
         historyRecorder: TelemetryHistoryRecorder,
@@ -72,6 +87,8 @@ final class TelemetryController: ObservableObject {
             } else {
                 self.incidentRecorder.finish(sessionID: self.historyRecorder.activeSessionID)
                 self.videoRecorder.connectionDidEnd()
+                self.lastVideoSessionID = nil
+                self.lastVideoHeartbeat = .distantPast
             }
             if self.activityManager.isRunning {
                 self.activityManager.enqueueUpdate(self.snapshot, connectionLabel: state.label)
@@ -79,9 +96,14 @@ final class TelemetryController: ObservableObject {
             self.objectWillChange.send()
         }
         bluetooth.objectWillChange
+            .throttle(for: .milliseconds(200), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
         activityManager.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        videoRecorder.objectWillChange
+            .throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
         Task { [weak self] in
@@ -132,6 +154,13 @@ final class TelemetryController: ObservableObject {
         if !isConnected {
             parser = EMUFrameParser()
             accumulator = EMUTelemetryAccumulator()
+            telemetryDrainTask?.cancel()
+            telemetryDrainTask = nil
+            pendingRawSnapshot = nil
+            totalReceivedBytes = 0
+            lastTelemetryProcess = .distantPast
+            lastSnapshotPublish = .distantPast
+            lastDiagnosticsPublish = .distantPast
             parserStats = .init()
             receivedBytes = 0
         }
@@ -161,21 +190,57 @@ final class TelemetryController: ObservableObject {
     }
 
     private func ingest(_ data: Data) {
-        receivedBytes += data.count
+        totalReceivedBytes += data.count
         let frames = parser.feed(data)
-        guard !frames.isEmpty else {
+        let now = Date.now
+        if now.timeIntervalSince(lastDiagnosticsPublish) >= TelemetryUpdateCadence.diagnosticsInterval {
+            receivedBytes = totalReceivedBytes
             parserStats = parser.stats
-            return
+            lastDiagnosticsPublish = now
         }
+        guard !frames.isEmpty else { return }
         for frame in frames { accumulator.apply(frame) }
-        parserStats = parser.stats
-        publish(accumulator.snapshot)
+        enqueueTelemetryProcessing(accumulator.snapshot, now: now)
     }
 
-    private func publish(_ rawValue: TelemetrySnapshot) {
+    private func enqueueTelemetryProcessing(_ rawValue: TelemetrySnapshot, now: Date) {
+        pendingRawSnapshot = rawValue
+        guard telemetryDrainTask == nil else { return }
+
+        let elapsed = now.timeIntervalSince(lastTelemetryProcess)
+        let delay = max(0, TelemetryUpdateCadence.processingInterval - elapsed)
+        if delay == 0 {
+            drainPendingTelemetry(at: now)
+            return
+        }
+
+        telemetryDrainTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            self.drainPendingTelemetry(at: .now)
+        }
+    }
+
+    private func drainPendingTelemetry(at now: Date) {
+        telemetryDrainTask = nil
+        guard let rawValue = pendingRawSnapshot else { return }
+        pendingRawSnapshot = nil
+        lastTelemetryProcess = now
+        process(rawValue, at: now)
+    }
+
+    private func process(_ rawValue: TelemetrySnapshot, at now: Date) {
         let rules = cloudSync.alertRules.activeRules
         let value = rules.applyingWarningState(to: rawValue)
-        snapshot = value
+        let displayInterval = videoRecorder.isRecording
+            ? TelemetryUpdateCadence.recordingDisplayInterval
+            : TelemetryUpdateCadence.normalDisplayInterval
+        let warningStateChanged = value.hasCriticalWarning != snapshot.hasCriticalWarning ||
+            value.hasTemperatureWarning != snapshot.hasTemperatureWarning
+        if warningStateChanged || now.timeIntervalSince(lastSnapshotPublish) >= displayInterval {
+            snapshot = value
+            lastSnapshotPublish = now
+        }
         watchBridge.enqueue(value)
         engineAlertManager.evaluate(value, rules: rules)
         if let change = historyRecorder.record(value) {
@@ -184,15 +249,16 @@ final class TelemetryController: ObservableObject {
             }
         }
         if let sessionID = historyRecorder.activeSessionID {
-            videoRecorder.handleTelemetry(sessionID: sessionID)
-        }
-        if let sessionID = historyRecorder.activeSessionID {
+            if sessionID != lastVideoSessionID || now.timeIntervalSince(lastVideoHeartbeat) >= 1 {
+                videoRecorder.handleTelemetry(sessionID: sessionID)
+                lastVideoSessionID = sessionID
+                lastVideoHeartbeat = now
+            }
             incidentRecorder.record(value, sessionID: sessionID)
         }
         if !bluetooth.connectedIsSimulator {
             cloudSync.publishLive(value)
         }
-        let now = Date.now
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)
             lastSharedWrite = now

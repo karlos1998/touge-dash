@@ -313,6 +313,7 @@
 "Nie znaleziono dostępnej kamery." = "No available camera was found.";
 "Wybrana kamera jest obecnie niedostępna." = "The selected camera is currently unavailable.";
 "Nie udało się przygotować nagrywania wideo." = "Video recording could not be prepared.";
+"Nagrywanie jest już aktywne." = "Recording is already active.";
 "Zapisany plik nie zawiera obrazu wideo." = "The saved file does not contain video.";
 "NAGRYWANIE PRZEJAZDU" = "DRIVE RECORDING";
 "TYLKO LOKALNIE" = "LOCAL ONLY";

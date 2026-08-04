@@ -59,6 +59,7 @@
 		C44CA2A2FC8E0EE3137230C0 /* TougeDashWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6DF9230FC2BD86F85A70343 /* TougeDashWidgets.swift */; };
 		C6506C3F08C2E3E901D53FDE /* CloudSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D642E0E53B986134A1AD69DA /* CloudSyncManager.swift */; };
 		C9BA350DEC850C27A0902F2A /* TelemetrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */; };
+		D0760D0CF246F91F21B99B70 /* DriveVideoCaptureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D3C92DB390BF67E87D5BCEA /* DriveVideoCaptureEngine.swift */; };
 		D350C1D23C89BA0ACBD9A941 /* TelemetryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AB235F1E099FCAD2444AEC /* TelemetryController.swift */; };
 		D704435085305FE1920999EF /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		D8CFE42360328B0EEE565637 /* DashboardTemplateControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0995A0CC3CAECAE373495929 /* DashboardTemplateControls.swift */; };
@@ -128,6 +129,7 @@
 		1B05E162CFE078B735FA31F7 /* DriveVideoFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoFeatureTests.swift; sourceTree = "<group>"; };
 		1BAC4A1BBACF7C5FE52A713C /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1D1F550E6FB4C529DD8B8D70 /* TelemetryActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryActivityManager.swift; sourceTree = "<group>"; };
+		1D3C92DB390BF67E87D5BCEA /* DriveVideoCaptureEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoCaptureEngine.swift; sourceTree = "<group>"; };
 		20B274E00E4B4234DED32AC0 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		23DB35220D4E5079DFF7037A /* AlertCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlertCenterView.swift; sourceTree = "<group>"; };
 		26707E250162A5983CD8DFA1 /* CloudModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudModels.swift; sourceTree = "<group>"; };
@@ -344,6 +346,7 @@
 		D3842D31BE1F72B09D925405 /* Video */ = {
 			isa = PBXGroup;
 			children = (
+				1D3C92DB390BF67E87D5BCEA /* DriveVideoCaptureEngine.swift */,
 				3F4F4C7BF7873DB1946180BA /* DriveVideoExporter.swift */,
 				B38F2608603DA13A1DCCB7BF /* DriveVideoHistorySection.swift */,
 				4BFB9F44D2E057B4F68D3983 /* DriveVideoModels.swift */,
@@ -633,6 +636,7 @@
 				DF0EFA5F5E90AC47FB60A2C9 /* DashboardTelemetryBuffer.swift in Sources */,
 				D8CFE42360328B0EEE565637 /* DashboardTemplateControls.swift in Sources */,
 				3D36302E4ADB8DAAB6E746E4 /* DashboardTemplateStore.swift in Sources */,
+				D0760D0CF246F91F21B99B70 /* DriveVideoCaptureEngine.swift in Sources */,
 				92D43105882679AA7F170830 /* DriveVideoExporter.swift in Sources */,
 				927FF8EBA2C3C49AC53E98AA /* DriveVideoHistorySection.swift in Sources */,
 				44EC962E52388A57767D2763 /* DriveVideoModels.swift in Sources */,
@@ -784,7 +788,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -845,7 +849,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

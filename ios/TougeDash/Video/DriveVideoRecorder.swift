@@ -23,8 +23,7 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
     let settings: DriveVideoSettingsStore
 
     private let context: ModelContext
-    private let captureSession = AVCaptureSession()
-    private let movieOutput = AVCaptureMovieFileOutput()
+    private let captureEngine = DriveVideoCaptureEngine()
     private var pendingSessionID: UUID?
     private var currentSessionID: UUID?
     private var currentURL: URL?
@@ -32,7 +31,6 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
     private var currentCameraName = ""
     private var currentHasAudio = false
     private var permissionRequestID = UUID()
-    private var isConfigured = false
     private var latestTelemetrySessionID: UUID?
     private var latestTelemetryAt = Date.distantPast
     private var isApplicationActive = true
@@ -43,6 +41,11 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         context.autosaveEnabled = true
         state = settings.isEnabled ? .ready : .disabled
         super.init()
+        captureEngine.onFinished = { [weak self] url, error in
+            Task { @MainActor [weak self] in
+                await self?.finishRecording(url: url, error: error)
+            }
+        }
         refreshCameras()
         refreshDiskCapacity()
     }
@@ -119,7 +122,7 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
             }
         } else {
             pendingSessionID = nil
-            if movieOutput.isRecording {
+            if isRecording {
                 stopRecording()
             } else {
                 stopCaptureSession()
@@ -171,7 +174,7 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         latestTelemetrySessionID = nil
         latestTelemetryAt = .distantPast
         pendingSessionID = nil
-        if movieOutput.isRecording {
+        if isRecording {
             stopRecording()
         } else if settings.isEnabled {
             stopCaptureSession()
@@ -183,7 +186,7 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         isApplicationActive = false
         permissionRequestID = UUID()
         pendingSessionID = nil
-        if movieOutput.isRecording {
+        if isRecording {
             stopRecording()
         } else {
             stopCaptureSession()
@@ -200,8 +203,8 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
     }
 
     private func reconfigureForNextClip(activeSessionID: UUID?) {
-        isConfigured = false
-        if movieOutput.isRecording {
+        permissionRequestID = UUID()
+        if isRecording {
             pendingSessionID = activeSessionID
             stopRecording()
         } else if let activeSessionID, settings.isEnabled {
@@ -211,7 +214,7 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
     }
 
     private func prepareAndStart(sessionID: UUID) async {
-        guard settings.isEnabled, !movieOutput.isRecording else { return }
+        guard settings.isEnabled, !isRecording else { return }
         let requestID = UUID()
         permissionRequestID = requestID
         state = .requestingPermission
@@ -237,19 +240,22 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
 
         state = .preparing
         do {
-            try configureSession(includeAudio: audioAllowed)
             guard settings.isEnabled, pendingSessionID == sessionID else {
                 state = settings.isEnabled ? .ready : .disabled
                 return
             }
-            try startRecording(sessionID: sessionID)
+            try await startRecording(
+                sessionID: sessionID,
+                includeAudio: audioAllowed,
+                requestID: requestID
+            )
         } catch {
             fail(error.localizedDescription)
         }
     }
 
     private func requestPermissionsForFutureRecording() async {
-        guard settings.isEnabled, !movieOutput.isRecording else { return }
+        guard settings.isEnabled, !isRecording else { return }
         let requestID = UUID()
         permissionRequestID = requestID
         state = .requestingPermission
@@ -270,88 +276,48 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         state = .ready
     }
 
-    private func configureSession(includeAudio: Bool) throws {
-        guard let selectedCamera,
-              let device = AVCaptureDevice(uniqueID: selectedCamera.id) else {
-            throw DriveVideoRecorderError.noCamera
-        }
-
-        captureSession.beginConfiguration()
-        defer { captureSession.commitConfiguration() }
-
-        captureSession.inputs.forEach(captureSession.removeInput)
-        if captureSession.outputs.contains(movieOutput) == false {
-            guard captureSession.canAddOutput(movieOutput) else { throw DriveVideoRecorderError.outputUnavailable }
-            captureSession.addOutput(movieOutput)
-        }
-
-        let videoInput = try AVCaptureDeviceInput(device: device)
-        guard captureSession.canAddInput(videoInput) else { throw DriveVideoRecorderError.cameraUnavailable }
-        captureSession.addInput(videoInput)
-
-        var audioAttached = false
-        if includeAudio, let microphone = AVCaptureDevice.default(for: .audio) {
-            let audioInput = try AVCaptureDeviceInput(device: microphone)
-            if captureSession.canAddInput(audioInput) {
-                captureSession.addInput(audioInput)
-                audioAttached = true
-            }
-        }
-
-        let requestedPreset = settings.quality.sessionPreset
-        if captureSession.canSetSessionPreset(requestedPreset) {
-            captureSession.sessionPreset = requestedPreset
-        } else if captureSession.canSetSessionPreset(.hd1920x1080) {
-            captureSession.sessionPreset = .hd1920x1080
-        } else {
-            captureSession.sessionPreset = .high
-        }
-
-        movieOutput.movieFragmentInterval = CMTime(seconds: 5, preferredTimescale: 600)
-        if let connection = movieOutput.connection(with: .video) {
-            if movieOutput.availableVideoCodecTypes.contains(.hevc) {
-                movieOutput.setOutputSettings([AVVideoCodecKey: AVVideoCodecType.hevc], for: connection)
-            }
-            if connection.isVideoRotationAngleSupported(interfaceRotationAngle) {
-                connection.videoRotationAngle = interfaceRotationAngle
-            }
-        }
-
-        currentCameraName = selectedCamera.name
-        currentHasAudio = audioAttached
-        isConfigured = true
-    }
-
-    private func startRecording(sessionID: UUID) throws {
-        guard isConfigured else { throw DriveVideoRecorderError.cameraUnavailable }
+    private func startRecording(sessionID: UUID, includeAudio: Bool, requestID: UUID) async throws {
+        guard let selectedCamera else { throw DriveVideoRecorderError.noCamera }
         refreshDiskCapacity()
-        if let freeDiskBytes {
-            let usableBytes = max(1, freeDiskBytes - 500_000_000)
-            movieOutput.maxRecordedFileSize = usableBytes
-        }
+        let usableBytes = max(1, (freeDiskBytes ?? Int64.max) - 500_000_000)
         let url = try DriveVideoFileStore.newRecordingURL()
         currentSessionID = sessionID
         currentURL = url
         currentStartedAt = .now
-        pendingSessionID = nil
 
-        if !captureSession.isRunning { captureSession.startRunning() }
-        movieOutput.startRecording(to: url, recordingDelegate: self)
+        let result = try await captureEngine.configureAndStart(
+            cameraID: selectedCamera.id,
+            quality: settings.quality,
+            includeAudio: includeAudio,
+            rotationAngle: interfaceRotationAngle,
+            outputURL: url,
+            maximumFileSize: usableBytes
+        )
+        guard requestID == permissionRequestID,
+              settings.isEnabled,
+              pendingSessionID == sessionID,
+              isApplicationActive else {
+            captureEngine.stopRecording()
+            return
+        }
+        currentCameraName = result.cameraName
+        currentHasAudio = result.hasAudio
+        pendingSessionID = nil
         state = .recording(sessionID: sessionID, startedAt: currentStartedAt ?? .now)
     }
 
     private func stopRecording() {
-        guard movieOutput.isRecording else {
+        guard isRecording else {
             stopCaptureSession()
             state = settings.isEnabled ? .ready : .disabled
             return
         }
         state = .stopping
-        movieOutput.stopRecording()
+        captureEngine.stopRecording()
     }
 
     private func stopCaptureSession() {
-        if captureSession.isRunning { captureSession.stopRunning() }
+        captureEngine.stopSession()
     }
 
     private func finishRecording(url: URL, error: Error?) async {
@@ -361,7 +327,6 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         currentSessionID = nil
         currentURL = nil
         currentStartedAt = nil
-        isConfigured = false
 
         if let error, !isSuccessfulFinishError(error) {
             try? FileManager.default.removeItem(at: url)
@@ -475,24 +440,12 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
     }
 }
 
-extension DriveVideoRecorder: AVCaptureFileOutputRecordingDelegate {
-    nonisolated func fileOutput(
-        _ output: AVCaptureFileOutput,
-        didFinishRecordingTo outputFileURL: URL,
-        from connections: [AVCaptureConnection],
-        error: Error?
-    ) {
-        Task { @MainActor [weak self] in
-            await self?.finishRecording(url: outputFileURL, error: error)
-        }
-    }
-}
-
-private enum DriveVideoRecorderError: LocalizedError {
+enum DriveVideoRecorderError: LocalizedError {
     case noCamera
     case cameraUnavailable
     case outputUnavailable
     case invalidVideo
+    case recordingAlreadyActive
 
     var errorDescription: String? {
         switch self {
@@ -500,6 +453,7 @@ private enum DriveVideoRecorderError: LocalizedError {
         case .cameraUnavailable: localized("Wybrana kamera jest obecnie niedostępna.")
         case .outputUnavailable: localized("Nie udało się przygotować nagrywania wideo.")
         case .invalidVideo: localized("Zapisany plik nie zawiera obrazu wideo.")
+        case .recordingAlreadyActive: localized("Nagrywanie jest już aktywne.")
         }
     }
 }

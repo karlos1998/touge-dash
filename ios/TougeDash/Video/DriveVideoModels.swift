@@ -71,7 +71,12 @@ final class DriveVideoSettingsStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        isEnabled = defaults.bool(forKey: Key.enabled)
+        #if DEBUG
+        let forcesRecording = ProcessInfo.processInfo.environment["TOUGE_DASH_FORCE_VIDEO_RECORDING"] == "1"
+        #else
+        let forcesRecording = false
+        #endif
+        isEnabled = forcesRecording || defaults.bool(forKey: Key.enabled)
         selectedCameraID = defaults.string(forKey: Key.cameraID)
         recordsAudio = defaults.object(forKey: Key.audio) as? Bool ?? true
         quality = defaults.string(forKey: Key.quality)

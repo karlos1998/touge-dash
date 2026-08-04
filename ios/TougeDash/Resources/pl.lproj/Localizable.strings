@@ -204,6 +204,7 @@
 "Nie znaleziono dostępnej kamery." = "Nie znaleziono dostępnej kamery.";
 "Wybrana kamera jest obecnie niedostępna." = "Wybrana kamera jest obecnie niedostępna.";
 "Nie udało się przygotować nagrywania wideo." = "Nie udało się przygotować nagrywania wideo.";
+"Nagrywanie jest już aktywne." = "Nagrywanie jest już aktywne.";
 "Zapisany plik nie zawiera obrazu wideo." = "Zapisany plik nie zawiera obrazu wideo.";
 "NAGRYWANIE PRZEJAZDU" = "NAGRYWANIE PRZEJAZDU";
 "TYLKO LOKALNIE" = "TYLKO LOKALNIE";
