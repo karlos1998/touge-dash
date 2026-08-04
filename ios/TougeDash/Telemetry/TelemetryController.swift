@@ -16,6 +16,7 @@ final class TelemetryController: ObservableObject {
     let incidentRecorder: TelemetryIncidentRecorder
     let locationTracker: LocationTrackingService
     let cloudSync: CloudSyncManager
+    let videoRecorder: DriveVideoRecorder
     private let watchBridge = WatchTelemetryBridge.shared
     private let engineAlertManager = EngineAlertManager()
 
@@ -28,11 +29,13 @@ final class TelemetryController: ObservableObject {
     init(
         historyRecorder: TelemetryHistoryRecorder,
         incidentRecorder: TelemetryIncidentRecorder,
-        cloudSync: CloudSyncManager
+        cloudSync: CloudSyncManager,
+        videoRecorder: DriveVideoRecorder
     ) {
         self.historyRecorder = historyRecorder
         self.incidentRecorder = incidentRecorder
         self.cloudSync = cloudSync
+        self.videoRecorder = videoRecorder
         locationTracker = historyRecorder.locationTracker
 
         #if DEBUG
@@ -63,6 +66,7 @@ final class TelemetryController: ObservableObject {
                 }
             } else {
                 self.incidentRecorder.finish(sessionID: self.historyRecorder.activeSessionID)
+                self.videoRecorder.connectionDidEnd()
             }
             if self.activityManager.isRunning {
                 self.activityManager.enqueueUpdate(self.snapshot, connectionLabel: state.label)
@@ -171,6 +175,9 @@ final class TelemetryController: ObservableObject {
         engineAlertManager.evaluate(value, rules: rules)
         if let change = historyRecorder.record(value) {
             cloudSync.noteLocalSampleRecorded(sessionBecamePending: change.sessionBecamePending)
+        }
+        if let sessionID = historyRecorder.activeSessionID {
+            videoRecorder.handleTelemetry(sessionID: sessionID)
         }
         if let sessionID = historyRecorder.activeSessionID {
             incidentRecorder.record(value, sessionID: sessionID)

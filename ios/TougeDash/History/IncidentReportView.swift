@@ -175,7 +175,7 @@ struct IncidentListRow: View {
             }
 
             Spacer()
-            Image(systemName: incident.syncState == .synced ? "icloud.fill" : "arrow.up.icloud")
+            Image(systemName: incident.syncState == .synced ? "icloud.fill" : "icloud.and.arrow.up")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(incident.syncState == .synced ? Color.tougeMint : .tougeOrange)
             Image(systemName: "chevron.right")
@@ -503,7 +503,7 @@ struct IncidentNotesCard: View {
                                 .font(.subheadline)
                         }
                         Spacer()
-                        Image(systemName: note.syncState == .synced ? "icloud.fill" : "arrow.up.icloud")
+                        Image(systemName: note.syncState == .synced ? "icloud.fill" : "icloud.and.arrow.up")
                             .font(.caption)
                             .foregroundStyle(note.syncState == .synced ? Color.tougeMint : .tougeOrange)
                     }

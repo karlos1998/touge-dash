@@ -6,6 +6,8 @@ struct TougeDashRootView: View {
     @ObservedObject var cloudSync: CloudSyncManager
     @ObservedObject var dashboardTemplates: DashboardTemplateStore
     @ObservedObject var dashboardBuffer: DashboardTelemetryBuffer
+    @ObservedObject var videoRecorder: DriveVideoRecorder
+    @ObservedObject var videoOverlays: VideoOverlayTemplateStore
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -16,13 +18,17 @@ struct TougeDashRootView: View {
         cloudAccount: CloudAccountService,
         cloudSync: CloudSyncManager,
         dashboardTemplates: DashboardTemplateStore,
-        dashboardBuffer: DashboardTelemetryBuffer
+        dashboardBuffer: DashboardTelemetryBuffer,
+        videoRecorder: DriveVideoRecorder,
+        videoOverlays: VideoOverlayTemplateStore
     ) {
         self.controller = controller
         self.cloudAccount = cloudAccount
         self.cloudSync = cloudSync
         self.dashboardTemplates = dashboardTemplates
         self.dashboardBuffer = dashboardBuffer
+        self.videoRecorder = videoRecorder
+        self.videoOverlays = videoOverlays
         #if DEBUG
         let historyPreview = ProcessInfo.processInfo.environment["TOUGE_DASH_HISTORY_PREVIEW"] == "1"
         _selection = State(initialValue: historyPreview ? 1 : 0)
@@ -52,6 +58,8 @@ struct TougeDashRootView: View {
                 locationTracker: controller.locationTracker,
                 cloudAccount: cloudAccount,
                 cloudSync: cloudSync,
+                videoRecorder: videoRecorder,
+                videoOverlays: videoOverlays,
                 onShowDashboard: compactLandscape ? { selection = 0 } : nil
             )
                 .toolbarVisibility(compactLandscape ? .hidden : .automatic, for: .tabBar)
@@ -73,6 +81,11 @@ struct TougeDashRootView: View {
             if phase != .active {
                 controller.historyRecorder.saveNow()
                 Task { await cloudSync.syncNow() }
+            }
+            if phase == .background {
+                videoRecorder.applicationDidEnterBackground()
+            } else if phase == .active {
+                videoRecorder.applicationDidBecomeActive()
             }
         }
         .onChange(of: cloudAccount.isAuthenticated) { _, _ in

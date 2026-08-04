@@ -42,8 +42,14 @@
 	<string>Touge Dash uses Bluetooth to receive engine data from a compatible ECUMaster interface.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>Touge Dash uses Bluetooth to receive engine data from a compatible ECUMaster interface.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Touge Dash uses the selected camera to record a drive locally on this device.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>When route recording is enabled, Touge Dash records location with engine telemetry, including while the phone is locked.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Touge Dash can record sound with a local drive video when you enable audio.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Touge Dash saves the drive video you export to your photo library.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>

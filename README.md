@@ -36,6 +36,8 @@ zasobów z oficjalnego eDash.
 - RPM, boost/MAP, TPS, AFR/lambda, temperatury, ciśnienia i napięcie,
 - adaptacyjny dashboard SwiftUI na iPhone'a i iPada, w pionie i poziomie,
 - lokalna historia przejazdów z interaktywnymi wykresami i opcjonalną trasą GPS,
+- lokalne nagrywanie przejazdu z odtwarzaniem zsynchronizowanym z telemetrią,
+- eksport filmu do Zdjęć z konfigurowalną nakładką parametrów,
 - automatyczne raporty incydentów obejmujące 30 sekund przed i 60 sekund po zdarzeniu,
 - notatki przypinane do dokładnego momentu przejazdu,
 - Centrum alertów z progami per auto, pracą offline i synchronizacją zmian mechanika,
@@ -81,6 +83,20 @@ auto po UUID interfejsu Bluetooth, przy pierwszym połączeniu prosi o jego nazw
 a następnie wysyła zaległe sesje partiami. Utrata internetu nie przerywa zapisu:
 próbki zostają w SwiftData i są dosyłane po odzyskaniu połączenia. Tokeny sesji
 są zapisane w Keychain.
+
+### Nagrania przejazdów
+
+Nagrywanie wideo jest opcjonalne i domyślnie wyłączone. Po jego włączeniu można
+wybrać obiektyw, jakość oraz zapis dźwięku. Film rozpoczyna się i kończy razem z
+sesją telemetrii, a w historii pozostaje przypisany do konkretnego przejazdu.
+Odtwarzacz i wykresy korzystają ze wspólnej osi czasu: przesunięcie filmu ustawia
+kursor telemetrii, a wskazanie momentu na wykresie przewija nagranie.
+
+Nagrania nie są synchronizowane z API ani kopią iCloud. Lista historii pokazuje
+ich rozmiar, a każdy plik można usunąć albo wyeksportować do aplikacji Zdjęcia.
+Eksport może zachować surowy obraz lub wyrenderować wybrany szablon HUD z
+prędkością, RPM, boostem, AFR, temperaturami i ciśnieniami. Szablony, pozycje,
+rozmiary oraz kolory nakładek są konfigurowalne i zapisywane lokalnie.
 
 ## Raporty incydentów
 

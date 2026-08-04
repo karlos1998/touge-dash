@@ -235,6 +235,56 @@ final class TelemetryHistorySample {
 }
 
 @Model
+final class DriveVideoRecording {
+    @Attribute(.unique) var id: UUID
+    var sessionID: UUID
+    var fileName: String
+    var startedAt: Date
+    var endedAt: Date
+    var duration: Double
+    var fileSizeBytes: Int64
+    var pixelWidth: Int
+    var pixelHeight: Int
+    var framesPerSecond: Double
+    var cameraName: String
+    var hasAudio: Bool
+    var preferredOverlayTemplateID: UUID?
+    var createdAt: Date
+
+    init(
+        id: UUID = UUID(),
+        sessionID: UUID,
+        fileName: String,
+        startedAt: Date,
+        endedAt: Date,
+        duration: Double,
+        fileSizeBytes: Int64,
+        pixelWidth: Int,
+        pixelHeight: Int,
+        framesPerSecond: Double,
+        cameraName: String,
+        hasAudio: Bool,
+        preferredOverlayTemplateID: UUID? = nil,
+        createdAt: Date = .now
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        self.fileName = fileName
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.duration = duration
+        self.fileSizeBytes = fileSizeBytes
+        self.pixelWidth = pixelWidth
+        self.pixelHeight = pixelHeight
+        self.framesPerSecond = framesPerSecond
+        self.cameraName = cameraName
+        self.hasAudio = hasAudio
+        self.preferredOverlayTemplateID = preferredOverlayTemplateID
+        self.createdAt = createdAt
+    }
+}
+
+@Model
 final class DriveIncident {
     @Attribute(.unique) var id: UUID
     var vehicleID: UUID

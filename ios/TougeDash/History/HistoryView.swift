@@ -8,9 +8,12 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \DriveSession.startedAt, order: .reverse) private var sessions: [DriveSession]
     @Query(sort: \DriveIncident.triggeredAt, order: .reverse) private var incidents: [DriveIncident]
+    @Query(sort: \DriveVideoRecording.startedAt, order: .reverse) private var videos: [DriveVideoRecording]
     @ObservedObject var locationTracker: LocationTrackingService
     @ObservedObject var cloudAccount: CloudAccountService
     @ObservedObject var cloudSync: CloudSyncManager
+    @ObservedObject var videoRecorder: DriveVideoRecorder
+    @ObservedObject var videoOverlays: VideoOverlayTemplateStore
     let onShowDashboard: (() -> Void)?
 
     var body: some View {
@@ -22,6 +25,7 @@ struct HistoryView: View {
                     LazyVStack(spacing: 14) {
                         CloudSyncCard(account: cloudAccount, sync: cloudSync)
                         LocationRecordingCard(locationTracker: locationTracker)
+                        DriveVideoRecordingCard(recorder: videoRecorder)
 
                         if !incidents.isEmpty {
                             HStack {
@@ -78,10 +82,14 @@ struct HistoryView: View {
                                     DriveSessionDetailView(
                                         session: session,
                                         cloudAccount: cloudAccount,
-                                        cloudSync: cloudSync
+                                        cloudSync: cloudSync,
+                                        videoOverlays: videoOverlays
                                     )
                                 } label: {
-                                    DriveSessionRow(session: session)
+                                    DriveSessionRow(
+                                        session: session,
+                                        recordings: videos.filter { $0.sessionID == session.id }
+                                    )
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
@@ -118,6 +126,10 @@ struct HistoryView: View {
     }
 
     private func delete(_ session: DriveSession) {
+        for video in videos where video.sessionID == session.id {
+            try? DriveVideoFileStore.delete(video)
+            modelContext.delete(video)
+        }
         for incident in incidents where incident.sessionID == session.id {
             modelContext.delete(incident)
         }
@@ -205,6 +217,9 @@ private struct HistoryEmptyState: View {
 
 private struct DriveSessionRow: View {
     let session: DriveSession
+    let recordings: [DriveVideoRecording]
+
+    private var videoBytes: Int64 { recordings.reduce(0) { $0 + $1.fileSizeBytes } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -232,7 +247,7 @@ private struct DriveSessionRow: View {
                         .padding(.vertical, 5)
                         .background(Color.tougeBlue.opacity(0.12), in: Capsule())
                 }
-                Image(systemName: session.syncState == .synced ? "icloud.fill" : "arrow.up.icloud")
+                Image(systemName: session.syncState == .synced ? "icloud.fill" : "icloud.and.arrow.up")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(session.syncState == .synced ? Color.tougeMint : Color.tougeOrange)
                 Image(systemName: "chevron.right")
@@ -257,6 +272,19 @@ private struct DriveSessionRow: View {
                 )
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
+            }
+
+            if !recordings.isEmpty {
+                Label(
+                    String(
+                        format: localized("Nagrania: %@ · %@ lokalnie"),
+                        recordings.count.formatted(),
+                        DriveVideoFileStore.formattedSize(videoBytes)
+                    ),
+                    systemImage: "video.fill"
+                )
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(Color.tougeRed)
             }
         }
         .padding(16)
@@ -297,8 +325,10 @@ private struct DriveSessionDetailView: View {
     let session: DriveSession
     @ObservedObject var cloudAccount: CloudAccountService
     @ObservedObject var cloudSync: CloudSyncManager
+    @ObservedObject var videoOverlays: VideoOverlayTemplateStore
     @Query(sort: \DriveIncident.triggeredAt) private var allIncidents: [DriveIncident]
     @Query(sort: \TimelineAnnotation.timestamp) private var allAnnotations: [TimelineAnnotation]
+    @Query(sort: \DriveVideoRecording.startedAt) private var allVideos: [DriveVideoRecording]
     @State private var selectedTime: Date?
     @State private var cachedSamples: [TelemetryHistorySample] = []
     @State private var chartSamples: [TelemetryHistorySample] = []
@@ -321,6 +351,10 @@ private struct DriveSessionDetailView: View {
         allAnnotations.filter { $0.sessionID == session.id && $0.incidentID == nil }
     }
 
+    private var recordings: [DriveVideoRecording] {
+        allVideos.filter { $0.sessionID == session.id }
+    }
+
     private var selectedCoordinate: CLLocationCoordinate2D? {
         guard let selectedTime,
               let sample = locatedSamples.nearest(to: selectedTime),
@@ -336,6 +370,16 @@ private struct DriveSessionDetailView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 14) {
                     SessionDetailHeader(session: session)
+
+                    if !recordings.isEmpty {
+                        DriveVideoHistorySection(
+                            recordings: recordings,
+                            samples: cachedSamples,
+                            selectedTime: $selectedTime,
+                            overlayStore: videoOverlays,
+                            onDelete: deleteVideo
+                        )
+                    }
 
                     if let selectedSample {
                         SelectedTelemetryStrip(sample: selectedSample, startedAt: session.startedAt)
@@ -478,6 +522,12 @@ private struct DriveSessionDetailView: View {
                 )
             }
         }
+    }
+
+    private func deleteVideo(_ recording: DriveVideoRecording) {
+        try? DriveVideoFileStore.delete(recording)
+        modelContext.delete(recording)
+        try? modelContext.save()
     }
 }
 

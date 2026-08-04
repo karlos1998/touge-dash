@@ -8,20 +8,26 @@
 
 /* Begin PBXBuildFile section */
 		0445B54FD5520FC04D8FF0DA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 766C369A028C9554F6713EF4 /* PrivacyInfo.xcprivacy */; };
+		06B80D050A4A57A6F2042E94 /* DriveVideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68EE821538067F559C124118 /* DriveVideoRecorder.swift */; };
 		07DD3DEBC6F93D500397E40D /* TougeDashRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E791078ECAA3EBD6D0CDB63 /* TougeDashRootView.swift */; };
 		0EBCD9A1BB5ED65085F937EC /* CloudWebAuthenticationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31DF319B7913DE4E073912F /* CloudWebAuthenticationSession.swift */; };
 		112733D2EDB08FD8A7923BD2 /* TougeDashWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = E697F34CB3FBBBECDE56B5FB /* TougeDashWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		145DC707D755B1C800A818E0 /* DriveVideoFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B05E162CFE078B735FA31F7 /* DriveVideoFeatureTests.swift */; };
+		19CDCED3C63C97A9BCA9D17A /* VideoOverlayModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48E627BEFBED68A854EEEF9A /* VideoOverlayModels.swift */; };
 		1B5AB2DCE6CC29A74145E2AD /* CloudModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26707E250162A5983CD8DFA1 /* CloudModels.swift */; };
 		29951B8FDF19A1D63CD3CDF8 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 32EF1DB4AE9E0F3919DE5F2F /* Localizable.strings */; };
 		299C268AE3198AFD790B2BE8 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 44D1AEB2A62A3DE8ABBB31EF /* Localizable.strings */; };
 		2A3D137A597A3A7650DB483E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6D33CEAED617C652DE41B67A /* PrivacyInfo.xcprivacy */; };
 		2B49A361609CA52600C27390 /* IncidentCaptureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3FD8B40DADC13A9B57FC4C /* IncidentCaptureEngine.swift */; };
+		2ECB776AE983337F613C0CA3 /* VideoOverlayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62B812B8C9EA59F4149D7103 /* VideoOverlayViews.swift */; };
 		2F5A43CF144D24A36986C752 /* WatchAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */; };
 		30A4F8895C5D5D7DCF993BBB /* CloudAccountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959C63DBA5B8A3C9E02CC0A2 /* CloudAccountService.swift */; };
 		32C08267B68F81BBDB3BE1A2 /* TougeDashWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 867564BA0BCD96BE13BB6CF2 /* TougeDashWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		3BCB3D0B6BC454922D743146 /* WatchTelemetryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5EC0840422B283BEFAECA00 /* WatchTelemetryController.swift */; };
 		3D36302E4ADB8DAAB6E746E4 /* DashboardTemplateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1008C0FBAC866F95BABD8A9B /* DashboardTemplateStore.swift */; };
+		418EFD2CB073246DEB3FA87F /* DriveVideoRecordingCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324ECA2B4DB8807A9925483F /* DriveVideoRecordingCard.swift */; };
 		4423D8E79B07BC7DC7227C27 /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
+		44EC962E52388A57767D2763 /* DriveVideoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFB9F44D2E057B4F68D3983 /* DriveVideoModels.swift */; };
 		461565700F8C1458526589B9 /* DashboardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8920142F4ACD5BE349220C77 /* DashboardModels.swift */; };
 		571D08AD010FE11015D25FE5 /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		60AAEF7A1ECA24D0B7DB69EF /* TelemetryActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1F550E6FB4C529DD8B8D70 /* TelemetryActivityManager.swift */; };
@@ -31,6 +37,8 @@
 		824F62972F06FB510E22F6B3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 3EBA8A7B0FC46842A7032005 /* PrivacyInfo.xcprivacy */; };
 		90CD28C116C9E4905866B302 /* EMUProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4755566114D5FAA70D71C3DF /* EMUProtocolTests.swift */; };
 		90D16AB7A00650BBD36BAF1D /* WatchTelemetryBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61373911C45310F82868CE77 /* WatchTelemetryBridge.swift */; };
+		927FF8EBA2C3C49AC53E98AA /* DriveVideoHistorySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B38F2608603DA13A1DCCB7BF /* DriveVideoHistorySection.swift */; };
+		92D43105882679AA7F170830 /* DriveVideoExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F4F4C7BF7873DB1946180BA /* DriveVideoExporter.swift */; };
 		93B92EBD25C2A7DD562B0349 /* CloudCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D4BDC1640C2CC10C5B971C /* CloudCredentialStore.swift */; };
 		9CDDC9896D9EAC134E86C104 /* HistoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1B6F75BEE169D2AC7626A3 /* HistoryModels.swift */; };
 		9F0A9C87668727632F2E2367 /* CloudViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B13510CE4FA317F340E83B /* CloudViews.swift */; };
@@ -117,6 +125,7 @@
 /* Begin PBXFileReference section */
 		0995A0CC3CAECAE373495929 /* DashboardTemplateControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTemplateControls.swift; sourceTree = "<group>"; };
 		1008C0FBAC866F95BABD8A9B /* DashboardTemplateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTemplateStore.swift; sourceTree = "<group>"; };
+		1B05E162CFE078B735FA31F7 /* DriveVideoFeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoFeatureTests.swift; sourceTree = "<group>"; };
 		1BAC4A1BBACF7C5FE52A713C /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		1D1F550E6FB4C529DD8B8D70 /* TelemetryActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryActivityManager.swift; sourceTree = "<group>"; };
 		20B274E00E4B4234DED32AC0 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
@@ -125,18 +134,24 @@
 		2A31118FAAC584270E040350 /* TougeDashApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashApp.swift; sourceTree = "<group>"; };
 		2BEF1664EF73C11A88CEDB49 /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		2C91642725B1BB61E1466BB0 /* ConfigurableDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurableDashboardView.swift; sourceTree = "<group>"; };
+		324ECA2B4DB8807A9925483F /* DriveVideoRecordingCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoRecordingCard.swift; sourceTree = "<group>"; };
 		3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = WatchAssets.xcassets; sourceTree = "<group>"; };
 		390DDE5663561312036818FF /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		3EBA8A7B0FC46842A7032005 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		3F4F4C7BF7873DB1946180BA /* DriveVideoExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoExporter.swift; sourceTree = "<group>"; };
 		4077192963AFEE623364528E /* TougeDash.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = TougeDash.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		426C277A095E02902C757197 /* TougeDashTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = TougeDashTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4755566114D5FAA70D71C3DF /* EMUProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EMUProtocolTests.swift; sourceTree = "<group>"; };
+		48E627BEFBED68A854EEEF9A /* VideoOverlayModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoOverlayModels.swift; sourceTree = "<group>"; };
 		4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
+		4BFB9F44D2E057B4F68D3983 /* DriveVideoModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoModels.swift; sourceTree = "<group>"; };
 		4D8E154F0783092C9E408ED1 /* DashboardTelemetryBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTelemetryBuffer.swift; sourceTree = "<group>"; };
 		4F897E7BACCFC82DCC47CFE8 /* WatchDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchDashboardView.swift; sourceTree = "<group>"; };
 		5040EC799703D53C4627A5F7 /* DashboardTemplateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTemplateTests.swift; sourceTree = "<group>"; };
 		540345614ECEE8151C103CAD /* CloudPasswordPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPasswordPolicyTests.swift; sourceTree = "<group>"; };
 		61373911C45310F82868CE77 /* WatchTelemetryBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryBridge.swift; sourceTree = "<group>"; };
+		62B812B8C9EA59F4149D7103 /* VideoOverlayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoOverlayViews.swift; sourceTree = "<group>"; };
+		68EE821538067F559C124118 /* DriveVideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoRecorder.swift; sourceTree = "<group>"; };
 		697C6502047A8B29FFEA91EF /* EngineAlertManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineAlertManager.swift; sourceTree = "<group>"; };
 		6D33CEAED617C652DE41B67A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		766C369A028C9554F6713EF4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -151,6 +166,7 @@
 		97630148259D8776DD8E7BD5 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		9E791078ECAA3EBD6D0CDB63 /* TougeDashRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashRootView.swift; sourceTree = "<group>"; };
 		B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryPayload.swift; sourceTree = "<group>"; };
+		B38F2608603DA13A1DCCB7BF /* DriveVideoHistorySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoHistorySection.swift; sourceTree = "<group>"; };
 		B6DF9230FC2BD86F85A70343 /* TougeDashWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashWidgets.swift; sourceTree = "<group>"; };
 		BB3FD8B40DADC13A9B57FC4C /* IncidentCaptureEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentCaptureEngine.swift; sourceTree = "<group>"; };
 		C0ABE317B4A0CDB49B92ABA6 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -225,6 +241,7 @@
 				D5A18A140B3A43BFD8447CF4 /* Online */,
 				2CEEA1877963B97AB8CC7E1A /* Resources */,
 				F99BEE7542B1CE198E8C3C99 /* Telemetry */,
+				D3842D31BE1F72B09D925405 /* Video */,
 				153097958A358C9D0482CED9 /* Views */,
 			);
 			path = TougeDash;
@@ -324,6 +341,20 @@
 			path = TougeDashWidgets;
 			sourceTree = "<group>";
 		};
+		D3842D31BE1F72B09D925405 /* Video */ = {
+			isa = PBXGroup;
+			children = (
+				3F4F4C7BF7873DB1946180BA /* DriveVideoExporter.swift */,
+				B38F2608603DA13A1DCCB7BF /* DriveVideoHistorySection.swift */,
+				4BFB9F44D2E057B4F68D3983 /* DriveVideoModels.swift */,
+				68EE821538067F559C124118 /* DriveVideoRecorder.swift */,
+				324ECA2B4DB8807A9925483F /* DriveVideoRecordingCard.swift */,
+				48E627BEFBED68A854EEEF9A /* VideoOverlayModels.swift */,
+				62B812B8C9EA59F4149D7103 /* VideoOverlayViews.swift */,
+			);
+			path = Video;
+			sourceTree = "<group>";
+		};
 		D5A18A140B3A43BFD8447CF4 /* Online */ = {
 			isa = PBXGroup;
 			children = (
@@ -365,6 +396,7 @@
 			children = (
 				540345614ECEE8151C103CAD /* CloudPasswordPolicyTests.swift */,
 				5040EC799703D53C4627A5F7 /* DashboardTemplateTests.swift */,
+				1B05E162CFE078B735FA31F7 /* DriveVideoFeatureTests.swift */,
 				4755566114D5FAA70D71C3DF /* EMUProtocolTests.swift */,
 				EEC2FC81C9B018C283812A62 /* IncidentCaptureEngineTests.swift */,
 			);
@@ -563,6 +595,7 @@
 			files = (
 				AF1310959A34802521674372 /* CloudPasswordPolicyTests.swift in Sources */,
 				ACF330D29DAF30624D6ECE14 /* DashboardTemplateTests.swift in Sources */,
+				145DC707D755B1C800A818E0 /* DriveVideoFeatureTests.swift in Sources */,
 				90CD28C116C9E4905866B302 /* EMUProtocolTests.swift in Sources */,
 				DE207C288E6A5A8BC5A5F109 /* IncidentCaptureEngineTests.swift in Sources */,
 			);
@@ -600,6 +633,11 @@
 				DF0EFA5F5E90AC47FB60A2C9 /* DashboardTelemetryBuffer.swift in Sources */,
 				D8CFE42360328B0EEE565637 /* DashboardTemplateControls.swift in Sources */,
 				3D36302E4ADB8DAAB6E746E4 /* DashboardTemplateStore.swift in Sources */,
+				92D43105882679AA7F170830 /* DriveVideoExporter.swift in Sources */,
+				927FF8EBA2C3C49AC53E98AA /* DriveVideoHistorySection.swift in Sources */,
+				44EC962E52388A57767D2763 /* DriveVideoModels.swift in Sources */,
+				06B80D050A4A57A6F2042E94 /* DriveVideoRecorder.swift in Sources */,
+				418EFD2CB073246DEB3FA87F /* DriveVideoRecordingCard.swift in Sources */,
 				E7C3A817DFBB318DB2BA1366 /* EMUProtocol.swift in Sources */,
 				F3E8E9984021000DE8B68120 /* EngineAlertManager.swift in Sources */,
 				9CDDC9896D9EAC134E86C104 /* HistoryModels.swift in Sources */,
@@ -614,6 +652,8 @@
 				7AF71B7D587FFBB02C0B1A35 /* TougeDashApp.swift in Sources */,
 				07DD3DEBC6F93D500397E40D /* TougeDashRootView.swift in Sources */,
 				B6F28CD522FC1A0CCF0C48AD /* VehicleAlertRules.swift in Sources */,
+				19CDCED3C63C97A9BCA9D17A /* VideoOverlayModels.swift in Sources */,
+				2ECB776AE983337F613C0CA3 /* VideoOverlayViews.swift in Sources */,
 				90D16AB7A00650BBD36BAF1D /* WatchTelemetryBridge.swift in Sources */,
 				D704435085305FE1920999EF /* WatchTelemetryPayload.swift in Sources */,
 			);
@@ -744,7 +784,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -805,7 +845,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;

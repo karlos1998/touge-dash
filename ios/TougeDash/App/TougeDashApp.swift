@@ -10,12 +10,15 @@ struct TougeDashApp: App {
     @StateObject private var cloudSync: CloudSyncManager
     @StateObject private var dashboardTemplates: DashboardTemplateStore
     @StateObject private var dashboardBuffer: DashboardTelemetryBuffer
+    @StateObject private var videoRecorder: DriveVideoRecorder
+    @StateObject private var videoOverlays: VideoOverlayTemplateStore
 
     init() {
         do {
             let container = try ModelContainer(
                 for: DriveSession.self,
                 TelemetryHistorySample.self,
+                DriveVideoRecording.self,
                 DriveIncident.self,
                 TimelineAnnotation.self
             )
@@ -28,6 +31,9 @@ struct TougeDashApp: App {
             let alertRules = VehicleAlertRuleStore()
             let templates = DashboardTemplateStore()
             let dashboardBuffer = DashboardTelemetryBuffer()
+            let videoSettings = DriveVideoSettingsStore()
+            let videoRecorder = DriveVideoRecorder(container: container, settings: videoSettings)
+            let videoOverlays = VideoOverlayTemplateStore()
             let sync = CloudSyncManager(
                 container: container,
                 account: account,
@@ -45,6 +51,8 @@ struct TougeDashApp: App {
             _cloudSync = StateObject(wrappedValue: sync)
             _dashboardTemplates = StateObject(wrappedValue: templates)
             _dashboardBuffer = StateObject(wrappedValue: dashboardBuffer)
+            _videoRecorder = StateObject(wrappedValue: videoRecorder)
+            _videoOverlays = StateObject(wrappedValue: videoOverlays)
             let incidentRecorder = TelemetryIncidentRecorder(
                 container: container,
                 locationTracker: locationTracker,
@@ -56,7 +64,8 @@ struct TougeDashApp: App {
             _controller = StateObject(wrappedValue: TelemetryController(
                 historyRecorder: historyRecorder,
                 incidentRecorder: incidentRecorder,
-                cloudSync: sync
+                cloudSync: sync,
+                videoRecorder: videoRecorder
             ))
         } catch {
             fatalError("Unable to create telemetry history store: \(error)")
@@ -70,7 +79,9 @@ struct TougeDashApp: App {
                 cloudAccount: cloudAccount,
                 cloudSync: cloudSync,
                 dashboardTemplates: dashboardTemplates,
-                dashboardBuffer: dashboardBuffer
+                dashboardBuffer: dashboardBuffer,
+                videoRecorder: videoRecorder,
+                videoOverlays: videoOverlays
             )
                 .preferredColorScheme(.dark)
         }
