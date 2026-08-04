@@ -8,6 +8,8 @@ struct TougeDashApp: App {
     @StateObject private var controller: TelemetryController
     @StateObject private var cloudAccount: CloudAccountService
     @StateObject private var cloudSync: CloudSyncManager
+    @StateObject private var dashboardTemplates: DashboardTemplateStore
+    @StateObject private var dashboardBuffer: DashboardTelemetryBuffer
 
     init() {
         do {
@@ -24,10 +26,13 @@ struct TougeDashApp: App {
             )
             let account = CloudAccountService()
             let alertRules = VehicleAlertRuleStore()
+            let templates = DashboardTemplateStore()
+            let dashboardBuffer = DashboardTelemetryBuffer()
             let sync = CloudSyncManager(
                 container: container,
                 account: account,
                 locationTracker: locationTracker,
+                dashboardTemplates: templates,
                 alertRules: alertRules
             )
             #if DEBUG
@@ -38,6 +43,8 @@ struct TougeDashApp: App {
             modelContainer = container
             _cloudAccount = StateObject(wrappedValue: account)
             _cloudSync = StateObject(wrappedValue: sync)
+            _dashboardTemplates = StateObject(wrappedValue: templates)
+            _dashboardBuffer = StateObject(wrappedValue: dashboardBuffer)
             let incidentRecorder = TelemetryIncidentRecorder(
                 container: container,
                 locationTracker: locationTracker,
@@ -58,7 +65,13 @@ struct TougeDashApp: App {
 
     var body: some Scene {
         WindowGroup {
-            TougeDashRootView(controller: controller, cloudAccount: cloudAccount, cloudSync: cloudSync)
+            TougeDashRootView(
+                controller: controller,
+                cloudAccount: cloudAccount,
+                cloudSync: cloudSync,
+                dashboardTemplates: dashboardTemplates,
+                dashboardBuffer: dashboardBuffer
+            )
                 .preferredColorScheme(.dark)
         }
         .modelContainer(modelContainer)

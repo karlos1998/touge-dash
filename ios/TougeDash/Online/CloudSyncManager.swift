@@ -50,6 +50,7 @@ final class CloudSyncManager: ObservableObject {
 
     private let account: CloudAccountService
     private let locationTracker: LocationTrackingService
+    let dashboardTemplates: DashboardTemplateStore
     let alertRules: VehicleAlertRuleStore
     private let context: ModelContext
     private let monitor = NWPathMonitor()
@@ -72,10 +73,12 @@ final class CloudSyncManager: ObservableObject {
         container: ModelContainer,
         account: CloudAccountService,
         locationTracker: LocationTrackingService,
+        dashboardTemplates: DashboardTemplateStore,
         alertRules: VehicleAlertRuleStore
     ) {
         self.account = account
         self.locationTracker = locationTracker
+        self.dashboardTemplates = dashboardTemplates
         self.alertRules = alertRules
         context = ModelContext(container)
         context.autosaveEnabled = false
@@ -96,14 +99,14 @@ final class CloudSyncManager: ObservableObject {
                 guard let self else { return }
                 isNetworkAvailable = path.status == .satisfied
                 if isNetworkAvailable {
-                    if account.isAuthenticated, activeVehicle != nil { await syncNow() }
+                    if account.isAuthenticated { await syncNow() }
                 } else {
                     state = .offline
                 }
             }
         }
         monitor.start(queue: monitorQueue)
-        if activeVehicle != nil {
+        if account.isAuthenticated {
             Task { [weak self] in
                 await Task.yield()
                 await self?.syncNow()
@@ -113,7 +116,7 @@ final class CloudSyncManager: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 guard let self else { return }
-                if self.account.isAuthenticated, self.activeVehicle != nil, self.isNetworkAvailable {
+                if self.account.isAuthenticated, self.isNetworkAvailable {
                     await self.syncNow()
                 }
             }
@@ -153,11 +156,12 @@ final class CloudSyncManager: ObservableObject {
             pendingHardwareIdentifier = nil
             progress = nil
             state = .signedOut
+            dashboardTemplates.markSignedOut()
             return
         }
         if let pendingHardwareIdentifier { await prepareVehicle(hardwareIdentifier: pendingHardwareIdentifier) }
         else if restoreActiveVehicle() { await syncNow() }
-        else { state = .ready }
+        else { await syncNow() }
     }
 
     func prepareVehicle(hardwareIdentifier: UUID) async {
@@ -196,18 +200,24 @@ final class CloudSyncManager: ObservableObject {
     }
 
     func syncNow() async {
-        guard account.isAuthenticated else { state = .signedOut; return }
-        guard isNetworkAvailable else { state = .offline; return }
-        guard !isSynchronizing else { return }
-        let associations = currentAccountAssociations()
-        guard !associations.isEmpty else {
-            state = pendingHardwareIdentifier == nil ? .ready : .waitingForVehicleName
+        guard account.isAuthenticated else {
+            state = .signedOut
+            dashboardTemplates.markSignedOut()
             return
         }
+        guard isNetworkAvailable else { state = .offline; return }
+        guard !isSynchronizing else { return }
         isSynchronizing = true
         defer { isSynchronizing = false }
         state = .syncing
         do {
+            try await synchronizeDashboardTemplates()
+            let associations = currentAccountAssociations()
+            guard !associations.isEmpty else {
+                lastSynchronizedAt = .now
+                state = pendingHardwareIdentifier == nil ? .ready : .waitingForVehicleName
+                return
+            }
             let queued = try pendingSessionEntries(for: associations)
             let queuedIncidents = try pendingIncidentEntries(for: associations)
             let queuedAnnotations = try pendingAnnotationEntries(for: associations)
@@ -249,6 +259,23 @@ final class CloudSyncManager: ObservableObject {
         } catch {
             state = .failed(error.localizedDescription)
             updatePendingCount()
+        }
+    }
+
+    private func synchronizeDashboardTemplates() async throws {
+        dashboardTemplates.markSyncing()
+        do {
+            let payload = CloudDashboardTemplateSyncRequest(
+                templates: dashboardTemplates.synchronizationRecords.map(CloudDashboardTemplate.init(record:))
+            )
+            let response: CloudDashboardTemplateSyncResponse = try await account.send(
+                endpoint: "/api/v1/dashboard-templates/sync",
+                body: payload
+            )
+            dashboardTemplates.mergeFromServer(response.templates.map(\.record))
+        } catch {
+            dashboardTemplates.markSyncFailed(error)
+            throw error
         }
     }
 

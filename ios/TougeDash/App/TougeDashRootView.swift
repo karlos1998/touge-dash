@@ -4,15 +4,25 @@ struct TougeDashRootView: View {
     @ObservedObject var controller: TelemetryController
     @ObservedObject var cloudAccount: CloudAccountService
     @ObservedObject var cloudSync: CloudSyncManager
+    @ObservedObject var dashboardTemplates: DashboardTemplateStore
+    @ObservedObject var dashboardBuffer: DashboardTelemetryBuffer
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var selection: Int
 
-    init(controller: TelemetryController, cloudAccount: CloudAccountService, cloudSync: CloudSyncManager) {
+    init(
+        controller: TelemetryController,
+        cloudAccount: CloudAccountService,
+        cloudSync: CloudSyncManager,
+        dashboardTemplates: DashboardTemplateStore,
+        dashboardBuffer: DashboardTelemetryBuffer
+    ) {
         self.controller = controller
         self.cloudAccount = cloudAccount
         self.cloudSync = cloudSync
+        self.dashboardTemplates = dashboardTemplates
+        self.dashboardBuffer = dashboardBuffer
         #if DEBUG
         let historyPreview = ProcessInfo.processInfo.environment["TOUGE_DASH_HISTORY_PREVIEW"] == "1"
         _selection = State(initialValue: historyPreview ? 1 : 0)
@@ -27,6 +37,9 @@ struct TougeDashRootView: View {
         TabView(selection: $selection) {
             ContentView(
                 controller: controller,
+                templates: dashboardTemplates,
+                telemetryBuffer: dashboardBuffer,
+                onTemplateChanged: { Task { await cloudSync.syncNow() } },
                 onShowHistory: compactLandscape ? { selection = 1 } : nil
             )
                 .toolbarVisibility(compactLandscape ? .hidden : .automatic, for: .tabBar)
@@ -65,5 +78,6 @@ struct TougeDashRootView: View {
         .onChange(of: cloudAccount.isAuthenticated) { _, _ in
             Task { await cloudSync.accountDidChange() }
         }
+        .onReceive(controller.$snapshot) { dashboardBuffer.record($0) }
     }
 }

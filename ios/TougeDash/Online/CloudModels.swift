@@ -21,6 +21,45 @@ struct CloudVehicle: Codable, Equatable, Identifiable, Sendable {
     let createdAt: Date
 }
 
+struct CloudDashboardTemplate: Codable, Equatable, Identifiable, Sendable {
+    let id: UUID
+    let schemaVersion: Int
+    let name: String
+    let definition: DashboardDefinition
+    let modifiedAt: Date
+    let deletedAt: Date?
+    let serverUpdatedAt: Date?
+
+    init(record: DashboardTemplateRecord) {
+        id = record.id
+        schemaVersion = record.schemaVersion
+        name = record.name
+        definition = record.definition
+        modifiedAt = record.modifiedAt
+        deletedAt = record.deletedAt
+        serverUpdatedAt = nil
+    }
+
+    var record: DashboardTemplateRecord {
+        DashboardTemplateRecord(
+            id: id,
+            schemaVersion: schemaVersion,
+            name: name,
+            definition: definition,
+            modifiedAt: modifiedAt,
+            deletedAt: deletedAt
+        )
+    }
+}
+
+struct CloudDashboardTemplateSyncRequest: Encodable, Sendable {
+    let templates: [CloudDashboardTemplate]
+}
+
+struct CloudDashboardTemplateSyncResponse: Decodable, Sendable {
+    let templates: [CloudDashboardTemplate]
+}
+
 struct CloudSyncResult: Codable, Sendable {
     let sessionId: UUID
     let serverRevision: Int
