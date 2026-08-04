@@ -7,6 +7,10 @@ struct ContentView: View {
     let onTemplateChanged: () -> Void
     let onShowHistory: (() -> Void)?
 
+    @State private var isEditingDashboard = false
+    @State private var quickEditorWidget: DashboardWidget?
+    @State private var widgetPendingDeletion: DashboardWidget?
+
     var body: some View {
         ZStack {
             DashboardBackground()
@@ -21,6 +25,7 @@ struct ContentView: View {
                         DashboardHeader(controller: controller, compact: isCompactWide)
                         DashboardTemplateBar(
                             store: templates,
+                            isEditingDashboard: $isEditingDashboard,
                             compact: isCompactWide,
                             onTemplateChanged: onTemplateChanged
                         )
@@ -29,7 +34,20 @@ struct ContentView: View {
                             snapshot: controller.snapshot,
                             telemetryBuffer: telemetryBuffer,
                             isWide: isWide,
-                            compact: isCompactWide
+                            compact: isCompactWide,
+                            isEditing: isEditingDashboard,
+                            canDeleteWidgets: templates.activeTemplate.definition.widgets.count > 1,
+                            onEditWidget: { quickEditorWidget = $0 },
+                            onDeleteWidget: { widget in
+                                widgetPendingDeletion = widget
+                            },
+                            onSwapWidgets: { sourceID, destinationID in
+                                withAnimation(.snappy(duration: 0.24)) {
+                                    if templates.swapActiveWidgets(sourceID, destinationID, isWide: isWide) {
+                                        onTemplateChanged()
+                                    }
+                                }
+                            }
                         )
                         .transaction { transaction in
                             if controller.videoRecorder.isRecording {
@@ -54,6 +72,42 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .sheet(isPresented: $controller.showingDevicePicker) {
             DevicePickerView(controller: controller)
+        }
+        .sheet(item: $quickEditorWidget) { widget in
+            DashboardWidgetQuickEditor(initial: widget) { updated in
+                if templates.updateActiveWidget(updated) {
+                    onTemplateChanged()
+                }
+                quickEditorWidget = nil
+            }
+        }
+        .confirmationDialog(
+            localized("Usunąć tę kartę z dashboardu?"),
+            isPresented: Binding(
+                get: { widgetPendingDeletion != nil },
+                set: { if !$0 { widgetPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(localized("Usuń kartę"), role: .destructive) {
+                guard let widget = widgetPendingDeletion else { return }
+                withAnimation(.snappy(duration: 0.22)) {
+                    if templates.removeActiveWidget(widget.id) {
+                        onTemplateChanged()
+                    }
+                }
+                widgetPendingDeletion = nil
+            }
+            Button(localized("Anuluj"), role: .cancel) {
+                widgetPendingDeletion = nil
+            }
+        }
+        .task {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["TOUGE_DASH_DASHBOARD_EDIT_PREVIEW"] == "1" {
+                isEditingDashboard = true
+            }
+            #endif
         }
     }
 }

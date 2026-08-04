@@ -288,6 +288,15 @@
 "Niskie napięcie" = "Niskie napięcie";
 "Zjedź w bezpieczne miejsce, zatrzymaj auto i sprawdź silnik." = "Zjedź w bezpieczne miejsce, zatrzymaj auto i sprawdź silnik.";
 "Sprawdź parametry instalacji i silnika." = "Sprawdź parametry instalacji i silnika.";
+"EDYTUJESZ DASHBOARD" = "EDYTUJESZ DASHBOARD";
+"Przeciągnij kartę na inną, aby zamienić je miejscami." = "Przeciągnij kartę na inną, aby zamienić je miejscami.";
+"Zaawansowane" = "Zaawansowane";
+"Edycja zaawansowana dashboardu" = "Edycja zaawansowana dashboardu";
+"PRZECIĄGNIJ" = "PRZECIĄGNIJ";
+"Usuń kartę" = "Usuń kartę";
+"Edytuj kartę" = "Edytuj kartę";
+"Zmiany dotyczą wyłącznie wyglądu dashboardu i nie są wysyłane do ECU." = "Zmiany dotyczą wyłącznie wyglądu dashboardu i nie są wysyłane do ECU.";
+"Usunąć tę kartę z dashboardu?" = "Usunąć tę kartę z dashboardu?";
 "%@ km zapisanej trasy" = "%@ km zapisanej trasy";
 "%@ · %@ próbek" = "%@ · %@ próbek";
 "Anuluj" = "Anuluj";

@@ -111,6 +111,52 @@ final class DashboardTemplateStore: ObservableObject {
         markLocalChange()
     }
 
+    @discardableResult
+    func updateActiveWidget(_ widget: DashboardWidget) -> Bool {
+        var template = activeTemplate
+        guard let index = template.definition.widgets.firstIndex(where: { $0.id == widget.id }) else {
+            return false
+        }
+        template.definition.widgets[index] = widget
+        save(template)
+        return true
+    }
+
+    @discardableResult
+    func removeActiveWidget(_ id: UUID) -> Bool {
+        var template = activeTemplate
+        guard template.definition.widgets.count > 1,
+              let index = template.definition.widgets.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+        template.definition.widgets.remove(at: index)
+        normalizeOrdersAfterListChange(&template)
+        save(template)
+        return true
+    }
+
+    @discardableResult
+    func swapActiveWidgets(_ sourceID: UUID, _ destinationID: UUID, isWide: Bool) -> Bool {
+        guard sourceID != destinationID else { return false }
+        var template = activeTemplate
+        guard let sourceIndex = template.definition.widgets.firstIndex(where: { $0.id == sourceID }),
+              let destinationIndex = template.definition.widgets.firstIndex(where: { $0.id == destinationID }) else {
+            return false
+        }
+
+        if isWide {
+            let sourceOrder = template.definition.widgets[sourceIndex].landscapeOrder
+            template.definition.widgets[sourceIndex].landscapeOrder = template.definition.widgets[destinationIndex].landscapeOrder
+            template.definition.widgets[destinationIndex].landscapeOrder = sourceOrder
+        } else {
+            let sourceOrder = template.definition.widgets[sourceIndex].portraitOrder
+            template.definition.widgets[sourceIndex].portraitOrder = template.definition.widgets[destinationIndex].portraitOrder
+            template.definition.widgets[destinationIndex].portraitOrder = sourceOrder
+        }
+        save(template)
+        return true
+    }
+
     func select(_ id: UUID) {
         guard records.contains(where: { $0.id == id && $0.deletedAt == nil }) else { return }
         activeTemplateID = id
@@ -185,14 +231,39 @@ final class DashboardTemplateStore: ObservableObject {
     }
 
     private func normalize(_ record: inout DashboardTemplateRecord) {
-        record.definition.widgets = record.definition.widgets.enumerated().map { index, widget in
+        record.definition.widgets = record.definition.widgets.map { widget in
             var value = widget
-            value.portraitOrder = index
-            value.landscapeOrder = index
             if value.metrics.isEmpty { value.metrics = [.boost] }
             if value.kind == .group { value.metrics = Array(value.metrics.prefix(3)) }
             if value.kind != .group && value.kind != .hero { value.metrics = [value.primaryMetric] }
             return value
+        }
+        normalizeOrder(in: &record, isWide: false)
+        normalizeOrder(in: &record, isWide: true)
+    }
+
+    private func normalizeOrdersAfterListChange(_ record: inout DashboardTemplateRecord) {
+        normalizeOrder(in: &record, isWide: false)
+        normalizeOrder(in: &record, isWide: true)
+    }
+
+    private func normalizeOrder(in record: inout DashboardTemplateRecord, isWide: Bool) {
+        let orderedIDs = record.definition.widgets
+            .sorted { lhs, rhs in
+                let lhsOrder = isWide ? lhs.landscapeOrder : lhs.portraitOrder
+                let rhsOrder = isWide ? rhs.landscapeOrder : rhs.portraitOrder
+                if lhsOrder != rhsOrder { return lhsOrder < rhsOrder }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            .map(\.id)
+
+        for (order, id) in orderedIDs.enumerated() {
+            guard let index = record.definition.widgets.firstIndex(where: { $0.id == id }) else { continue }
+            if isWide {
+                record.definition.widgets[index].landscapeOrder = order
+            } else {
+                record.definition.widgets[index].portraitOrder = order
+            }
         }
     }
 }

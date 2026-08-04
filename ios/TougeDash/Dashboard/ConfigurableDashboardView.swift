@@ -7,6 +7,11 @@ struct ConfigurableDashboardView: View {
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
     let isWide: Bool
     let compact: Bool
+    let isEditing: Bool
+    let canDeleteWidgets: Bool
+    let onEditWidget: (DashboardWidget) -> Void
+    let onDeleteWidget: (DashboardWidget) -> Void
+    let onSwapWidgets: (UUID, UUID) -> Void
 
     private var widgets: [DashboardWidget] {
         template.definition.widgets
@@ -32,7 +37,12 @@ struct ConfigurableDashboardView: View {
                     telemetryBuffer: telemetryBuffer,
                     isWide: isWide,
                     compact: compact,
-                    spacing: spacing
+                    spacing: spacing,
+                    isEditing: isEditing,
+                    canDeleteWidgets: canDeleteWidgets,
+                    onEditWidget: onEditWidget,
+                    onDeleteWidget: onDeleteWidget,
+                    onSwapWidgets: onSwapWidgets
                 )
             }
         }
@@ -47,6 +57,11 @@ private struct DashboardGridRow: View {
     let isWide: Bool
     let compact: Bool
     let spacing: CGFloat
+    let isEditing: Bool
+    let canDeleteWidgets: Bool
+    let onEditWidget: (DashboardWidget) -> Void
+    let onDeleteWidget: (DashboardWidget) -> Void
+    let onSwapWidgets: (UUID, UUID) -> Void
 
     private var occupiedColumns: Int {
         widgets.reduce(0) { $0 + span(for: $1) }
@@ -62,12 +77,17 @@ private struct DashboardGridRow: View {
 
             HStack(alignment: .top, spacing: spacing) {
                 ForEach(widgets) { widget in
-                    DashboardWidgetView(
+                    EditableDashboardWidget(
                         widget: widget,
                         snapshot: snapshot,
                         telemetryBuffer: telemetryBuffer,
                         isWide: isWide,
-                        compact: compact
+                        compact: compact,
+                        isEditing: isEditing,
+                        canDelete: canDeleteWidgets,
+                        onEdit: { onEditWidget(widget) },
+                        onDelete: { onDeleteWidget(widget) },
+                        onSwap: { sourceID in onSwapWidgets(sourceID, widget.id) }
                     )
                     .frame(
                         width: width(for: span(for: widget), columnWidth: columnWidth),
@@ -95,6 +115,172 @@ private struct DashboardGridRow: View {
 
     private func width(for columns: Int, columnWidth: CGFloat) -> CGFloat {
         (columnWidth * CGFloat(columns)) + (spacing * CGFloat(max(0, columns - 1)))
+    }
+}
+
+private struct EditableDashboardWidget: View {
+    let widget: DashboardWidget
+    let snapshot: TelemetrySnapshot
+    @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
+    let isWide: Bool
+    let compact: Bool
+    let isEditing: Bool
+    let canDelete: Bool
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let onSwap: (UUID) -> Void
+
+    @State private var isWobbling = false
+    @State private var isDropTarget = false
+
+    var body: some View {
+        Group {
+            if isEditing {
+                editableContent
+                    .draggable(widget.id.uuidString) {
+                        dragPreview
+                    }
+                    .dropDestination(for: String.self) { items, _ in
+                        guard let rawID = items.first,
+                              let sourceID = UUID(uuidString: rawID),
+                              sourceID != widget.id else {
+                            return false
+                        }
+                        onSwap(sourceID)
+                        return true
+                    } isTargeted: { targeted in
+                        withAnimation(.easeOut(duration: 0.14)) {
+                            isDropTarget = targeted
+                        }
+                    }
+                    .onAppear(perform: startWobble)
+                    .onDisappear {
+                        isWobbling = false
+                        isDropTarget = false
+                    }
+            } else {
+                dashboardContent
+            }
+        }
+        .accessibilityElement(children: isEditing ? .contain : .combine)
+    }
+
+    private var editableContent: some View {
+        dashboardContent
+            .saturation(0.82)
+            .scaleEffect(isDropTarget ? 0.965 : 0.985)
+            .rotationEffect(.degrees(isWobbling ? 0.32 : -0.32))
+            .overlay {
+                if isDropTarget {
+                    CutCornerPanel(cut: 12)
+                        .stroke(Color.tougeCyan, lineWidth: 2)
+                        .shadow(color: Color.tougeCyan.opacity(0.65), radius: 9)
+                }
+            }
+            .overlay(alignment: .top) {
+                HStack(alignment: .top, spacing: 5) {
+                    editButton(
+                        icon: "xmark",
+                        tint: .tougeRed,
+                        enabled: canDelete,
+                        accessibilityLabel: localized("Usuń kartę"),
+                        action: onDelete
+                    )
+
+                    Spacer(minLength: 0)
+
+                    Group {
+                        if showsDragTitle {
+                            Label(localized("PRZECIĄGNIJ"), systemImage: "line.3.horizontal")
+                        } else {
+                            Image(systemName: "line.3.horizontal")
+                        }
+                    }
+                        .font(.system(size: showsDragTitle ? 8 : 10, weight: .black))
+                        .tracking(showsDragTitle ? 0.7 : 0)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .padding(.horizontal, showsDragTitle ? 9 : 8)
+                        .frame(height: compact ? 26 : 30)
+                        .background(.black.opacity(0.72), in: Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.15)))
+
+                    Spacer(minLength: 0)
+
+                    editButton(
+                        icon: "pencil",
+                        tint: .tougeCyan,
+                        enabled: true,
+                        accessibilityLabel: localized("Edytuj kartę"),
+                        action: onEdit
+                    )
+                }
+                .padding(compact ? 5 : 7)
+                .frame(maxWidth: .infinity)
+                .background(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.88), Color.black.opacity(0.62), Color.black.opacity(0)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+            }
+            .contentShape(Rectangle())
+    }
+
+    private var showsDragTitle: Bool {
+        !compact && (isWide ? widget.landscapeSpan : widget.portraitSpan) == .full
+    }
+
+    private var dashboardContent: some View {
+        DashboardWidgetView(
+            widget: widget,
+            snapshot: snapshot,
+            telemetryBuffer: telemetryBuffer,
+            isWide: isWide,
+            compact: compact
+        )
+    }
+
+    private var dragPreview: some View {
+        HStack(spacing: 9) {
+            Image(systemName: widget.primaryMetric.icon)
+                .foregroundStyle(widget.accent.color)
+            Text(widget.title?.isEmpty == false ? widget.title! : widget.primaryMetric.title)
+                .font(.subheadline.weight(.bold))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 11)
+        .foregroundStyle(.white)
+        .background(Color.black.opacity(0.88), in: Capsule())
+        .overlay(Capsule().stroke(widget.accent.color.opacity(0.7)))
+    }
+
+    private func editButton(
+        icon: String,
+        tint: Color,
+        enabled: Bool,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: compact ? 10 : 11, weight: .black))
+                .frame(width: compact ? 26 : 30, height: compact ? 26 : 30)
+                .foregroundStyle(enabled ? Color.white : Color.white.opacity(0.35))
+                .background(tint.opacity(enabled ? 0.88 : 0.3), in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(enabled ? 0.2 : 0.08)))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func startWobble() {
+        isWobbling = false
+        withAnimation(.easeInOut(duration: 0.17).repeatForever(autoreverses: true)) {
+            isWobbling = true
+        }
     }
 }
 

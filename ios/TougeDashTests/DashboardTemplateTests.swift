@@ -121,6 +121,52 @@ final class DashboardTemplateTests: XCTestCase {
     }
 
     @MainActor
+    func testInlineEditorSwapsOnlyTheCurrentOrientationAndPersists() throws {
+        let suite = "TougeDashTests.dashboard.inline.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = DashboardTemplateStore(defaults: defaults, keyPrefix: suite)
+        let factory = store.activeTemplate
+        let boost = try XCTUnwrap(factory.definition.widgets.first(where: { $0.primaryMetric == .boost }))
+        let engineHealth = try XCTUnwrap(factory.definition.widgets.first(where: { $0.kind == .group }))
+
+        XCTAssertTrue(store.swapActiveWidgets(boost.id, engineHealth.id, isWide: false))
+
+        let updatedBoost = try XCTUnwrap(store.activeTemplate.definition.widgets.first(where: { $0.id == boost.id }))
+        let updatedHealth = try XCTUnwrap(store.activeTemplate.definition.widgets.first(where: { $0.id == engineHealth.id }))
+        XCTAssertEqual(updatedBoost.portraitOrder, 1)
+        XCTAssertEqual(updatedHealth.portraitOrder, 0)
+        XCTAssertEqual(updatedBoost.landscapeOrder, boost.landscapeOrder)
+        XCTAssertEqual(updatedHealth.landscapeOrder, engineHealth.landscapeOrder)
+
+        let reloaded = DashboardTemplateStore(defaults: defaults, keyPrefix: suite)
+        XCTAssertEqual(reloaded.activeTemplate.definition.widgets.first(where: { $0.id == boost.id })?.portraitOrder, 1)
+    }
+
+    @MainActor
+    func testInlineEditorUpdatesAndDeletesWidgetsWithoutLeavingAnEmptyDashboard() throws {
+        let suite = "TougeDashTests.dashboard.inline-delete.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = DashboardTemplateStore(defaults: defaults, keyPrefix: suite)
+        var boost = try XCTUnwrap(store.activeTemplate.definition.widgets.first(where: { $0.primaryMetric == .boost }))
+        boost.kind = .gauge
+        boost.accent = .orange
+
+        XCTAssertTrue(store.updateActiveWidget(boost))
+        XCTAssertEqual(store.activeTemplate.definition.widgets.first(where: { $0.id == boost.id })?.kind, .gauge)
+        XCTAssertEqual(store.activeTemplate.definition.widgets.first(where: { $0.id == boost.id })?.accent, .orange)
+
+        while store.activeTemplate.definition.widgets.count > 1 {
+            let id = try XCTUnwrap(store.activeTemplate.definition.widgets.last?.id)
+            XCTAssertTrue(store.removeActiveWidget(id))
+        }
+        let lastID = try XCTUnwrap(store.activeTemplate.definition.widgets.first?.id)
+        XCTAssertFalse(store.removeActiveWidget(lastID))
+        XCTAssertEqual(store.activeTemplate.definition.widgets.count, 1)
+    }
+
+    @MainActor
     func testChartBufferSamplesAtFiveHertzAndFiltersDuration() {
         let buffer = DashboardTelemetryBuffer(retention: 600, samplesPerSecond: 5)
         let start = Date(timeIntervalSince1970: 1_800_000_000)

@@ -397,3 +397,12 @@
 "Niskie napięcie" = "Low system voltage";
 "Zjedź w bezpieczne miejsce, zatrzymaj auto i sprawdź silnik." = "Pull over safely, stop the vehicle and check the engine.";
 "Sprawdź parametry instalacji i silnika." = "Check the electrical system and engine parameters.";
+"EDYTUJESZ DASHBOARD" = "EDITING DASHBOARD";
+"Przeciągnij kartę na inną, aby zamienić je miejscami." = "Drag a card onto another one to swap their positions.";
+"Zaawansowane" = "Advanced";
+"Edycja zaawansowana dashboardu" = "Advanced dashboard editor";
+"PRZECIĄGNIJ" = "DRAG";
+"Usuń kartę" = "Delete card";
+"Edytuj kartę" = "Edit card";
+"Zmiany dotyczą wyłącznie wyglądu dashboardu i nie są wysyłane do ECU." = "These changes only affect the dashboard layout and are never sent to the ECU.";
+"Usunąć tę kartę z dashboardu?" = "Remove this card from the dashboard?";

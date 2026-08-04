@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardTemplateBar: View {
     @ObservedObject var store: DashboardTemplateStore
+    @Binding var isEditingDashboard: Bool
     let compact: Bool
     let onTemplateChanged: () -> Void
 
@@ -9,6 +10,49 @@ struct DashboardTemplateBar: View {
     @State private var showingFactoryResetConfirmation = false
 
     var body: some View {
+        Group {
+            if isEditingDashboard {
+                editingBar
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            } else {
+                regularBar
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.24), value: isEditingDashboard)
+        .sheet(item: $editorDraft) { draft in
+            DashboardTemplateEditor(
+                initial: draft,
+                canDelete: store.templates.count > 1 && store.templates.contains(where: { $0.id == draft.id }),
+                onSave: {
+                    store.save($0)
+                    editorDraft = nil
+                    onTemplateChanged()
+                },
+                onDelete: {
+                    store.delete(draft.id)
+                    editorDraft = nil
+                    isEditingDashboard = false
+                    onTemplateChanged()
+                }
+            )
+        }
+        .confirmationDialog(
+            localized("Przywrócić fabryczny dashboard?"),
+            isPresented: $showingFactoryResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(localized("Przywróć"), role: .destructive) {
+                store.restoreFactoryTemplate()
+                onTemplateChanged()
+            }
+            Button(localized("Anuluj"), role: .cancel) { }
+        } message: {
+            Text(localized("Fabryczny układ wróci do ustawień początkowych. Pozostałe dashboardy nie zostaną zmienione."))
+        }
+    }
+
+    private var regularBar: some View {
         HStack(spacing: compact ? 7 : 10) {
             Menu {
                 Section(localized("Zapisane dashboardy")) {
@@ -73,7 +117,7 @@ struct DashboardTemplateBar: View {
             .buttonStyle(.plain)
 
             Button {
-                editorDraft = store.activeTemplate
+                isEditingDashboard = true
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "slider.horizontal.3")
@@ -90,34 +134,93 @@ struct DashboardTemplateBar: View {
             }
             .buttonStyle(.plain)
         }
-        .sheet(item: $editorDraft) { draft in
-            DashboardTemplateEditor(
-                initial: draft,
-                canDelete: store.templates.count > 1 && store.templates.contains(where: { $0.id == draft.id }),
-                onSave: {
-                    store.save($0)
-                    editorDraft = nil
-                    onTemplateChanged()
-                },
-                onDelete: {
-                    store.delete(draft.id)
-                    editorDraft = nil
-                    onTemplateChanged()
-                }
-            )
+    }
+
+    private var editingBar: some View {
+        ViewThatFits(in: .horizontal) {
+            editingBarContent(narrow: false)
+                .fixedSize(horizontal: true, vertical: false)
+            editingBarContent(narrow: true)
         }
-        .confirmationDialog(
-            localized("Przywrócić fabryczny dashboard?"),
-            isPresented: $showingFactoryResetConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(localized("Przywróć"), role: .destructive) {
-                store.restoreFactoryTemplate()
-                onTemplateChanged()
+        .padding(.horizontal, compact ? 9 : 12)
+        .padding(.vertical, compact ? 7 : 9)
+        .background(Color.tougeCyan.opacity(0.065), in: CutCornerPanel(cut: 10))
+        .overlay(CutCornerPanel(cut: 10).stroke(Color.tougeCyan.opacity(0.32), lineWidth: 1))
+    }
+
+    private func editingBarContent(narrow: Bool) -> some View {
+        HStack(spacing: compact || narrow ? 7 : 10) {
+            Image(systemName: "square.grid.3x3.topleft.filled")
+                .font(.system(size: compact || narrow ? 13 : 16, weight: .bold))
+                .foregroundStyle(Color.tougeCyan)
+                .frame(width: compact || narrow ? 30 : 38, height: compact || narrow ? 30 : 38)
+                .background(Color.tougeCyan.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(localized("EDYTUJESZ DASHBOARD"))
+                    .font(.system(size: compact || narrow ? 8 : 10, weight: .black))
+                    .tracking(narrow ? 0.65 : 1.05)
+                    .foregroundStyle(Color.tougeCyan)
+                    .lineLimit(narrow ? 2 : 1)
+                if !compact && !narrow {
+                    Text(localized("Przeciągnij kartę na inną, aby zamienić je miejscami."))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
             }
-            Button(localized("Anuluj"), role: .cancel) { }
-        } message: {
-            Text(localized("Fabryczny układ wróci do ustawień początkowych. Pozostałe dashboardy nie zostaną zmienione."))
+
+            Spacer(minLength: 2)
+
+            Button {
+                editorDraft = store.activeTemplate
+            } label: {
+                Group {
+                    if narrow {
+                        VStack(spacing: 2) {
+                            Image(systemName: "slider.horizontal.3")
+                            Text(localized("Zaawansowane"))
+                                .font(.system(size: 7, weight: .black))
+                                .lineLimit(1)
+                        }
+                    } else {
+                        Label(localized("Zaawansowane"), systemImage: "slider.horizontal.3")
+                    }
+                }
+                    .font(.system(size: compact || narrow ? 11 : 12, weight: .bold))
+                    .frame(width: narrow ? 78 : nil)
+                    .padding(.horizontal, compact ? 9 : (narrow ? 0 : 12))
+                    .padding(.vertical, compact || narrow ? 7 : 10)
+                    .background(Color.white.opacity(0.075), in: CutCornerPanel(cut: 7))
+                    .overlay(CutCornerPanel(cut: 7).stroke(Color.white.opacity(0.1)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(localized("Edycja zaawansowana dashboardu"))
+
+            Button {
+                isEditingDashboard = false
+            } label: {
+                Group {
+                    if narrow {
+                        VStack(spacing: 2) {
+                            Image(systemName: "checkmark")
+                            Text(localized("Gotowe"))
+                                .font(.system(size: 7, weight: .black))
+                                .lineLimit(1)
+                        }
+                    } else {
+                        Label(localized("Gotowe"), systemImage: "checkmark")
+                    }
+                }
+                    .font(.system(size: compact || narrow ? 11 : 12, weight: .black))
+                    .frame(width: narrow ? 54 : nil)
+                    .padding(.horizontal, compact ? 10 : (narrow ? 0 : 14))
+                    .padding(.vertical, compact || narrow ? 7 : 10)
+                    .foregroundStyle(Color.black)
+                    .background(Color.tougeCyan, in: CutCornerPanel(cut: 7))
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -180,9 +283,11 @@ struct DashboardTemplateEditor: View {
                     }
                     .onMove { source, destination in
                         draft.definition.widgets.move(fromOffsets: source, toOffset: destination)
+                        resetWidgetOrders()
                     }
                     .onDelete { offsets in
                         draft.definition.widgets.remove(atOffsets: offsets)
+                        resetWidgetOrders()
                     }
 
                     Button {
@@ -249,11 +354,65 @@ struct DashboardTemplateEditor: View {
                 accent: .cyan
             )
         )
+        resetWidgetOrders()
+    }
+
+    private func resetWidgetOrders() {
+        for index in draft.definition.widgets.indices {
+            draft.definition.widgets[index].portraitOrder = index
+            draft.definition.widgets[index].landscapeOrder = index
+        }
+    }
+}
+
+struct DashboardWidgetQuickEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var draft: DashboardWidget
+
+    let onSave: (DashboardWidget) -> Void
+
+    init(initial: DashboardWidget, onSave: @escaping (DashboardWidget) -> Void) {
+        _draft = State(initialValue: initial)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                DashboardWidgetEditorRow(widget: $draft, initiallyExpanded: true)
+
+                Section {
+                    Label(
+                        localized("Zmiany dotyczą wyłącznie wyglądu dashboardu i nie są wysyłane do ECU."),
+                        systemImage: "checkmark.shield.fill"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(Color.tougeMint)
+                }
+            }
+            .navigationTitle(localized("Edytuj kartę"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(localized("Anuluj")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(localized("Zapisz")) { onSave(draft) }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
     }
 }
 
 private struct DashboardWidgetEditorRow: View {
     @Binding var widget: DashboardWidget
+    @State private var isExpanded: Bool
+
+    init(widget: Binding<DashboardWidget>, initiallyExpanded: Bool = false) {
+        _widget = widget
+        _isExpanded = State(initialValue: initiallyExpanded)
+    }
 
     private var maximumMetricCount: Int {
         switch widget.kind {
@@ -264,7 +423,7 @@ private struct DashboardWidgetEditorRow: View {
     }
 
     var body: some View {
-        DisclosureGroup {
+        DisclosureGroup(isExpanded: $isExpanded) {
             TextField(localized("Własny tytuł (opcjonalnie)"), text: titleBinding)
 
             Picker(localized("Rodzaj karty"), selection: $widget.kind) {
