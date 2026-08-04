@@ -335,7 +335,7 @@ extension DashboardTemplateRecord {
                     landscapeSpan: .third,
                     portraitOrder: 0,
                     landscapeOrder: 1,
-                    gaugeMinimum: -1,
+                    gaugeMinimum: 0,
                     gaugeMaximum: 2,
                     accent: .cyan
                 ),

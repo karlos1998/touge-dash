@@ -360,13 +360,20 @@ private struct DashboardValueWidget: View {
                 .foregroundStyle(warning ? Color.tougeRed : Color.white)
                 .minimumScaleFactor(0.55)
                 .lineLimit(1)
-            Text(metric.unit)
+            Text(secondaryLabel)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(compact ? 11 : 14)
         .cardSurface(warning: warning, accent: warning ? .tougeRed : widget.accent.color)
+    }
+
+    private var secondaryLabel: String {
+        if metric == .afr {
+            return "λ " + snapshot.lambda.formatted(.number.precision(.fractionLength(2)))
+        }
+        return metric.unit
     }
 }
 
