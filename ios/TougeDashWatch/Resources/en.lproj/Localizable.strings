@@ -6,3 +6,13 @@
 "WAIT" = "WAIT";
 "OIL" = "OIL";
 "COOLANT" = "COOLANT";
+"CRITICAL ENGINE ALERT" = "CRITICAL ENGINE ALERT";
+"Krytyczny alert silnika" = "Critical engine alert";
+"Niskie ciśnienie oleju" = "Low oil pressure";
+"Uboga mieszanka pod boostem" = "Lean mixture under boost";
+"Przekroczone doładowanie" = "Overboost";
+"Wysoka temperatura płynu" = "High coolant temperature";
+"Wysoka temperatura oleju" = "High oil temperature";
+"Niskie ciśnienie paliwa" = "Low fuel pressure";
+"Niskie napięcie" = "Low system voltage";
+"Zatrzymaj auto i sprawdź silnik." = "Stop the vehicle and check the engine.";

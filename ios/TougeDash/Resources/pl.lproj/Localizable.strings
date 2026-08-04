@@ -280,6 +280,14 @@
 "Plik filmu nie istnieje już na urządzeniu." = "Plik filmu nie istnieje już na urządzeniu.";
 "Nie udało się przygotować eksportu filmu." = "Nie udało się przygotować eksportu filmu.";
 "Brak zgody na dodawanie filmów do aplikacji Zdjęcia." = "Brak zgody na dodawanie filmów do aplikacji Zdjęcia.";
+"Touge Dash — krytyczny alert silnika" = "Touge Dash — krytyczny alert silnika";
+"Touge Dash — ostrzeżenie silnika" = "Touge Dash — ostrzeżenie silnika";
+"Uboga mieszanka pod boostem" = "Uboga mieszanka pod boostem";
+"Wysoka temperatura płynu" = "Wysoka temperatura płynu";
+"Wysoka temperatura oleju" = "Wysoka temperatura oleju";
+"Niskie napięcie" = "Niskie napięcie";
+"Zjedź w bezpieczne miejsce, zatrzymaj auto i sprawdź silnik." = "Zjedź w bezpieczne miejsce, zatrzymaj auto i sprawdź silnik.";
+"Sprawdź parametry instalacji i silnika." = "Sprawdź parametry instalacji i silnika.";
 "%@ km zapisanej trasy" = "%@ km zapisanej trasy";
 "%@ · %@ próbek" = "%@ · %@ próbek";
 "Anuluj" = "Anuluj";

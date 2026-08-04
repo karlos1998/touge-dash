@@ -54,6 +54,8 @@
 	<true/>
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
 	<true/>
+	<key>TougeDashCriticalAlertsEnabled</key>
+	<string>$(TOUGE_DASH_CRITICAL_ALERTS_ENABLED)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

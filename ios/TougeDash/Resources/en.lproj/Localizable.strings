@@ -389,3 +389,11 @@
 "Plik filmu nie istnieje już na urządzeniu." = "The video file is no longer on this device.";
 "Nie udało się przygotować eksportu filmu." = "Video export could not be prepared.";
 "Brak zgody na dodawanie filmów do aplikacji Zdjęcia." = "Touge Dash does not have permission to add videos to Photos.";
+"Touge Dash — krytyczny alert silnika" = "Touge Dash — critical engine alert";
+"Touge Dash — ostrzeżenie silnika" = "Touge Dash — engine warning";
+"Uboga mieszanka pod boostem" = "Lean mixture under boost";
+"Wysoka temperatura płynu" = "High coolant temperature";
+"Wysoka temperatura oleju" = "High oil temperature";
+"Niskie napięcie" = "Low system voltage";
+"Zjedź w bezpieczne miejsce, zatrzymaj auto i sprawdź silnik." = "Pull over safely, stop the vehicle and check the engine.";
+"Sprawdź parametry instalacji i silnika." = "Check the electrical system and engine parameters.";

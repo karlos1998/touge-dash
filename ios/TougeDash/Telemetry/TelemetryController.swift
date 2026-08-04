@@ -127,7 +127,8 @@ final class TelemetryController: ObservableObject {
         if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_ALERT"] == "1" {
             let rules = cloudSync.alertRules.activeRules
             snapshot = rules.applyingWarningState(to: snapshot)
-            engineAlertManager.evaluate(snapshot, rules: rules)
+            _ = engineAlertManager.evaluate(snapshot, rules: rules, now: snapshot.updatedAt.addingTimeInterval(-5))
+            _ = engineAlertManager.evaluate(snapshot, rules: rules, now: snapshot.updatedAt)
         }
         #endif
     }
@@ -241,8 +242,11 @@ final class TelemetryController: ObservableObject {
             snapshot = value
             lastSnapshotPublish = now
         }
-        watchBridge.enqueue(value)
-        engineAlertManager.evaluate(value, rules: rules)
+        let alertEvaluation = engineAlertManager.evaluate(value, rules: rules, now: now)
+        watchBridge.enqueue(value, activeAlerts: alertEvaluation.active)
+        if !alertEvaluation.triggered.isEmpty {
+            watchBridge.sendAlertEvents(alertEvaluation.triggered, snapshot: value)
+        }
         if let change = historyRecorder.record(value) {
             if !bluetooth.connectedIsSimulator {
                 cloudSync.noteLocalSampleRecorded(sessionBecamePending: change.sessionBecamePending)

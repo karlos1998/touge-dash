@@ -7,6 +7,31 @@ enum EngineTemperatureLimits {
     static let oilResetCelsius = 115.0
 }
 
+enum EngineAlertKind: String, Codable, CaseIterable, Sendable {
+    case lowOilPressure = "LOW_OIL_PRESSURE"
+    case leanUnderBoost = "LEAN_UNDER_BOOST"
+    case overboost = "OVERBOOST"
+    case highCoolantTemperature = "HIGH_COOLANT_TEMPERATURE"
+    case highOilTemperature = "HIGH_OIL_TEMPERATURE"
+    case lowFuelPressure = "LOW_FUEL_PRESSURE"
+    case lowBatteryVoltage = "LOW_BATTERY_VOLTAGE"
+}
+
+enum EngineAlertSeverity: String, Codable, Sendable {
+    case warning = "WARNING"
+    case critical = "CRITICAL"
+}
+
+struct EngineAlertEvent: Codable, Equatable, Identifiable, Sendable {
+    let id: UUID
+    let kind: EngineAlertKind
+    let severity: EngineAlertSeverity
+    let value: Double
+    let threshold: Double
+    let unit: String
+    let triggeredAt: Date
+}
+
 struct WatchTelemetryPayload: Codable, Equatable, Sendable {
     static let contextKey = "tougeDashTelemetry"
 
@@ -19,6 +44,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
     var hasCriticalWarning: Bool
     var configuredOilTemperatureWarning: Bool?
     var configuredCoolantWarning: Bool?
+    var activeAlerts: [EngineAlertEvent]?
     var updatedAt: Date
 
     init(
@@ -29,6 +55,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         coolantCelsius: Double,
         rpm: Double,
         hasCriticalWarning: Bool,
+        activeAlerts: [EngineAlertEvent] = [],
         updatedAt: Date
     ) {
         self.boostBar = boostBar
@@ -38,6 +65,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         self.coolantCelsius = coolantCelsius
         self.rpm = rpm
         self.hasCriticalWarning = hasCriticalWarning
+        self.activeAlerts = activeAlerts
         self.updatedAt = updatedAt
     }
 
@@ -83,8 +111,12 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         hasOilTemperatureWarning || hasCoolantWarning
     }
 
+    var engineAlerts: [EngineAlertEvent] {
+        activeAlerts ?? []
+    }
+
     #if os(iOS)
-    init(snapshot: TelemetrySnapshot) {
+    init(snapshot: TelemetrySnapshot, activeAlerts: [EngineAlertEvent] = []) {
         boostBar = snapshot.boostBar
         afr = snapshot.afr
         oilPressureBar = snapshot.oilPressureBar
@@ -94,6 +126,7 @@ struct WatchTelemetryPayload: Codable, Equatable, Sendable {
         hasCriticalWarning = snapshot.hasCriticalWarning
         configuredOilTemperatureWarning = snapshot.hasOilTemperatureWarning
         configuredCoolantWarning = snapshot.hasCoolantWarning
+        self.activeAlerts = activeAlerts
         updatedAt = snapshot.updatedAt
     }
     #endif

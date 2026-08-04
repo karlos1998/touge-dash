@@ -41,7 +41,7 @@ struct WatchDashboardView: View {
             coolantPanel(snapshot: snapshot)
 
             if snapshot.hasCriticalWarning {
-                Label(localized(snapshot.hasTemperatureWarning ? "TEMPERATURE ALERT" : "ENGINE WARNING"), systemImage: "exclamationmark.triangle.fill")
+                Label(localized(snapshot.engineAlerts.isEmpty ? (snapshot.hasTemperatureWarning ? "TEMPERATURE ALERT" : "ENGINE WARNING") : "CRITICAL ENGINE ALERT"), systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 9, weight: .black))
                     .foregroundStyle(Color.tougeOrange)
                     .symbolEffect(.pulse, options: .repeating, isActive: snapshot.hasTemperatureWarning)

@@ -2,6 +2,97 @@ import XCTest
 @testable import TougeDash
 
 final class IncidentCaptureEngineTests: XCTestCase {
+    func testNotificationEvaluatorTriggersEveryConfiguredRuleAfterItsDebounce() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let scenarios: [(EngineAlertKind, VehicleAlertRules, TelemetrySnapshot, TimeInterval)] = [
+            (.lowOilPressure, Self.isolatedRules { $0.lowOilPressureEnabled = true },
+             Self.telemetry(rpm: 4_000, oilPressure: 1.0), 0.75),
+            (.leanUnderBoost, Self.isolatedRules { $0.leanUnderBoostEnabled = true },
+             Self.telemetry(boost: 0.8, afr: 14.2), 0.5),
+            (.overboost, Self.isolatedRules { $0.overboostEnabled = true },
+             Self.telemetry(boost: 1.8), 0.5),
+            (.highCoolantTemperature, Self.isolatedRules { $0.highCoolantTemperatureEnabled = true },
+             Self.telemetry(coolant: 115), 2),
+            (.highOilTemperature, Self.isolatedRules { $0.highOilTemperatureEnabled = true },
+             Self.telemetry(oilTemperature: 125), 2),
+            (.lowFuelPressure, Self.isolatedRules { $0.lowFuelPressureEnabled = true },
+             Self.telemetry(rpm: 3_000, fuelPressure: 2.0), 1),
+            (.lowBatteryVoltage, Self.isolatedRules { $0.lowBatteryVoltageEnabled = true },
+             Self.telemetry(rpm: 1_500, battery: 10.8), 3),
+        ]
+
+        for (kind, rules, snapshot, debounce) in scenarios {
+            var evaluator = EngineAlertEvaluator()
+            XCTAssertTrue(evaluator.evaluate(snapshot, rules: rules, now: start).triggered.isEmpty)
+            let result = evaluator.evaluate(
+                snapshot,
+                rules: rules,
+                now: start.addingTimeInterval(debounce + 0.01)
+            )
+            XCTAssertEqual(result.triggered.map(\.kind), [kind], "Missing notification for \(kind)")
+            XCTAssertEqual(result.active.map(\.kind), [kind])
+        }
+    }
+
+    func testNotificationEvaluatorRespectsCooldownWithoutLosingActiveState() {
+        var rules = Self.isolatedRules { $0.overboostEnabled = true }
+        rules.cooldownSeconds = 30
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let overboost = Self.telemetry(boost: 1.8)
+        let safe = Self.telemetry(boost: 0.2)
+        var evaluator = EngineAlertEvaluator()
+
+        _ = evaluator.evaluate(overboost, rules: rules, now: start)
+        XCTAssertEqual(
+            evaluator.evaluate(overboost, rules: rules, now: start.addingTimeInterval(0.6)).triggered.count,
+            1
+        )
+        XCTAssertTrue(evaluator.evaluate(safe, rules: rules, now: start.addingTimeInterval(1)).active.isEmpty)
+        _ = evaluator.evaluate(overboost, rules: rules, now: start.addingTimeInterval(2))
+        XCTAssertTrue(
+            evaluator.evaluate(overboost, rules: rules, now: start.addingTimeInterval(3)).triggered.isEmpty
+        )
+        XCTAssertEqual(
+            evaluator.evaluate(overboost, rules: rules, now: start.addingTimeInterval(31)).triggered.count,
+            1
+        )
+    }
+
+    private static func isolatedRules(_ configure: (inout VehicleAlertRules) -> Void) -> VehicleAlertRules {
+        var rules = VehicleAlertRules.standard
+        rules.lowOilPressureEnabled = false
+        rules.leanUnderBoostEnabled = false
+        rules.overboostEnabled = false
+        rules.highCoolantTemperatureEnabled = false
+        rules.highOilTemperatureEnabled = false
+        rules.lowBatteryVoltageEnabled = false
+        rules.lowFuelPressureEnabled = false
+        configure(&rules)
+        return rules
+    }
+
+    private static func telemetry(
+        rpm: Double = 1_000,
+        boost: Double = 0,
+        coolant: Double = 90,
+        oilTemperature: Double = 100,
+        oilPressure: Double = 4,
+        fuelPressure: Double = 3.5,
+        afr: Double = 12.5,
+        battery: Double = 13.8
+    ) -> TelemetrySnapshot {
+        TelemetrySnapshot(
+            rpm: rpm,
+            boostBar: boost,
+            coolantCelsius: coolant,
+            oilTemperatureCelsius: oilTemperature,
+            oilPressureBar: oilPressure,
+            fuelPressureBar: fuelPressure,
+            afr: afr,
+            batteryVoltage: battery
+        )
+    }
+
     func testLowOilPressureReportContainsPreAndPostTriggerSamplesAtTwentyFiveHertz() {
         var configuration = IncidentCaptureEngine.Configuration.standard
         configuration.preTriggerDuration = 0.4

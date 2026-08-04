@@ -7,3 +7,13 @@
 "OIL" = "OLEJ";
 "COOLANT" = "PŁYN";
 "BOOST" = "BOOST";
+"CRITICAL ENGINE ALERT" = "KRYTYCZNY ALERT SILNIKA";
+"Krytyczny alert silnika" = "Krytyczny alert silnika";
+"Niskie ciśnienie oleju" = "Niskie ciśnienie oleju";
+"Uboga mieszanka pod boostem" = "Uboga mieszanka pod boostem";
+"Przekroczone doładowanie" = "Przekroczone doładowanie";
+"Wysoka temperatura płynu" = "Wysoka temperatura płynu";
+"Wysoka temperatura oleju" = "Wysoka temperatura oleju";
+"Niskie ciśnienie paliwa" = "Niskie ciśnienie paliwa";
+"Niskie napięcie" = "Niskie napięcie";
+"Zatrzymaj auto i sprawdź silnik." = "Zatrzymaj auto i sprawdź silnik.";
