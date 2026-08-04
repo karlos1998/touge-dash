@@ -136,6 +136,37 @@ final class DriveVideoFeatureTests: XCTestCase {
     }
 
     @MainActor
+    func testExportCompletesAfterPhotoLibrarySaverFinishes() async throws {
+        let sourceURL = try DriveVideoFileStore.newRecordingURL()
+        try Data("test-video".utf8).write(to: sourceURL, options: .atomic)
+        defer { try? FileManager.default.removeItem(at: sourceURL) }
+
+        let probe = PhotoLibrarySaverProbe()
+        let exporter = DriveVideoExporter { url in
+            await probe.save(url)
+        }
+        let recording = DriveVideoRecording(
+            sessionID: UUID(),
+            fileName: sourceURL.lastPathComponent,
+            startedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            endedAt: Date(timeIntervalSince1970: 1_800_000_001),
+            duration: 1,
+            fileSizeBytes: 10,
+            pixelWidth: 320,
+            pixelHeight: 180,
+            framesPerSecond: 30,
+            cameraName: "Test camera",
+            hasAudio: false
+        )
+
+        await exporter.export(recording: recording, samples: [], template: nil)
+
+        XCTAssertEqual(exporter.state, .completed)
+        let savedURL = await probe.savedURL
+        XCTAssertEqual(savedURL, sourceURL)
+    }
+
+    @MainActor
     func testVideoQualityDefaultsToFullHDAndPersists() throws {
         let suite = "TougeDashTests.videoSettings.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -206,5 +237,13 @@ final class DriveVideoFeatureTests: XCTestCase {
         await writer.finishWriting()
         if let error = writer.error { throw error }
         XCTAssertEqual(writer.status, .completed)
+    }
+}
+
+private actor PhotoLibrarySaverProbe {
+    private(set) var savedURL: URL?
+
+    func save(_ url: URL) {
+        savedURL = url
     }
 }

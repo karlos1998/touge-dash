@@ -65,6 +65,8 @@ struct VideoTelemetryFrame: Sendable {
 
 @MainActor
 final class DriveVideoExporter: ObservableObject {
+    typealias PhotoLibrarySaver = @Sendable (URL) async throws -> Void
+
     enum State: Equatable {
         case idle
         case rendering(Double)
@@ -83,6 +85,11 @@ final class DriveVideoExporter: ObservableObject {
     @Published private(set) var state: State = .idle
     private var activeExport: AVAssetExportSession?
     private var wasCancelled = false
+    private let photoLibrarySaver: PhotoLibrarySaver
+
+    init(photoLibrarySaver: @escaping PhotoLibrarySaver = DriveVideoPhotoLibrarySaver.save) {
+        self.photoLibrarySaver = photoLibrarySaver
+    }
 
     func export(
         recording: DriveVideoRecording,
@@ -116,7 +123,7 @@ final class DriveVideoExporter: ObservableObject {
             }
 
             state = .savingToPhotos
-            try await saveToPhotoLibrary(outputURL)
+            try await photoLibrarySaver(outputURL)
             if let temporaryURL { try? FileManager.default.removeItem(at: temporaryURL) }
             state = .completed
         } catch {
@@ -202,7 +209,13 @@ final class DriveVideoExporter: ObservableObject {
         )
     }
 
-    private func saveToPhotoLibrary(_ url: URL) async throws {
+}
+
+/// Photos executes its change block on a private queue. Keep the block outside
+/// `DriveVideoExporter`'s MainActor isolation or Swift 6 traps at runtime when
+/// the export reaches 100% and the asset is added to the photo library.
+enum DriveVideoPhotoLibrarySaver {
+    nonisolated static func save(_ url: URL) async throws {
         let authorization = await withCheckedContinuation { continuation in
             PHPhotoLibrary.requestAuthorization(for: .addOnly) { continuation.resume(returning: $0) }
         }
@@ -210,8 +223,16 @@ final class DriveVideoExporter: ObservableObject {
             throw DriveVideoExportError.photoAccessDenied
         }
 
-        try await PHPhotoLibrary.shared().performChanges {
-            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+        try await withCheckedThrowingContinuation { continuation in
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+            }, completionHandler: { succeeded, error in
+                if succeeded {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: error ?? DriveVideoExportError.photoSaveFailed)
+                }
+            })
         }
     }
 }
@@ -396,12 +417,14 @@ private enum DriveVideoExportError: LocalizedError {
     case fileMissing
     case exportUnavailable
     case photoAccessDenied
+    case photoSaveFailed
 
     var errorDescription: String? {
         switch self {
         case .fileMissing: localized("Plik filmu nie istnieje już na urządzeniu.")
         case .exportUnavailable: localized("Nie udało się przygotować eksportu filmu.")
         case .photoAccessDenied: localized("Brak zgody na dodawanie filmów do aplikacji Zdjęcia.")
+        case .photoSaveFailed: localized("Nie udało się dodać filmu do aplikacji Zdjęcia.")
         }
     }
 }
