@@ -297,6 +297,17 @@
 "Edytuj kartę" = "Edytuj kartę";
 "Zmiany dotyczą wyłącznie wyglądu dashboardu i nie są wysyłane do ECU." = "Zmiany dotyczą wyłącznie wyglądu dashboardu i nie są wysyłane do ECU.";
 "Usunąć tę kartę z dashboardu?" = "Usunąć tę kartę z dashboardu?";
+"FUNKCJA TESTOWA" = "FUNKCJA TESTOWA";
+"Przeczytaj przed włączeniem" = "Przeczytaj przed włączeniem";
+"Może mocno obciążyć telefon" = "Może mocno obciążyć telefon";
+"Jednoczesne nagrywanie obrazu, zapisywanie telemetrii i wyświetlanie dashboardu może nagrzewać urządzenie, zwiększać zużycie baterii oraz powodować spadki płynności. Ta funkcja nie jest jeszcze zalecana do codziennego użycia." = "Jednoczesne nagrywanie obrazu, zapisywanie telemetrii i wyświetlanie dashboardu może nagrzewać urządzenie, zwiększać zużycie baterii oraz powodować spadki płynności. Ta funkcja nie jest jeszcze zalecana do codziennego użycia.";
+"Co otrzymasz?" = "Co otrzymasz?";
+"Umieść telefon stabilnie w uchwycie i skieruj kamerę na drogę. Touge Dash nagra obraz razem z logami przejazdu. Później możesz zatrzymać film w dowolnym momencie, sprawdzić odpowiadające mu parametry i wyeksportować nagranie z nakładką dashboardu." = "Umieść telefon stabilnie w uchwycie i skieruj kamerę na drogę. Touge Dash nagra obraz razem z logami przejazdu. Później możesz zatrzymać film w dowolnym momencie, sprawdzić odpowiadające mu parametry i wyeksportować nagranie z nakładką dashboardu.";
+"Nagranie pozostaje na tym urządzeniu" = "Nagranie pozostaje na tym urządzeniu";
+"Film nie jest wysyłany do Touge Dash Cloud. Przed jazdą upewnij się, że uchwyt jest stabilny i nie obsługuj telefonu podczas prowadzenia." = "Film nie jest wysyłany do Touge Dash Cloud. Przed jazdą upewnij się, że uchwyt jest stabilny i nie obsługuj telefonu podczas prowadzenia.";
+"Zostaw wyłączone" = "Zostaw wyłączone";
+"Rozumiem, włącz nagrywanie (%d)" = "Rozumiem, włącz nagrywanie (%d)";
+"Rozumiem, włącz nagrywanie" = "Rozumiem, włącz nagrywanie";
 "%@ km zapisanej trasy" = "%@ km zapisanej trasy";
 "%@ · %@ próbek" = "%@ · %@ próbek";
 "Anuluj" = "Anuluj";

@@ -305,7 +305,7 @@
 "Gotowe · film rozpocznie się z przejazdem" = "Ready · video starts with the drive";
 "Oczekiwanie na dostęp do kamery" = "Waiting for camera access";
 "Przygotowywanie kamery…" = "Preparing camera…";
-"Nagrywanie przejazdu" = "Recording drive";
+"Nagrywanie przejazdu" = "Drive recording";
 "Zapisywanie filmu…" = "Saving video…";
 "Brak dostępu do kamery. Włącz go w Ustawieniach iOS." = "Camera access is disabled. Enable it in iOS Settings.";
 "Za mało wolnego miejsca. Nagrywanie wymaga co najmniej 500 MB." = "Not enough free space. Recording requires at least 500 MB.";
@@ -406,3 +406,14 @@
 "Edytuj kartę" = "Edit card";
 "Zmiany dotyczą wyłącznie wyglądu dashboardu i nie są wysyłane do ECU." = "These changes only affect the dashboard layout and are never sent to the ECU.";
 "Usunąć tę kartę z dashboardu?" = "Remove this card from the dashboard?";
+"FUNKCJA TESTOWA" = "EXPERIMENTAL FEATURE";
+"Przeczytaj przed włączeniem" = "Read before enabling";
+"Może mocno obciążyć telefon" = "May put heavy load on your phone";
+"Jednoczesne nagrywanie obrazu, zapisywanie telemetrii i wyświetlanie dashboardu może nagrzewać urządzenie, zwiększać zużycie baterii oraz powodować spadki płynności. Ta funkcja nie jest jeszcze zalecana do codziennego użycia." = "Recording video while logging telemetry and displaying the dashboard can heat up your device, increase battery use and cause reduced performance. This feature is not yet recommended for everyday use.";
+"Co otrzymasz?" = "What does it do?";
+"Umieść telefon stabilnie w uchwycie i skieruj kamerę na drogę. Touge Dash nagra obraz razem z logami przejazdu. Później możesz zatrzymać film w dowolnym momencie, sprawdzić odpowiadające mu parametry i wyeksportować nagranie z nakładką dashboardu." = "Secure your phone in a mount and point the camera at the road. Touge Dash records video together with the drive logs. Later, you can pause the video at any moment, inspect the matching telemetry and export the recording with a dashboard overlay.";
+"Nagranie pozostaje na tym urządzeniu" = "The recording stays on this device";
+"Film nie jest wysyłany do Touge Dash Cloud. Przed jazdą upewnij się, że uchwyt jest stabilny i nie obsługuj telefonu podczas prowadzenia." = "The video is not uploaded to Touge Dash Cloud. Make sure the mount is secure before driving and never operate the phone while driving.";
+"Zostaw wyłączone" = "Keep disabled";
+"Rozumiem, włącz nagrywanie (%d)" = "I understand, enable recording (%d)";
+"Rozumiem, włącz nagrywanie" = "I understand, enable recording";
