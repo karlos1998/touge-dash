@@ -418,6 +418,7 @@ struct RecordedLocation: Codable, Hashable, Sendable {
 
 enum LocalVehicleIdentity {
     private static let defaultsKey = "tougeDash.localVehicleID"
+    static let simulatorID = UUID(uuidString: "0E0F7D29-8A5C-4A69-A8A7-51E519100001")!
 
     static func resolve(defaults: UserDefaults = .standard) -> UUID {
         if let rawValue = defaults.string(forKey: defaultsKey),

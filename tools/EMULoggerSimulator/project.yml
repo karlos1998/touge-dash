@@ -1,0 +1,69 @@
+name: EMULoggerSimulator
+options:
+  developmentLanguage: pl
+  bundleIdPrefix: it.letscode
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: UCT44QZ8L4
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  EMULoggerSimulator:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources
+    info:
+      path: Config/Info.plist
+      properties:
+        CFBundleDisplayName: Touge Dash EMU Simulator
+        CFBundleName: EMULoggerSimulator
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        ITSAppUsesNonExemptEncryption: false
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSBluetoothAlwaysUsageDescription: Symulator używa Bluetooth, aby udawać EMULOGGER i wysyłać testową telemetrię do Touge Dash.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: it.letscode.touge-dash.emu-simulator
+        PRODUCT_NAME: Touge Dash EMU Simulator
+        PRODUCT_MODULE_NAME: EMULoggerSimulator
+        GENERATE_INFOPLIST_FILE: NO
+        COMBINE_HIDPI_IMAGES: YES
+
+  EMULoggerSimulatorTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: EMULoggerSimulator
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: it.letscode.touge-dash.emu-simulator.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Touge Dash EMU Simulator.app/Contents/MacOS/Touge Dash EMU Simulator"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  EMULoggerSimulator:
+    build:
+      targets:
+        EMULoggerSimulator: all
+        EMULoggerSimulatorTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - EMULoggerSimulatorTests
+    archive:
+      config: Release

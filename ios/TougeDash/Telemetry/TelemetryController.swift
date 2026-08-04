@@ -60,9 +60,14 @@ final class TelemetryController: ObservableObject {
             if state.isConnected {
                 self.showingDevicePicker = false
                 if let identifier = self.bluetooth.connectedIdentifier {
-                    self.historyRecorder.activateVehicle(identifier)
-                    self.incidentRecorder.activateVehicle(identifier)
-                    Task { await self.cloudSync.prepareVehicle(hardwareIdentifier: identifier) }
+                    let historyIdentifier = self.bluetooth.connectedIsSimulator
+                        ? LocalVehicleIdentity.simulatorID
+                        : identifier
+                    self.historyRecorder.activateVehicle(historyIdentifier)
+                    self.incidentRecorder.activateVehicle(historyIdentifier)
+                    if !self.bluetooth.connectedIsSimulator {
+                        Task { await self.cloudSync.prepareVehicle(hardwareIdentifier: identifier) }
+                    }
                 }
             } else {
                 self.incidentRecorder.finish(sessionID: self.historyRecorder.activeSessionID)
@@ -174,7 +179,9 @@ final class TelemetryController: ObservableObject {
         watchBridge.enqueue(value)
         engineAlertManager.evaluate(value, rules: rules)
         if let change = historyRecorder.record(value) {
-            cloudSync.noteLocalSampleRecorded(sessionBecamePending: change.sessionBecamePending)
+            if !bluetooth.connectedIsSimulator {
+                cloudSync.noteLocalSampleRecorded(sessionBecamePending: change.sessionBecamePending)
+            }
         }
         if let sessionID = historyRecorder.activeSessionID {
             videoRecorder.handleTelemetry(sessionID: sessionID)
@@ -182,7 +189,9 @@ final class TelemetryController: ObservableObject {
         if let sessionID = historyRecorder.activeSessionID {
             incidentRecorder.record(value, sessionID: sessionID)
         }
-        cloudSync.publishLive(value)
+        if !bluetooth.connectedIsSimulator {
+            cloudSync.publishLive(value)
+        }
         let now = Date.now
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)

@@ -63,6 +63,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     @Published private(set) var receivedByteCount = 0
     @Published private(set) var lastPacketHex = ""
     @Published private(set) var connectedIdentifier: UUID?
+    @Published private(set) var connectedIsSimulator = false
 
     var onBytes: ((Data) -> Void)?
     var onConnectionChanged: ((BluetoothConnectionState) -> Void)?
@@ -72,6 +73,8 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     private var connectedPeripheral: CBPeripheral?
     private var shouldScan = false
     private var attemptedAutomaticConnection = false
+    private var hasTriedRememberedPeripheral = false
+    private var connectionTimeoutTask: Task<Void, Never>?
     private let lastPeripheralKey = "TougeDash.lastECUMasterPeripheral"
     private let debugLogURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("tougedash-ble.log")
@@ -93,6 +96,17 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
 
     func startScanning() {
         shouldScan = true
+        let tryRememberedPeripheral = !hasTriedRememberedPeripheral
+        hasTriedRememberedPeripheral = true
+        beginScanning(tryRememberedPeripheral: tryRememberedPeripheral)
+    }
+
+    private func resumeScanning() {
+        guard shouldScan else { return }
+        beginScanning(tryRememberedPeripheral: false)
+    }
+
+    private func beginScanning(tryRememberedPeripheral: Bool) {
         bluetoothDebugLog("start scanning centralState=\(central.state.rawValue)")
         guard central.state == .poweredOn else { return }
         guard !state.isConnected else { return }
@@ -104,7 +118,8 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         receivedByteCount = 0
         lastPacketHex = ""
 
-        if let storedIdentifier = UserDefaults.standard.string(forKey: lastPeripheralKey),
+        if tryRememberedPeripheral,
+           let storedIdentifier = UserDefaults.standard.string(forKey: lastPeripheralKey),
            let identifier = UUID(uuidString: storedIdentifier),
            let peripheral = central.retrievePeripherals(withIdentifiers: [identifier]).first {
             let remembered = DiscoveredTelemetryDevice(
@@ -153,14 +168,18 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         // auto-reconnect options on the physical iPhone with CBError.invalidParameters.
         // We handle reconnects ourselves, so the plain BLE connection is sufficient.
         central.connect(peripheral, options: nil)
+        scheduleConnectionTimeout(for: peripheral)
     }
 
     func disconnect() {
+        connectionTimeoutTask?.cancel()
+        connectionTimeoutTask = nil
         if let connectedPeripheral {
             central.cancelPeripheralConnection(connectedPeripheral)
         }
         connectedPeripheral = nil
         connectedIdentifier = nil
+        connectedIsSimulator = false
         setState(.disconnected(nil))
     }
 
@@ -170,10 +189,15 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     }
 
     private func activateConnectedPeripheral(_ peripheral: CBPeripheral) {
+        connectionTimeoutTask?.cancel()
+        connectionTimeoutTask = nil
         connectedPeripheral = peripheral
         connectedIdentifier = peripheral.identifier
         peripheral.delegate = self
-        let name = peripheral.name ?? "ECUMaster interface"
+        let discoveredName = devices.first(where: { $0.id == peripheral.identifier })?.name
+        let name = discoveredName ?? peripheral.name ?? "ECUMaster interface"
+        let isSimulator = Self.isSimulatorName(name)
+        connectedIsSimulator = isSimulator
         peripherals[peripheral.identifier] = peripheral
         let connectedDevice = DiscoveredTelemetryDevice(
             id: peripheral.identifier,
@@ -186,11 +210,29 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         } else {
             devices = [connectedDevice]
         }
-        UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: lastPeripheralKey)
+        if !isSimulator {
+            UserDefaults.standard.set(peripheral.identifier.uuidString, forKey: lastPeripheralKey)
+        }
         setState(.connected(name))
         appendDiagnostic(localized("Connected; discovering GATT services"))
         bluetoothDebugLog("connected name=\(name) id=\(peripheral.identifier.uuidString)")
         peripheral.discoverServices(nil)
+    }
+
+    private func scheduleConnectionTimeout(for peripheral: CBPeripheral) {
+        connectionTimeoutTask?.cancel()
+        let identifier = peripheral.identifier
+        connectionTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(6))
+            guard !Task.isCancelled, let self,
+                  self.connectedPeripheral?.identifier == identifier,
+                  !self.state.isConnected else { return }
+            self.appendDiagnostic(localized("Connection timed out; continuing scan"))
+            self.central.cancelPeripheralConnection(peripheral)
+            self.connectedPeripheral = nil
+            self.setState(.disconnected(localized("Connection timed out")))
+            self.resumeScanning()
+        }
     }
 
     private func appendDiagnostic(_ message: String) {
@@ -212,8 +254,18 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         return ["emu", "ecumaster", "canbt", "btcan", "edl", "logger"].contains { normalized.contains($0) }
     }
 
+    private static func isSimulatorName(_ name: String) -> Bool {
+        let normalized = name.lowercased()
+        return normalized.contains("emulogger sim") || normalized.contains("touge dash simulator")
+    }
+
     private static func isECUMasterAdvertisement(name: String, advertisementData: [String: Any]) -> Bool {
         if likelyEMUName(name) { return true }
+
+        if let serviceUUIDs = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID],
+           serviceUUIDs.contains(CBUUID(string: "FFE0")) {
+            return true
+        }
 
         let advertisedText = advertisementData.values.compactMap { value -> String? in
             if let text = value as? String { return text }
@@ -282,6 +334,8 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        connectionTimeoutTask?.cancel()
+        connectionTimeoutTask = nil
         bluetoothDebugLog("connection failed name=\(peripheral.name ?? "unknown") error=\(error?.localizedDescription ?? "unknown")")
         appendDiagnostic(String(
             format: localized("Connection failed: %@"),
@@ -289,10 +343,14 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         ))
         setState(.disconnected(error?.localizedDescription))
         connectedPeripheral = nil
-        if shouldScan { startScanning() }
+        connectedIdentifier = nil
+        connectedIsSimulator = false
+        resumeScanning()
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        connectionTimeoutTask?.cancel()
+        connectionTimeoutTask = nil
         bluetoothDebugLog("disconnected name=\(peripheral.name ?? "unknown") error=\(error?.localizedDescription ?? "none")")
         appendDiagnostic(String(
             format: localized("Disconnected: %@"),
@@ -300,7 +358,9 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         ))
         setState(.disconnected(error?.localizedDescription))
         connectedPeripheral = nil
-        if shouldScan { startScanning() }
+        connectedIdentifier = nil
+        connectedIsSimulator = false
+        resumeScanning()
     }
 
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
@@ -321,6 +381,12 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
 }
 
 extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
+    func peripheral(_ peripheral: CBPeripheral, didModifyServices invalidatedServices: [CBService]) {
+        guard invalidatedServices.contains(where: { $0.uuid == CBUUID(string: "FFE0") }) else { return }
+        appendDiagnostic(localized("Simulator stopped service FFE0; reconnecting"))
+        central.cancelPeripheralConnection(peripheral)
+    }
+
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error {
             appendDiagnostic(String(format: localized("Service discovery error: %@"), error.localizedDescription))

@@ -1,4 +1,7 @@
 "EMU BLACK  /  DRIVER DISPLAY" = "EMU BLACK  /  EKRAN KIEROWCY";
+"Simulator stopped service FFE0; reconnecting" = "Symulator zatrzymał usługę FFE0; ponowne łączenie";
+"Connection timed out; continuing scan" = "Próba połączenia wygasła; kontynuowanie skanowania";
+"Connection timed out" = "Przekroczono czas połączenia";
 "Stworzono z" = "Stworzono z";
 "przez" = "przez";
 "Stworzono z sercem przez Let's Code It — Karol Sójka" = "Stworzono z sercem przez Let's Code It — Karol Sójka";

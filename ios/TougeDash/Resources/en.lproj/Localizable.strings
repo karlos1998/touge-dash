@@ -1,4 +1,7 @@
 "Połączono" = "Connected";
+"Simulator stopped service FFE0; reconnecting" = "Simulator stopped service FFE0; reconnecting";
+"Connection timed out; continuing scan" = "Connection timed out; continuing scan";
+"Connection timed out" = "Connection timed out";
 "Połączenie" = "Connection";
 "Historia" = "History";
 "Szybki podgląd aktywny · ekran iPhone’a nie wygasi się automatycznie" = "Quick view active · the iPhone screen will stay on";

@@ -47,7 +47,8 @@ zasobów z oficjalnego eDash.
 - mały widok Live Activity przygotowany pod CarPlay,
 - dashboard Apple Watch z danymi przesyłanymi na żywo z iPhone'a,
 - widgety iOS,
-- diagnostyka pakietów BLE bezpośrednio w aplikacji.
+- diagnostyka pakietów BLE bezpośrednio w aplikacji,
+- natywny symulator `EMULOGGER` na macOS do testów bez samochodu.
 
 ## Sprawdzony zestaw
 
@@ -56,7 +57,8 @@ Aktualna wersja była testowana na:
 - iPhone 14 Pro z iOS 26.5.2,
 - Apple Watch Series 11 (46 mm) Simulator z watchOS 26.2,
 - ECUMaster EMU Black,
-- EDL-1 widocznym w BLE jako `EMULOGGER`.
+- EDL-1 widocznym w BLE jako `EMULOGGER`,
+- symulatorem BLE uruchomionym na Macu i fizycznym iPhonem.
 
 Połączenie jest nawiązywane automatycznie. Aplikacja zapamiętuje ostatni
 interfejs, więc przy kolejnych uruchomieniach nie trzeba otwierać listy
@@ -181,10 +183,24 @@ Strumień ECUMaster składa się z pięciobajtowych ramek:
 strumieniowo, radzi sobie z ramkami rozdzielonymi pomiędzy notyfikacje BLE i
 wraca do synchronizacji po uszkodzonych danych.
 
+## Symulator EMULOGGERA na macOS
+
+Do repozytorium jest dołączona natywna aplikacja macOS reklamująca przez BLE
+usługę `FFE0` i charakterystykę `FFE1`. Wysyła prawidłowe ramki telemetrii 10
+albo 25 razy na sekundę, udostępnia gotowe scenariusze jazdy i pozwala ręcznie
+zmieniać parametry. Dzięki temu można sprawdzić dashboard, nagrania, historię,
+alerty i reconnect bez uruchamiania samochodu.
+
+Symulator nie obsługuje zapisów do BLE ani komunikacji z ECU. Utworzone z nim
+przejazdy pozostają lokalne i nie trafiają do Touge Dash Cloud. Instrukcja
+uruchomienia znajduje się w
+[`tools/EMULoggerSimulator/README.md`](tools/EMULoggerSimulator/README.md).
+
 ## Układ repozytorium
 
 ```text
 ios/                 aplikacje iPhone/Apple Watch, widgety i Live Activity
+tools/EMULoggerSimulator/  natywny symulator BLE dla macOS
 docs/screenshots/    zrzuty ekranów używane w README
 ```
 
