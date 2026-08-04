@@ -11,7 +11,12 @@ struct TougeDashApp: App {
 
     init() {
         do {
-            let container = try ModelContainer(for: DriveSession.self, TelemetryHistorySample.self)
+            let container = try ModelContainer(
+                for: DriveSession.self,
+                TelemetryHistorySample.self,
+                DriveIncident.self,
+                TimelineAnnotation.self
+            )
             let locationTracker = LocationTrackingService()
             let historyRecorder = TelemetryHistoryRecorder(
                 container: container,
@@ -27,7 +32,15 @@ struct TougeDashApp: App {
             modelContainer = container
             _cloudAccount = StateObject(wrappedValue: account)
             _cloudSync = StateObject(wrappedValue: sync)
-            _controller = StateObject(wrappedValue: TelemetryController(historyRecorder: historyRecorder, cloudSync: sync))
+            let incidentRecorder = TelemetryIncidentRecorder(container: container, locationTracker: locationTracker)
+            incidentRecorder.onIncidentStored = { sampleCount in
+                sync.noteLocalIncidentRecorded(sampleCount: sampleCount)
+            }
+            _controller = StateObject(wrappedValue: TelemetryController(
+                historyRecorder: historyRecorder,
+                incidentRecorder: incidentRecorder,
+                cloudSync: sync
+            ))
         } catch {
             fatalError("Unable to create telemetry history store: \(error)")
         }

@@ -36,6 +36,8 @@ zasobów z oficjalnego eDash.
 - RPM, boost/MAP, TPS, AFR/lambda, temperatury, ciśnienia i napięcie,
 - adaptacyjny dashboard SwiftUI na iPhone'a i iPada, w pionie i poziomie,
 - lokalna historia przejazdów z interaktywnymi wykresami i opcjonalną trasą GPS,
+- automatyczne raporty incydentów obejmujące 30 sekund przed i 60 sekund po zdarzeniu,
+- notatki przypinane do dokładnego momentu przejazdu,
 - opcjonalne konto i synchronizacja historii z Touge Dash Cloud,
 - logowanie e-mail/hasło, Sign in with Apple oraz bezpieczny handoff Google/Facebook z panelu WWW,
 - Live Activity uruchamiana automatycznie razem z aplikacją,
@@ -59,7 +61,7 @@ Bluetooth.
 
 ## Historia przejazdów
 
-Gdy z EMU napływa telemetria, Touge Dash automatycznie zapisuje jedną próbkę
+Gdy z EMU napływa telemetria, Touge Dash automatycznie zapisuje 10 próbek
 na sekundę. Dłuższa niż 90 sekund przerwa rozpoczyna nowy przejazd. W zakładce
 `Historia` można później porównać na wspólnej osi czasu:
 
@@ -78,6 +80,22 @@ auto po UUID interfejsu Bluetooth, przy pierwszym połączeniu prosi o jego nazw
 a następnie wysyła zaległe sesje partiami. Utrata internetu nie przerywa zapisu:
 próbki zostają w SwiftData i są dosyłane po odzyskaniu połączenia. Tokeny sesji
 są zapisane w Keychain.
+
+## Raporty incydentów
+
+Aplikacja analizuje odebrane dane do 25 razy na sekundę. Po utrzymaniu się
+niebezpiecznego warunku zapisuje osobny raport z buforem 30 sekund sprzed
+zdarzenia i 60 sekund po nim. Wykrywane są:
+
+- niskie ciśnienie oleju przy wysokich obrotach,
+- zbyt uboga mieszanka pod doładowaniem,
+- overboost,
+- temperatura płynu od 110°C albo oleju od 120°C,
+- niskie napięcie podczas pracy silnika.
+
+Raport zawiera wykresy, warunki wyzwolenia, trasę GPS i notatki dodane do
+konkretnej próbki. Właściciel może utworzyć wygasający link i wysłać go
+mechanikowi bez udostępniania reszty garażu.
 
 Panel WWW korzysta z tego samego konta. Właściciel widzi tam wykresy, mapę,
 eksport CSV i dane live, a auto może udostępnić mechanikowi albo obserwatorowi.
@@ -127,6 +145,10 @@ na iPhonie oraz zmienia kartę Live Activity i CarPlay na czerwoną.
 
 ## Protokół
 
+Połączenie Bluetooth jest celowo tylko do odczytu. Aplikacja subskrybuje
+notyfikacje GATT i odczytuje charakterystyki; nie wykonuje `writeValue` i nie
+wysyła do ECU ani loggera poleceń, map, nastaw lub konfiguracji.
+
 Strumień ECUMaster składa się z pięciobajtowych ramek:
 
 ```text
@@ -161,7 +183,7 @@ xcodebuild \
 
 ## Ważne
 
-To dodatkowy wyświetlacz, a nie homologowany przyrząd. Przed użyciem w czasie
+To rejestrator i dodatkowy wyświetlacz, a nie homologowany przyrząd. Przed użyciem w czasie
 jazdy porównaj wskazania z ECUMaster Client. Projekt nie jest powiązany ani
 autoryzowany przez ECUMaster.
 

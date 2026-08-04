@@ -15,6 +15,7 @@
 		29951B8FDF19A1D63CD3CDF8 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 32EF1DB4AE9E0F3919DE5F2F /* Localizable.strings */; };
 		299C268AE3198AFD790B2BE8 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 44D1AEB2A62A3DE8ABBB31EF /* Localizable.strings */; };
 		2A3D137A597A3A7650DB483E /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 6D33CEAED617C652DE41B67A /* PrivacyInfo.xcprivacy */; };
+		2B49A361609CA52600C27390 /* IncidentCaptureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3FD8B40DADC13A9B57FC4C /* IncidentCaptureEngine.swift */; };
 		2F5A43CF144D24A36986C752 /* WatchAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */; };
 		30A4F8895C5D5D7DCF993BBB /* CloudAccountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959C63DBA5B8A3C9E02CC0A2 /* CloudAccountService.swift */; };
 		32C08267B68F81BBDB3BE1A2 /* TougeDashWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 867564BA0BCD96BE13BB6CF2 /* TougeDashWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -38,6 +39,7 @@
 		AC5764AE471942645415FCA0 /* TelemetrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */; };
 		AC8C11B6916757CC66953A44 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E32E18F950BFA52335DE7A0D /* Assets.xcassets */; };
 		AF1310959A34802521674372 /* CloudPasswordPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 540345614ECEE8151C103CAD /* CloudPasswordPolicyTests.swift */; };
+		AF4F369F54060C2522FCADD9 /* IncidentReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E877436DFF1CF205296B9649 /* IncidentReportView.swift */; };
 		B34D767DA02419747471EA57 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */; };
 		C2FFF38884E04B9C3EAA6A67 /* BluetoothTelemetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB4599FA4D016749B9DEF63 /* BluetoothTelemetryService.swift */; };
 		C3A8602CE87BC00FAE6D1E32 /* TelemetryHistoryRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A3F10F3D557D89DA9A256A /* TelemetryHistoryRecorder.swift */; };
@@ -46,6 +48,7 @@
 		C9BA350DEC850C27A0902F2A /* TelemetrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */; };
 		D350C1D23C89BA0ACBD9A941 /* TelemetryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4AB235F1E099FCAD2444AEC /* TelemetryController.swift */; };
 		D704435085305FE1920999EF /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
+		DE207C288E6A5A8BC5A5F109 /* IncidentCaptureEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEC2FC81C9B018C283812A62 /* IncidentCaptureEngineTests.swift */; };
 		DE23EEF71ABEEECFD970D2B8 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */; };
 		E2D3EA6F1A250823543FCE12 /* LocationTrackingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC8734024210C5690446D7CB /* LocationTrackingService.swift */; };
 		E7C3A817DFBB318DB2BA1366 /* EMUProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = C864400F6D0621EB9AE0063F /* EMUProtocol.swift */; };
@@ -134,6 +137,7 @@
 		9E791078ECAA3EBD6D0CDB63 /* TougeDashRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashRootView.swift; sourceTree = "<group>"; };
 		B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryPayload.swift; sourceTree = "<group>"; };
 		B6DF9230FC2BD86F85A70343 /* TougeDashWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashWidgets.swift; sourceTree = "<group>"; };
+		BB3FD8B40DADC13A9B57FC4C /* IncidentCaptureEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentCaptureEngine.swift; sourceTree = "<group>"; };
 		C0ABE317B4A0CDB49B92ABA6 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		C7A3F10F3D557D89DA9A256A /* TelemetryHistoryRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetryHistoryRecorder.swift; sourceTree = "<group>"; };
 		C864400F6D0621EB9AE0063F /* EMUProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EMUProtocol.swift; sourceTree = "<group>"; };
@@ -144,7 +148,9 @@
 		E0283F8F27A9276CBEC6AA4F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		E32E18F950BFA52335DE7A0D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E697F34CB3FBBBECDE56B5FB /* TougeDashWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TougeDashWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E877436DFF1CF205296B9649 /* IncidentReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentReportView.swift; sourceTree = "<group>"; };
 		EC8734024210C5690446D7CB /* LocationTrackingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationTrackingService.swift; sourceTree = "<group>"; };
+		EEC2FC81C9B018C283812A62 /* IncidentCaptureEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentCaptureEngineTests.swift; sourceTree = "<group>"; };
 		F1D4BDC1640C2CC10C5B971C /* CloudCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCredentialStore.swift; sourceTree = "<group>"; };
 		F289D7AADCD698F390E191DE /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
 		F31DF319B7913DE4E073912F /* CloudWebAuthenticationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudWebAuthenticationSession.swift; sourceTree = "<group>"; };
@@ -234,6 +240,8 @@
 			children = (
 				DA1B6F75BEE169D2AC7626A3 /* HistoryModels.swift */,
 				20B274E00E4B4234DED32AC0 /* HistoryView.swift */,
+				BB3FD8B40DADC13A9B57FC4C /* IncidentCaptureEngine.swift */,
+				E877436DFF1CF205296B9649 /* IncidentReportView.swift */,
 				EC8734024210C5690446D7CB /* LocationTrackingService.swift */,
 				C7A3F10F3D557D89DA9A256A /* TelemetryHistoryRecorder.swift */,
 			);
@@ -318,6 +326,7 @@
 			children = (
 				540345614ECEE8151C103CAD /* CloudPasswordPolicyTests.swift */,
 				4755566114D5FAA70D71C3DF /* EMUProtocolTests.swift */,
+				EEC2FC81C9B018C283812A62 /* IncidentCaptureEngineTests.swift */,
 			);
 			path = TougeDashTests;
 			sourceTree = "<group>";
@@ -514,6 +523,7 @@
 			files = (
 				AF1310959A34802521674372 /* CloudPasswordPolicyTests.swift in Sources */,
 				90CD28C116C9E4905866B302 /* EMUProtocolTests.swift in Sources */,
+				DE207C288E6A5A8BC5A5F109 /* IncidentCaptureEngineTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -547,6 +557,8 @@
 				F3E8E9984021000DE8B68120 /* EngineAlertManager.swift in Sources */,
 				9CDDC9896D9EAC134E86C104 /* HistoryModels.swift in Sources */,
 				A75AF4BD0081032CCBDDF0FF /* HistoryView.swift in Sources */,
+				2B49A361609CA52600C27390 /* IncidentCaptureEngine.swift in Sources */,
+				AF4F369F54060C2522FCADD9 /* IncidentReportView.swift in Sources */,
 				E2D3EA6F1A250823543FCE12 /* LocationTrackingService.swift in Sources */,
 				60AAEF7A1ECA24D0B7DB69EF /* TelemetryActivityManager.swift in Sources */,
 				D350C1D23C89BA0ACBD9A941 /* TelemetryController.swift in Sources */,

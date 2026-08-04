@@ -4,8 +4,12 @@ import SwiftData
 
 struct CloudSyncProgress: Equatable, Sendable {
     let totalSessions: Int
+    let totalIncidents: Int
+    let totalAnnotations: Int
     let totalSamples: Int
     var completedSessions: Int
+    var completedIncidents: Int
+    var completedAnnotations: Int
     var completedSamples: Int
     var transferredBytes: Int64
 
@@ -14,7 +18,10 @@ struct CloudSyncProgress: Equatable, Sendable {
             return min(1, Double(completedSamples) / Double(totalSamples))
         }
         guard totalSessions > 0 else { return 1 }
-        return min(1, Double(completedSessions) / Double(totalSessions))
+        let totalItems = totalSessions + totalIncidents + totalAnnotations
+        let completedItems = completedSessions + completedIncidents + completedAnnotations
+        guard totalItems > 0 else { return 1 }
+        return min(1, Double(completedItems) / Double(totalItems))
     }
 }
 
@@ -34,6 +41,8 @@ final class CloudSyncManager: ObservableObject {
     @Published private(set) var pendingHardwareIdentifier: UUID?
     @Published private(set) var pendingSessions = 0
     @Published private(set) var pendingSamples = 0
+    @Published private(set) var pendingIncidents = 0
+    @Published private(set) var pendingAnnotations = 0
     @Published private(set) var estimatedPendingBytes: Int64 = 0
     @Published private(set) var progress: CloudSyncProgress?
     @Published private(set) var lastTransferBytes: Int64 = 0
@@ -191,17 +200,30 @@ final class CloudSyncManager: ObservableObject {
         state = .syncing
         do {
             let queued = try pendingSessionEntries(for: associations)
-            let totalSamples = queued.reduce(0) { $0 + $1.session.sampleCount }
+            let queuedIncidents = try pendingIncidentEntries(for: associations)
+            let queuedAnnotations = try pendingAnnotationEntries(for: associations)
+            let totalSamples = queued.reduce(0) { $0 + $1.session.sampleCount } +
+                queuedIncidents.reduce(0) { $0 + $1.incident.sampleCount }
             progress = CloudSyncProgress(
                 totalSessions: queued.count,
+                totalIncidents: queuedIncidents.count,
+                totalAnnotations: queuedAnnotations.count,
                 totalSamples: totalSamples,
                 completedSessions: 0,
+                completedIncidents: 0,
+                completedAnnotations: 0,
                 completedSamples: 0,
                 transferredBytes: 0
             )
 
             for entry in queued {
                 try await upload(session: entry.session, vehicleID: entry.remoteVehicleID)
+            }
+            for entry in queuedIncidents {
+                try await upload(incident: entry.incident, vehicleID: entry.remoteVehicleID)
+            }
+            for entry in queuedAnnotations {
+                try await upload(annotation: entry.annotation, vehicleID: entry.remoteVehicleID)
             }
             try context.save()
             lastTransferBytes = progress?.transferredBytes ?? 0
@@ -220,6 +242,29 @@ final class CloudSyncManager: ObservableObject {
         if sessionBecamePending {
             pendingSessions += 1
         }
+    }
+
+    func noteLocalIncidentRecorded(sampleCount: Int) {
+        pendingIncidents += 1
+        pendingSamples += sampleCount
+        estimatedPendingBytes += Int64(sampleCount) * Self.estimatedBytesPerSample
+        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
+            Task { await syncNow() }
+        }
+    }
+
+    func noteLocalAnnotationRecorded() {
+        pendingAnnotations += 1
+        estimatedPendingBytes += 512
+        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
+            Task { await syncNow() }
+        }
+    }
+
+    func remoteVehicleID(for localHardwareIdentifier: UUID) -> UUID? {
+        currentAccountAssociations()
+            .first(where: { $0.hardwareIdentifier == localHardwareIdentifier })?
+            .vehicle.id
     }
 
     func publishLive(_ snapshot: TelemetrySnapshot) {
@@ -265,7 +310,6 @@ final class CloudSyncManager: ObservableObject {
     }
 
     private func upload(session: DriveSession, vehicleID: UUID) async throws {
-        let samples = session.samples.sorted { $0.timestamp < $1.timestamp }
         let uploadedRevision = max(1, session.revision)
         let uploadedStartedAt = session.startedAt
         let uploadedEndedAt = session.endedAt
@@ -278,10 +322,13 @@ final class CloudSyncManager: ObservableObject {
         let uploadedMaxOilTemperatureCelsius = session.maxOilTemperatureCelsius
         let uploadedMinimumOilPressureBar = session.minimumOilPressureBar
         let uploadedContainsLocation = session.containsLocation
-        let chunks = samples.isEmpty ? [[]] : stride(from: 0, to: samples.count, by: 2_000).map {
-            Array(samples[$0..<min($0 + 2_000, samples.count)])
-        }
-        for chunk in chunks {
+        var offset = 0
+        var sentEmptySession = false
+        while offset < uploadedSampleCount || (uploadedSampleCount == 0 && !sentEmptySession) {
+            let chunk = try sessionSamples(sessionID: session.id, offset: offset, limit: 2_000)
+            if uploadedSampleCount > 0 && chunk.isEmpty {
+                throw CloudAPIError.localHistoryIncomplete
+            }
             let request = CloudSessionUpload(
                 id: session.id,
                 startedAt: uploadedStartedAt,
@@ -309,16 +356,29 @@ final class CloudSyncManager: ObservableObject {
                 progress.transferredBytes += Int64(encodedSize)
                 self.progress = progress
             }
-        }
-        for sample in samples {
-            sample.remoteID = sample.id.uuidString
-            sample.syncState = .synced
+            for sample in chunk {
+                sample.remoteID = sample.id.uuidString
+                sample.syncState = .synced
+            }
+            try context.save()
+            offset += chunk.count
+            sentEmptySession = true
         }
         session.syncState = session.revision == uploadedRevision ? .synced : .changedAfterSync
         if var progress {
             progress.completedSessions += 1
             self.progress = progress
         }
+    }
+
+    private func sessionSamples(sessionID: UUID, offset: Int, limit: Int) throws -> [TelemetryHistorySample] {
+        var descriptor = FetchDescriptor<TelemetryHistorySample>(
+            predicate: #Predicate { sample in sample.session?.id == sessionID },
+            sortBy: [SortDescriptor(\.timestamp)]
+        )
+        descriptor.fetchOffset = offset
+        descriptor.fetchLimit = limit
+        return try context.fetch(descriptor)
     }
 
     private func makeUpload(_ sample: TelemetryHistorySample) -> CloudSampleUpload {
@@ -349,6 +409,102 @@ final class CloudSyncManager: ObservableObject {
         )
     }
 
+    private func upload(incident: DriveIncident, vehicleID: UUID) async throws {
+        let samples = incident.samples.sorted { $0.timestamp < $1.timestamp }
+        let chunks = samples.isEmpty ? [[]] : stride(from: 0, to: samples.count, by: 2_000).map {
+            Array(samples[$0..<min($0 + 2_000, samples.count)])
+        }
+        for chunk in chunks {
+            let request = CloudIncidentUpload(
+                id: incident.id,
+                sessionId: incident.sessionID,
+                type: incident.kindRaw,
+                severity: incident.severityRaw,
+                triggeredAt: incident.triggeredAt,
+                captureStartedAt: incident.captureStartedAt,
+                captureEndedAt: incident.captureEndedAt,
+                revision: max(1, incident.revision),
+                sampleCount: max(1, incident.sampleCount),
+                sampleRateHz: max(0.1, incident.sampleRateHz),
+                triggerValue: incident.triggerValue,
+                thresholdValue: incident.thresholdValue,
+                triggerUnit: incident.triggerUnit,
+                triggerRpm: incident.triggerRPM,
+                triggerBoostBar: incident.triggerBoostBar,
+                triggerAfr: incident.triggerAFR,
+                triggerSpeedKph: incident.triggerSpeedKPH,
+                latitude: incident.latitude,
+                longitude: incident.longitude,
+                samples: chunk.map(makeUpload)
+            )
+            let encodedSize = try JSONEncoder.tougeDashCloud().encode(request).count
+            let result: CloudIncidentSyncResult = try await account.send(
+                endpoint: "/api/v1/vehicles/\(vehicleID.uuidString)/incidents/sync",
+                body: request
+            )
+            incident.remoteID = result.incidentId.uuidString
+            if var progress {
+                progress.completedSamples += chunk.count
+                progress.transferredBytes += Int64(encodedSize)
+                self.progress = progress
+            }
+        }
+        incident.syncState = .synced
+        if var progress {
+            progress.completedIncidents += 1
+            self.progress = progress
+        }
+    }
+
+    private func makeUpload(_ sample: CapturedTelemetryPoint) -> CloudSampleUpload {
+        CloudSampleUpload(
+            id: sample.id,
+            recordedAt: sample.timestamp,
+            revision: 1,
+            rpm: sample.rpm,
+            boostBar: sample.boostBar,
+            mapKpa: sample.mapKPa,
+            throttlePercent: sample.throttlePercent,
+            coolantCelsius: sample.coolantCelsius,
+            intakeCelsius: sample.intakeCelsius,
+            oilTemperatureCelsius: sample.oilTemperatureCelsius,
+            oilPressureBar: sample.oilPressureBar,
+            fuelPressureBar: sample.fuelPressureBar,
+            afr: sample.afr,
+            lambda: sample.lambda,
+            batteryVoltage: sample.batteryVoltage,
+            ignitionDegrees: sample.ignitionDegrees,
+            injectorDutyPercent: sample.injectorDutyPercent,
+            speedKph: sample.speedKPH,
+            checkEngineMask: sample.checkEngineMask,
+            latitude: sample.latitude,
+            longitude: sample.longitude,
+            horizontalAccuracy: sample.horizontalAccuracy,
+            altitude: sample.altitude
+        )
+    }
+
+    private func upload(annotation: TimelineAnnotation, vehicleID: UUID) async throws {
+        let request = CloudTimelineAnnotationUpload(
+            id: annotation.id,
+            incidentId: annotation.incidentID,
+            recordedAt: annotation.timestamp,
+            body: annotation.body
+        )
+        let encodedSize = try JSONEncoder.tougeDashCloud().encode(request).count
+        let response: CloudTimelineAnnotationResponse = try await account.send(
+            endpoint: "/api/v1/vehicles/\(vehicleID.uuidString)/sessions/\(annotation.sessionID.uuidString)/annotations",
+            body: request
+        )
+        annotation.modifiedAt = response.updatedAt
+        annotation.syncState = .synced
+        if var progress {
+            progress.completedAnnotations += 1
+            progress.transferredBytes += Int64(encodedSize)
+            self.progress = progress
+        }
+    }
+
     private func vehicleLinkKey(_ hardwareIdentifier: UUID) -> String {
         let accountID = account.account?.id.uuidString.lowercased() ?? "signed-out"
         return "\(accountID):\(hardwareIdentifier.uuidString.lowercased())"
@@ -363,9 +519,20 @@ final class CloudSyncManager: ObservableObject {
         } else {
             sessions = (try? pendingSessionEntries(for: associations).map(\.session)) ?? []
         }
+        let incidents: [DriveIncident]
+        let annotations: [TimelineAnnotation]
+        if associations.isEmpty {
+            incidents = (try? context.fetch(FetchDescriptor<DriveIncident>(predicate: #Predicate { $0.syncStateRaw != "synced" }))) ?? []
+            annotations = (try? context.fetch(FetchDescriptor<TimelineAnnotation>(predicate: #Predicate { $0.syncStateRaw != "synced" }))) ?? []
+        } else {
+            incidents = (try? pendingIncidentEntries(for: associations).map(\.incident)) ?? []
+            annotations = (try? pendingAnnotationEntries(for: associations).map(\.annotation)) ?? []
+        }
         pendingSessions = sessions.count
-        pendingSamples = sessions.reduce(0) { $0 + $1.sampleCount }
-        estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample
+        pendingIncidents = incidents.count
+        pendingAnnotations = annotations.count
+        pendingSamples = sessions.reduce(0) { $0 + $1.sampleCount } + incidents.reduce(0) { $0 + $1.sampleCount }
+        estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample + Int64(annotations.count * 512)
     }
 
     private func persistVehicleLinks() {
@@ -399,6 +566,38 @@ final class CloudSyncManager: ObservableObject {
             result.append(contentsOf: try context.fetch(descriptor).map { ($0, association.vehicle.id) })
         }
         return result.sorted { $0.0.startedAt < $1.0.startedAt }
+    }
+
+    private func pendingIncidentEntries(
+        for associations: [VehicleAssociation]
+    ) throws -> [(incident: DriveIncident, remoteVehicleID: UUID)] {
+        var result: [(DriveIncident, UUID)] = []
+        for association in associations {
+            let hardwareIdentifier = association.hardwareIdentifier
+            let descriptor = FetchDescriptor<DriveIncident>(
+                predicate: #Predicate { incident in
+                    incident.vehicleID == hardwareIdentifier && incident.syncStateRaw != "synced"
+                }
+            )
+            result.append(contentsOf: try context.fetch(descriptor).map { ($0, association.vehicle.id) })
+        }
+        return result.sorted { $0.0.triggeredAt < $1.0.triggeredAt }
+    }
+
+    private func pendingAnnotationEntries(
+        for associations: [VehicleAssociation]
+    ) throws -> [(annotation: TimelineAnnotation, remoteVehicleID: UUID)] {
+        var result: [(TimelineAnnotation, UUID)] = []
+        for association in associations {
+            let hardwareIdentifier = association.hardwareIdentifier
+            let descriptor = FetchDescriptor<TimelineAnnotation>(
+                predicate: #Predicate { annotation in
+                    annotation.vehicleID == hardwareIdentifier && annotation.syncStateRaw != "synced"
+                }
+            )
+            result.append(contentsOf: try context.fetch(descriptor).map { ($0, association.vehicle.id) })
+        }
+        return result.sorted { $0.0.timestamp < $1.0.timestamp }
     }
 
     @discardableResult

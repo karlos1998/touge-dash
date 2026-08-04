@@ -1,3 +1,4 @@
+import CoreBluetooth
 import SwiftData
 import XCTest
 @testable import TougeDash
@@ -138,11 +139,13 @@ final class EMUProtocolTests: XCTestCase {
     }
 
     @MainActor
-    func testHistoryRecorderSamplesOncePerSecondAndSplitsLongGaps() throws {
+    func testHistoryRecorderSamplesAtTenHertzAndSplitsLongGaps() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
             for: DriveSession.self,
             TelemetryHistorySample.self,
+            DriveIncident.self,
+            TimelineAnnotation.self,
             configurations: configuration
         )
         UserDefaults.standard.set(false, forKey: LocationTrackingService.enabledDefaultsKey)
@@ -151,8 +154,8 @@ final class EMUProtocolTests: XCTestCase {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
 
         let firstChange = recorder.record(.preview, at: start)
-        let throttledChange = recorder.record(.preview, at: start.addingTimeInterval(0.4))
-        let sameSessionChange = recorder.record(.preview, at: start.addingTimeInterval(1.1))
+        let throttledChange = recorder.record(.preview, at: start.addingTimeInterval(0.04))
+        let sameSessionChange = recorder.record(.preview, at: start.addingTimeInterval(0.11))
         let nextSessionChange = recorder.record(.preview, at: start.addingTimeInterval(TelemetryHistoryRecorder.newSessionGap + 2))
         recorder.saveNow()
 
@@ -164,24 +167,42 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(sessions.map(\.sampleCount).reduce(0, +), 3)
         XCTAssertEqual(sessions.map(\.maxRPM).max(), TelemetrySnapshot.preview.rpm)
         XCTAssertEqual(sessions.map(\.maxBoostBar).max(), TelemetrySnapshot.preview.boostBar)
-        XCTAssertEqual(firstChange, .init(sessionBecamePending: true))
+        XCTAssertEqual(firstChange?.sessionBecamePending, true)
         XCTAssertNil(throttledChange)
-        XCTAssertEqual(sameSessionChange, .init(sessionBecamePending: false))
-        XCTAssertEqual(nextSessionChange, .init(sessionBecamePending: true))
+        XCTAssertEqual(sameSessionChange?.sessionBecamePending, false)
+        XCTAssertEqual(nextSessionChange?.sessionBecamePending, true)
+        XCTAssertEqual(firstChange?.sessionID, sameSessionChange?.sessionID)
+        XCTAssertNotEqual(firstChange?.sessionID, nextSessionChange?.sessionID)
+    }
+
+    func testBluetoothPolicyNeverAllowsLoggerWrites() {
+        let allProperties: CBCharacteristicProperties = [.read, .notify, .write, .writeWithoutResponse]
+
+        XCTAssertTrue(BluetoothTelemetryAccessPolicy.shouldRead(allProperties))
+        XCTAssertTrue(BluetoothTelemetryAccessPolicy.shouldSubscribe(to: allProperties))
+        XCTAssertFalse(BluetoothTelemetryAccessPolicy.allowsCharacteristicWrites)
     }
 
     func testCloudSyncProgressTracksSamplesAndEmptySessions() {
         let samples = CloudSyncProgress(
             totalSessions: 2,
+            totalIncidents: 1,
+            totalAnnotations: 1,
             totalSamples: 1_000,
             completedSessions: 1,
+            completedIncidents: 0,
+            completedAnnotations: 0,
             completedSamples: 250,
             transferredBytes: 120_000
         )
         let emptySession = CloudSyncProgress(
             totalSessions: 2,
+            totalIncidents: 1,
+            totalAnnotations: 1,
             totalSamples: 0,
             completedSessions: 1,
+            completedIncidents: 1,
+            completedAnnotations: 0,
             completedSamples: 0,
             transferredBytes: 1_200
         )

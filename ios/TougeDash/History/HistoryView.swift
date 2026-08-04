@@ -7,6 +7,7 @@ import SwiftUI
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \DriveSession.startedAt, order: .reverse) private var sessions: [DriveSession]
+    @Query(sort: \DriveIncident.triggeredAt, order: .reverse) private var incidents: [DriveIncident]
     @ObservedObject var locationTracker: LocationTrackingService
     @ObservedObject var cloudAccount: CloudAccountService
     @ObservedObject var cloudSync: CloudSyncManager
@@ -21,6 +22,37 @@ struct HistoryView: View {
                     LazyVStack(spacing: 14) {
                         CloudSyncCard(account: cloudAccount, sync: cloudSync)
                         LocationRecordingCard(locationTracker: locationTracker)
+
+                        if !incidents.isEmpty {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("RAPORTY INCYDENTÓW")
+                                        .font(.system(size: 13, weight: .black))
+                                        .tracking(1.4)
+                                    Text("30 sekund przed · 60 sekund po zdarzeniu")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text(incidents.count.formatted())
+                                    .font(.headline.monospacedDigit().weight(.black))
+                                    .foregroundStyle(Color.tougeRed)
+                            }
+                            .padding(.top, 4)
+
+                            ForEach(Array(incidents.prefix(5))) { incident in
+                                NavigationLink {
+                                    IncidentReportView(
+                                        incident: incident,
+                                        cloudAccount: cloudAccount,
+                                        cloudSync: cloudSync
+                                    )
+                                } label: {
+                                    IncidentListRow(incident: incident)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
 
                         if sessions.isEmpty {
                             HistoryEmptyState()
@@ -43,15 +75,18 @@ struct HistoryView: View {
 
                             ForEach(sessions) { session in
                                 NavigationLink {
-                                    DriveSessionDetailView(session: session)
+                                    DriveSessionDetailView(
+                                        session: session,
+                                        cloudAccount: cloudAccount,
+                                        cloudSync: cloudSync
+                                    )
                                 } label: {
                                     DriveSessionRow(session: session)
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
                                     Button(role: .destructive) {
-                                        modelContext.delete(session)
-                                        try? modelContext.save()
+                                        delete(session)
                                     } label: {
                                         Label("Usuń przejazd", systemImage: "trash")
                                     }
@@ -80,6 +115,19 @@ struct HistoryView: View {
                 }
             }
         }
+    }
+
+    private func delete(_ session: DriveSession) {
+        for incident in incidents where incident.sessionID == session.id {
+            modelContext.delete(incident)
+        }
+        let sessionID = session.id
+        let annotations = (try? modelContext.fetch(FetchDescriptor<TimelineAnnotation>(
+            predicate: #Predicate { $0.sessionID == sessionID }
+        ))) ?? []
+        annotations.forEach(modelContext.delete)
+        modelContext.delete(session)
+        try? modelContext.save()
     }
 }
 
@@ -142,7 +190,7 @@ private struct HistoryEmptyState: View {
                 .foregroundStyle(Color.tougeCyan)
             Text("Pierwszy wykres powstanie sam")
                 .font(.headline.weight(.black))
-            Text("Touge Dash rozpocznie przejazd po odebraniu danych z EMU i zapisze jedną próbkę na sekundę.")
+            Text("Touge Dash rozpocznie przejazd po odebraniu danych z EMU i zapisze 10 próbek na sekundę.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -245,18 +293,32 @@ private struct SessionStat: View {
 }
 
 private struct DriveSessionDetailView: View {
+    @Environment(\.modelContext) private var modelContext
     let session: DriveSession
+    @ObservedObject var cloudAccount: CloudAccountService
+    @ObservedObject var cloudSync: CloudSyncManager
+    @Query(sort: \DriveIncident.triggeredAt) private var allIncidents: [DriveIncident]
+    @Query(sort: \TimelineAnnotation.timestamp) private var allAnnotations: [TimelineAnnotation]
     @State private var selectedTime: Date?
     @State private var cachedSamples: [TelemetryHistorySample] = []
     @State private var chartSamples: [TelemetryHistorySample] = []
     @State private var locatedSamples: [TelemetryHistorySample] = []
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var routeHasMovement = false
+    @State private var showingNoteComposer = false
     private let chartColumns = [GridItem(.adaptive(minimum: 460), spacing: 14)]
 
     private var selectedSample: TelemetryHistorySample? {
         guard let selectedTime else { return cachedSamples.last }
         return cachedSamples.nearest(to: selectedTime)
+    }
+
+    private var incidents: [DriveIncident] {
+        allIncidents.filter { $0.sessionID == session.id }
+    }
+
+    private var notes: [TimelineAnnotation] {
+        allAnnotations.filter { $0.sessionID == session.id && $0.incidentID == nil }
     }
 
     private var selectedCoordinate: CLLocationCoordinate2D? {
@@ -277,6 +339,37 @@ private struct DriveSessionDetailView: View {
 
                     if let selectedSample {
                         SelectedTelemetryStrip(sample: selectedSample, startedAt: session.startedAt)
+
+                        Button {
+                            showingNoteComposer = true
+                        } label: {
+                            Label("Dodaj notatkę do wybranego momentu", systemImage: "note.text.badge.plus")
+                                .font(.subheadline.weight(.black))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 11)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.tougeCyan)
+                    }
+
+                    if !incidents.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("INCYDENTY W TYM PRZEJEŹDZIE")
+                                .font(.system(size: 11, weight: .black))
+                                .tracking(1.1)
+                            ForEach(incidents) { incident in
+                                NavigationLink {
+                                    IncidentReportView(
+                                        incident: incident,
+                                        cloudAccount: cloudAccount,
+                                        cloudSync: cloudSync
+                                    )
+                                } label: {
+                                    IncidentListRow(incident: incident)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
 
                     LazyVGrid(columns: chartColumns, spacing: 14) {
@@ -331,6 +424,8 @@ private struct DriveSessionDetailView: View {
                         )
                     }
 
+                    IncidentNotesCard(notes: notes)
+
                     ProductCreditFooter()
                         .padding(.top, 8)
                 }
@@ -345,7 +440,19 @@ private struct DriveSessionDetailView: View {
         ))
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            let sorted = session.samples.sorted { $0.timestamp < $1.timestamp }
+            let sessionID = session.id
+            let descriptor = FetchDescriptor<TelemetryHistorySample>(
+                predicate: #Predicate { sample in
+                    sample.session?.id == sessionID && sample.chartEligible == true
+                },
+                sortBy: [SortDescriptor(\.timestamp)]
+            )
+            let previewSamples = (try? modelContext.fetch(descriptor)) ?? []
+            // Records created by versions predating the preview flag use the
+            // old relationship fallback once. New 10 Hz drives stay lightweight.
+            let sorted = previewSamples.isEmpty
+                ? session.samples.sorted { $0.timestamp < $1.timestamp }.downsampled(maxPoints: 7_200)
+                : previewSamples.downsampled(maxPoints: 7_200)
             cachedSamples = sorted
             chartSamples = sorted.downsampled(maxPoints: 300)
             locatedSamples = sorted.filter { $0.latitude != nil && $0.longitude != nil }
@@ -358,6 +465,17 @@ private struct DriveSessionDetailView: View {
             }).count > 1
             if selectedTime == nil {
                 selectedTime = sorted.last?.timestamp
+            }
+        }
+        .sheet(isPresented: $showingNoteComposer) {
+            if let selectedSample {
+                TimelineNoteComposer(
+                    vehicleID: session.vehicleID,
+                    sessionID: session.id,
+                    incidentID: nil,
+                    timestamp: selectedSample.timestamp,
+                    cloudSync: cloudSync
+                )
             }
         }
     }

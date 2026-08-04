@@ -4,7 +4,7 @@ import SwiftData
 
 @MainActor
 final class TelemetryHistoryRecorder: ObservableObject {
-    static let sampleInterval: TimeInterval = 1
+    static let sampleInterval: TimeInterval = 0.1
     static let newSessionGap: TimeInterval = 90
 
     let locationTracker: LocationTrackingService
@@ -15,6 +15,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
     private var lastRecordedAt = Date.distantPast
     private var lastSavedAt = Date.distantPast
     private var lastDistanceLocation: RecordedLocation?
+    private var lastChartSampleAt = Date.distantPast
 
     init(container: ModelContainer, locationTracker: LocationTrackingService) {
         context = ModelContext(container)
@@ -26,6 +27,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
 
     struct RecordingChange: Equatable, Sendable {
         let sessionBecamePending: Bool
+        let sessionID: UUID
     }
 
     @discardableResult
@@ -37,23 +39,28 @@ final class TelemetryHistoryRecorder: ObservableObject {
         let isNewSession = previousSessionID != session.id
         let wasPending = !isNewSession && session.syncState != .synced
         let location = freshLocation(at: timestamp)
+        let chartEligible = timestamp.timeIntervalSince(lastChartSampleAt) >= 0.5
         let sample = TelemetryHistorySample(
             snapshot: snapshot,
             timestamp: timestamp,
             location: location,
+            chartEligible: chartEligible,
             session: session
         )
         context.insert(sample)
 
         update(session, with: sample, location: location)
         lastRecordedAt = timestamp
+        if chartEligible { lastChartSampleAt = timestamp }
 
         if timestamp.timeIntervalSince(lastSavedAt) >= 5 {
             try? context.save()
             lastSavedAt = timestamp
         }
-        return RecordingChange(sessionBecamePending: isNewSession || !wasPending)
+        return RecordingChange(sessionBecamePending: isNewSession || !wasPending, sessionID: session.id)
     }
+
+    var activeSessionID: UUID? { activeSession?.id }
 
     func activateVehicle(_ id: UUID) {
         guard vehicleID != id else { return }
@@ -62,6 +69,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         activeSession = nil
         lastDistanceLocation = nil
         lastRecordedAt = .distantPast
+        lastChartSampleAt = .distantPast
         restoreRecentSession()
     }
 
@@ -140,7 +148,15 @@ final class TelemetryHistoryRecorder: ObservableObject {
         activeSession = session
         lastRecordedAt = session.endedAt
 
-        if let lastSample = session.samples.max(by: { $0.timestamp < $1.timestamp }),
+        let sessionID = session.id
+        var sampleDescriptor = FetchDescriptor<TelemetryHistorySample>(
+            predicate: #Predicate { sample in
+                sample.session?.id == sessionID && sample.latitude != nil && sample.longitude != nil
+            },
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        sampleDescriptor.fetchLimit = 1
+        if let lastSample = try? context.fetch(sampleDescriptor).first,
            let latitude = lastSample.latitude,
            let longitude = lastSample.longitude {
             lastDistanceLocation = RecordedLocation(

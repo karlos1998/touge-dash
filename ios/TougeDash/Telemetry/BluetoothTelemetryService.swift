@@ -15,6 +15,20 @@ struct DiscoveredTelemetryDevice: Identifiable, Hashable, Sendable {
     let isLikelyEMU: Bool
 }
 
+/// Touge Dash is a passive dashboard. Its BLE contract intentionally exposes
+/// only GATT reads and notifications; ECU/logger writes are never permitted.
+enum BluetoothTelemetryAccessPolicy {
+    static let allowsCharacteristicWrites = false
+
+    static func shouldSubscribe(to properties: CBCharacteristicProperties) -> Bool {
+        properties.contains(.notify) || properties.contains(.indicate)
+    }
+
+    static func shouldRead(_ properties: CBCharacteristicProperties) -> Bool {
+        properties.contains(.read)
+    }
+}
+
 enum BluetoothConnectionState: Equatable, Sendable {
     case unavailable(String)
     case ready
@@ -332,11 +346,17 @@ extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
                 characteristic.uuid.uuidString,
                 Int64(properties.rawValue)
             ))
-            if properties.contains(.notify) || properties.contains(.indicate) {
+            if BluetoothTelemetryAccessPolicy.shouldSubscribe(to: properties) {
                 peripheral.setNotifyValue(true, for: characteristic)
             }
-            if properties.contains(.read) {
+            if BluetoothTelemetryAccessPolicy.shouldRead(properties) {
                 peripheral.readValue(for: characteristic)
+            }
+            if properties.contains(.write) || properties.contains(.writeWithoutResponse) {
+                appendDiagnostic(String(
+                    format: localized("Characteristic %@ offers writes; ignored by read-only policy"),
+                    characteristic.uuid.uuidString
+                ))
             }
         }
     }

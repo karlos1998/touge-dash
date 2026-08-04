@@ -95,7 +95,10 @@ struct CloudSyncCard: View {
                             } label: {
                                 Image(systemName: "arrow.triangle.2.circlepath")
                             }
-                            .disabled(sync.state == .syncing || sync.pendingSessions == 0)
+                            .disabled(
+                                sync.state == .syncing ||
+                                    (sync.pendingSessions == 0 && sync.pendingIncidents == 0 && sync.pendingAnnotations == 0)
+                            )
                             .accessibilityLabel("Synchronizuj teraz")
                         }
 
@@ -113,7 +116,7 @@ struct CloudSyncCard: View {
                             }
                             .font(.caption2.monospacedDigit().weight(.bold))
                             .foregroundStyle(.secondary)
-                        } else if sync.pendingSessions > 0 {
+                        } else if sync.pendingSessions > 0 || sync.pendingIncidents > 0 || sync.pendingAnnotations > 0 {
                             HStack(spacing: 5) {
                                 Text(String(
                                     format: localized("%@ %@"),
@@ -121,7 +124,13 @@ struct CloudSyncCard: View {
                                     localized(sync.pendingSessions == 1 ? "PRZEJAZD" : "PRZEJAZDY")
                                 ))
                                 Text("·")
+                                Text(String(format: localized("%@ INCYDENTÓW"), sync.pendingIncidents.formatted()))
+                                Text("·")
                                 Text(String(format: localized("%@ PRÓBEK"), sync.pendingSamples.formatted()))
+                                if sync.pendingAnnotations > 0 {
+                                    Text("·")
+                                    Text(String(format: localized("%@ NOTATEK"), sync.pendingAnnotations.formatted()))
+                                }
                                 Text("·")
                                 Text("OK. \(byteCount(sync.estimatedPendingBytes))")
                             }

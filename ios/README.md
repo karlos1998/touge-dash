@@ -7,6 +7,8 @@ Natywna aplikacja SwiftUI do podglądu telemetrii ECUMaster EMU Black. Projekt z
 - dekoder strumienia ECUMaster z resynchronizacją i kontrolą checksum,
 - automatyczne łączenie z ostatnim interfejsem ECUMaster,
 - lokalną historię przejazdów, interaktywne wykresy i opcjonalny zapis GPS,
+- automatyczne raporty incydentów z buforem 30 s przed i 60 s po zdarzeniu,
+- notatki przypięte do dokładnego momentu telemetrii,
 - opcjonalne konto i kolejkę synchronizacji Touge Dash Cloud,
 - mały i średni widget,
 - Live Activity ze specjalnym małym układem dla CarPlay,
@@ -50,7 +52,7 @@ Przed jazdą porównaj RPM, MAP, temperatury i ciśnienia z EMU Black Client. Ap
 
 ## Historia i zapis trasy
 
-Odebrane próbki są archiwizowane lokalnie w SwiftData z częstotliwością 1 Hz.
+Odebrane próbki są archiwizowane lokalnie w SwiftData z częstotliwością 10 Hz.
 Przerwa dłuższa niż 90 sekund zamyka bieżącą sesję i rozpoczyna następną.
 Ekran szczegółów pokazuje zsynchronizowane wykresy temperatur, ciśnień,
 prędkości i RPM oraz pełny zestaw wartości dla wskazanego momentu. Na iPadzie
@@ -65,6 +67,27 @@ Dane zawsze trafiają najpierw do lokalnego SwiftData. Konto jest opcjonalne.
 Po zalogowaniu sesje oczekujące są wysyłane partiami, a po utracie internetu
 zapis działa dalej. UUID urządzenia Bluetooth rozdziela archiwum różnych aut.
 Nowy EMULOGGER wymaga jednorazowego nadania nazwy.
+
+## Incydenty i notatki
+
+Niezależny bufor incydentów pobiera do 25 próbek/s. Reguły mają krótkie czasy
+potwierdzenia, dzięki czemu pojedynczy błędny pakiet nie tworzy raportu. Po
+wykryciu niskiego ciśnienia oleju przy wysokich obrotach, ubogiej mieszanki pod
+boostem, overboostu, przegrzania lub spadku napięcia aplikacja zachowuje
+30 sekund wcześniejszych danych i kolejne 60 sekund. Jeśli połączenie zostanie
+przerwane wcześniej, zapisuje dostępny fragment zamiast go odrzucać.
+
+Każdy raport ma zsynchronizowane wykresy, warunki pracy, mapę i notatki. Notatkę
+można dodać również do dowolnego momentu zwykłego przejazdu. Przejazdy, raporty
+i notatki trafiają do kolejki offline i są wysyłane w tej kolejności po
+odzyskaniu internetu.
+
+## Gwarancja trybu tylko do odczytu
+
+Warstwa CoreBluetooth dopuszcza wyłącznie `setNotifyValue` i `readValue`.
+Charakterystyki oferujące zapis są jawnie ignorowane, a test jednostkowy blokuje
+przypadkowe rozszerzenie tej polityki. Touge Dash nie wysyła ustawień ani poleceń
+do EMU/EMULOGGERA.
 
 ## Synchronizacja online
 
@@ -165,5 +188,6 @@ xcodebuild \
 ```
 
 Testy obejmują fragmentację notyfikacji BLE, szum, złą sumę kontrolną,
-resynchronizację, skalowanie kanałów, wartości ze znakiem oraz podział i
-podsumowania lokalnych sesji przejazdu.
+resynchronizację, skalowanie kanałów, wartości ze znakiem, podział sesji,
+częstotliwość zapisu, politykę Bluetooth tylko do odczytu oraz wszystkie reguły
+incydentów z buforem przed i po zdarzeniu.

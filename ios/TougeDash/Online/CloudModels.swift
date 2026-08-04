@@ -28,6 +28,64 @@ struct CloudSyncResult: Codable, Sendable {
     let synchronizedAt: Date
 }
 
+struct CloudIncidentSyncResult: Codable, Sendable {
+    let incidentId: UUID
+    let serverRevision: Int
+    let acceptedSamples: Int
+    let synchronizedAt: Date
+}
+
+struct CloudIncidentUpload: Encodable, Sendable {
+    let id: UUID
+    let sessionId: UUID
+    let type: String
+    let severity: String
+    let triggeredAt: Date
+    let captureStartedAt: Date
+    let captureEndedAt: Date
+    let revision: Int
+    let sampleCount: Int
+    let sampleRateHz: Double
+    let triggerValue: Double
+    let thresholdValue: Double
+    let triggerUnit: String
+    let triggerRpm: Double
+    let triggerBoostBar: Double
+    let triggerAfr: Double
+    let triggerSpeedKph: Double
+    let latitude: Double?
+    let longitude: Double?
+    let samples: [CloudSampleUpload]
+}
+
+struct CloudTimelineAnnotationUpload: Encodable, Sendable {
+    let id: UUID
+    let incidentId: UUID?
+    let recordedAt: Date
+    let body: String
+}
+
+struct CloudTimelineAnnotationResponse: Decodable, Sendable {
+    let id: UUID
+    let sessionId: UUID
+    let incidentId: UUID?
+    let recordedAt: Date
+    let body: String
+    let updatedAt: Date
+}
+
+struct CloudIncidentShareRequest: Encodable, Sendable {
+    let unit: String
+    let amount: Int?
+}
+
+struct CloudIncidentShare: Decodable, Sendable {
+    let id: UUID
+    let token: String
+    let createdAt: Date
+    let expiresAt: Date?
+}
+
 struct CloudSessionUpload: Encodable, Sendable {
     let id: UUID
     let startedAt: Date
@@ -101,6 +159,7 @@ struct CloudAPIErrorPayload: Decodable, Sendable {
 enum CloudAPIError: LocalizedError {
     case invalidServerAddress
     case invalidResponse
+    case localHistoryIncomplete
     case unauthorized
     case server(status: Int, message: String)
 
@@ -108,6 +167,8 @@ enum CloudAPIError: LocalizedError {
         switch self {
         case .invalidServerAddress: localized("Nieprawidłowy adres serwera.")
         case .invalidResponse: localized("Serwer zwrócił nieprawidłową odpowiedź.")
+        case .localHistoryIncomplete:
+            localized("Nie udało się odczytać wszystkich lokalnych próbek. Synchronizacja spróbuje ponownie.")
         case .unauthorized: localized("Sesja wygasła. Zaloguj się ponownie.")
         case .server(let status, let message):
             Locale.current.language.languageCode?.identifier == "pl"

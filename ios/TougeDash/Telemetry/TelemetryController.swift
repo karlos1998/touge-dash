@@ -13,6 +13,7 @@ final class TelemetryController: ObservableObject {
     let bluetooth = BluetoothTelemetryService()
     let activityManager = TelemetryActivityManager()
     let historyRecorder: TelemetryHistoryRecorder
+    let incidentRecorder: TelemetryIncidentRecorder
     let locationTracker: LocationTrackingService
     let cloudSync: CloudSyncManager
     private let watchBridge = WatchTelemetryBridge.shared
@@ -24,8 +25,13 @@ final class TelemetryController: ObservableObject {
     private var lastSharedWrite = Date.distantPast
     private var lastWidgetReload = Date.distantPast
 
-    init(historyRecorder: TelemetryHistoryRecorder, cloudSync: CloudSyncManager) {
+    init(
+        historyRecorder: TelemetryHistoryRecorder,
+        incidentRecorder: TelemetryIncidentRecorder,
+        cloudSync: CloudSyncManager
+    ) {
         self.historyRecorder = historyRecorder
+        self.incidentRecorder = incidentRecorder
         self.cloudSync = cloudSync
         locationTracker = historyRecorder.locationTracker
 
@@ -52,8 +58,11 @@ final class TelemetryController: ObservableObject {
                 self.showingDevicePicker = false
                 if let identifier = self.bluetooth.connectedIdentifier {
                     self.historyRecorder.activateVehicle(identifier)
+                    self.incidentRecorder.activateVehicle(identifier)
                     Task { await self.cloudSync.prepareVehicle(hardwareIdentifier: identifier) }
                 }
+            } else {
+                self.incidentRecorder.finish(sessionID: self.historyRecorder.activeSessionID)
             }
             if self.activityManager.isRunning {
                 self.activityManager.enqueueUpdate(self.snapshot, connectionLabel: state.label)
@@ -158,6 +167,9 @@ final class TelemetryController: ObservableObject {
         engineAlertManager.evaluate(value)
         if let change = historyRecorder.record(value) {
             cloudSync.noteLocalSampleRecorded(sessionBecamePending: change.sessionBecamePending)
+        }
+        if let sessionID = historyRecorder.activeSessionID {
+            incidentRecorder.record(value, sessionID: sessionID)
         }
         cloudSync.publishLive(value)
         let now = Date.now

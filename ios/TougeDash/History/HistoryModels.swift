@@ -8,6 +8,94 @@ enum HistorySyncState: String, Codable, Sendable {
     case changedAfterSync
 }
 
+enum IncidentKind: String, Codable, CaseIterable, Sendable {
+    case lowOilPressure = "LOW_OIL_PRESSURE"
+    case leanUnderBoost = "LEAN_UNDER_BOOST"
+    case overboost = "OVERBOOST"
+    case engineOverheat = "ENGINE_OVERHEAT"
+    case lowBatteryVoltage = "LOW_BATTERY_VOLTAGE"
+
+    var title: String {
+        switch self {
+        case .lowOilPressure: localized("Niskie ciśnienie oleju")
+        case .leanUnderBoost: localized("Uboga mieszanka pod boostem")
+        case .overboost: localized("Przekroczone doładowanie")
+        case .engineOverheat: localized("Przegrzanie silnika")
+        case .lowBatteryVoltage: localized("Niskie napięcie")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .lowOilPressure: "oilcan.fill"
+        case .leanUnderBoost: "aqi.medium"
+        case .overboost: "gauge.with.dots.needle.100percent"
+        case .engineOverheat: "thermometer.high"
+        case .lowBatteryVoltage: "battery.25percent"
+        }
+    }
+}
+
+enum IncidentSeverity: String, Codable, Sendable {
+    case warning = "WARNING"
+    case critical = "CRITICAL"
+}
+
+struct CapturedTelemetryPoint: Codable, Hashable, Identifiable, Sendable {
+    let id: UUID
+    let timestamp: Date
+    let rpm: Double
+    let boostBar: Double
+    let mapKPa: Double
+    let throttlePercent: Double
+    let coolantCelsius: Double
+    let intakeCelsius: Double
+    let oilTemperatureCelsius: Double
+    let oilPressureBar: Double
+    let fuelPressureBar: Double
+    let afr: Double
+    let lambda: Double
+    let batteryVoltage: Double
+    let ignitionDegrees: Double
+    let injectorDutyPercent: Double
+    let speedKPH: Double
+    let checkEngineMask: Int
+    let latitude: Double?
+    let longitude: Double?
+    let horizontalAccuracy: Double?
+    let altitude: Double?
+
+    init(
+        id: UUID = UUID(),
+        snapshot: TelemetrySnapshot,
+        timestamp: Date,
+        location: RecordedLocation? = nil
+    ) {
+        self.id = id
+        self.timestamp = timestamp
+        rpm = snapshot.rpm
+        boostBar = snapshot.boostBar
+        mapKPa = snapshot.mapKPa
+        throttlePercent = snapshot.throttlePercent
+        coolantCelsius = snapshot.coolantCelsius
+        intakeCelsius = snapshot.intakeCelsius
+        oilTemperatureCelsius = snapshot.oilTemperatureCelsius
+        oilPressureBar = snapshot.oilPressureBar
+        fuelPressureBar = snapshot.fuelPressureBar
+        afr = snapshot.afr
+        lambda = snapshot.lambda
+        batteryVoltage = snapshot.batteryVoltage
+        ignitionDegrees = snapshot.ignitionDegrees
+        injectorDutyPercent = snapshot.injectorDutyPercent
+        speedKPH = snapshot.speedKPH
+        checkEngineMask = Int(snapshot.checkEngineMask)
+        latitude = location?.latitude
+        longitude = location?.longitude
+        horizontalAccuracy = location?.horizontalAccuracy
+        altitude = location?.altitude
+    }
+}
+
 @Model
 final class DriveSession {
     @Attribute(.unique) var id: UUID
@@ -90,6 +178,7 @@ final class TelemetryHistorySample {
     var longitude: Double?
     var horizontalAccuracy: Double?
     var altitude: Double?
+    var chartEligible: Bool?
     var syncStateRaw: String
     var remoteID: String?
     var session: DriveSession?
@@ -99,6 +188,7 @@ final class TelemetryHistorySample {
         snapshot: TelemetrySnapshot,
         timestamp: Date,
         location: RecordedLocation? = nil,
+        chartEligible: Bool = true,
         session: DriveSession? = nil
     ) {
         self.id = id
@@ -123,9 +213,134 @@ final class TelemetryHistorySample {
         longitude = location?.longitude
         horizontalAccuracy = location?.horizontalAccuracy
         altitude = location?.altitude
+        self.chartEligible = chartEligible
         syncStateRaw = HistorySyncState.local.rawValue
         remoteID = nil
         self.session = session
+    }
+
+    var syncState: HistorySyncState {
+        get { HistorySyncState(rawValue: syncStateRaw) ?? .local }
+        set { syncStateRaw = newValue.rawValue }
+    }
+}
+
+@Model
+final class DriveIncident {
+    @Attribute(.unique) var id: UUID
+    var vehicleID: UUID
+    var sessionID: UUID
+    var kindRaw: String
+    var severityRaw: String
+    var triggeredAt: Date
+    var captureStartedAt: Date
+    var captureEndedAt: Date
+    var sampleCount: Int
+    var sampleRateHz: Double
+    var triggerValue: Double
+    var thresholdValue: Double
+    var triggerUnit: String
+    var triggerRPM: Double
+    var triggerBoostBar: Double
+    var triggerAFR: Double
+    var triggerSpeedKPH: Double
+    var latitude: Double?
+    var longitude: Double?
+    var encodedSamples: Data
+    var syncStateRaw: String
+    var revision: Int
+    var remoteID: String?
+
+    init(
+        id: UUID = UUID(),
+        vehicleID: UUID,
+        sessionID: UUID,
+        kind: IncidentKind,
+        severity: IncidentSeverity,
+        triggeredAt: Date,
+        thresholdValue: Double,
+        triggerValue: Double,
+        triggerUnit: String,
+        samples: [CapturedTelemetryPoint]
+    ) {
+        self.id = id
+        self.vehicleID = vehicleID
+        self.sessionID = sessionID
+        kindRaw = kind.rawValue
+        severityRaw = severity.rawValue
+        self.triggeredAt = triggeredAt
+        let firstTimestamp = samples.first?.timestamp ?? triggeredAt
+        let lastTimestamp = samples.last?.timestamp ?? triggeredAt
+        captureStartedAt = firstTimestamp
+        captureEndedAt = lastTimestamp
+        sampleCount = samples.count
+        let duration = lastTimestamp.timeIntervalSince(firstTimestamp)
+        sampleRateHz = duration > 0 ? Double(max(1, samples.count - 1)) / duration : 25
+        self.triggerValue = triggerValue
+        self.thresholdValue = thresholdValue
+        self.triggerUnit = triggerUnit
+        let trigger = samples.min {
+            abs($0.timestamp.timeIntervalSince(triggeredAt)) < abs($1.timestamp.timeIntervalSince(triggeredAt))
+        }
+        triggerRPM = trigger?.rpm ?? 0
+        triggerBoostBar = trigger?.boostBar ?? 0
+        triggerAFR = trigger?.afr ?? 0
+        triggerSpeedKPH = trigger?.speedKPH ?? 0
+        latitude = trigger?.latitude
+        longitude = trigger?.longitude
+        encodedSamples = (try? JSONEncoder().encode(samples)) ?? Data()
+        syncStateRaw = HistorySyncState.local.rawValue
+        revision = 1
+        remoteID = nil
+    }
+
+    var kind: IncidentKind {
+        IncidentKind(rawValue: kindRaw) ?? .engineOverheat
+    }
+
+    var severity: IncidentSeverity {
+        IncidentSeverity(rawValue: severityRaw) ?? .warning
+    }
+
+    var samples: [CapturedTelemetryPoint] {
+        (try? JSONDecoder().decode([CapturedTelemetryPoint].self, from: encodedSamples)) ?? []
+    }
+
+    var syncState: HistorySyncState {
+        get { HistorySyncState(rawValue: syncStateRaw) ?? .local }
+        set { syncStateRaw = newValue.rawValue }
+    }
+}
+
+@Model
+final class TimelineAnnotation {
+    @Attribute(.unique) var id: UUID
+    var vehicleID: UUID
+    var sessionID: UUID
+    var incidentID: UUID?
+    var timestamp: Date
+    var body: String
+    var createdAt: Date
+    var modifiedAt: Date
+    var syncStateRaw: String
+
+    init(
+        id: UUID = UUID(),
+        vehicleID: UUID,
+        sessionID: UUID,
+        incidentID: UUID? = nil,
+        timestamp: Date,
+        body: String
+    ) {
+        self.id = id
+        self.vehicleID = vehicleID
+        self.sessionID = sessionID
+        self.incidentID = incidentID
+        self.timestamp = timestamp
+        self.body = body
+        createdAt = .now
+        modifiedAt = .now
+        syncStateRaw = HistorySyncState.local.rawValue
     }
 
     var syncState: HistorySyncState {
