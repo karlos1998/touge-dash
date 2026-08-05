@@ -41,7 +41,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -116,7 +115,13 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
 
 @Composable
 private fun SessionRow(session: DriveSessionEntity, select: (String) -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable { select(session.id) }, colors = CardDefaults.cardColors(containerColor = TougePanel), shape = RoundedCornerShape(4.dp)) {
+    val accent = when (session.syncState) {
+        SyncState.SYNCED -> TougeMint
+        SyncState.FAILED -> TougeRed
+        SyncState.UPLOADING -> TougeCyan
+        else -> TougeOrange
+    }
+    TougePanelSurface(accent, Modifier.fillMaxWidth().clickable { select(session.id) }) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
@@ -208,7 +213,7 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
 
 @Composable
 private fun SessionSummary(session: DriveSessionEntity) {
-    Card(Modifier.fillMaxWidth().padding(14.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
+    TougePanelSurface(TougeCyan, Modifier.fillMaxWidth().padding(14.dp)) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 MiniValue(appText("DURATION", "CZAS"), duration(session.endedAt - session.startedAt), TougeCyan)
@@ -236,7 +241,7 @@ private fun TelemetryCursor(sample: TelemetrySampleEntity?, startedAt: Long) {
 @Composable
 private fun TelemetryChart(title: String, samples: List<TelemetrySampleEntity>, selected: TelemetrySampleEntity?, series: List<Pair<TelemetryMetric, Color>>) {
     val language = Locale.current.language
-    Card(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
+    TougePanelSurface(series.firstOrNull()?.second ?: TougeCyan, Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp)) {
         Column(Modifier.padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold)

@@ -7,16 +7,24 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -30,16 +38,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.DashboardCustomize
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -62,33 +68,26 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import it.letscode.tougedash.BuildConfig
 import it.letscode.tougedash.di.AppContainer
-import it.letscode.tougedash.model.ConnectionState
 import it.letscode.tougedash.model.DashboardAccent
 import it.letscode.tougedash.model.DashboardDefinition
 import it.letscode.tougedash.model.DashboardTemplate
 import it.letscode.tougedash.model.DashboardWidget
 import it.letscode.tougedash.model.DashboardWidgetKind
-import it.letscode.tougedash.model.TelemetryConnection
 import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.TelemetrySnapshot
 import it.letscode.tougedash.telemetry.TimedTelemetry
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
-import it.letscode.tougedash.ui.theme.TougePanel
 import it.letscode.tougedash.ui.theme.TougeRed
+import it.letscode.tougedash.ui.theme.TougeMuted
 import kotlinx.coroutines.launch
-import java.util.UUID
 import kotlin.math.abs
 
 @Composable
 fun ConfigurableDashboardScreen(
     container: AppContainer,
-    snapshot: TelemetrySnapshot,
-    connection: TelemetryConnection,
-    preview: Boolean,
-    setPreview: (Boolean) -> Unit
+    snapshot: TelemetrySnapshot
 ) {
     val template by container.dashboardRepository.selected.collectAsState(initial = DashboardTemplate.factory())
     val templates by container.dashboardRepository.templates.collectAsState(initial = listOf(DashboardTemplate.factory()))
@@ -97,6 +96,7 @@ fun ConfigurableDashboardScreen(
     var editing by remember { mutableStateOf(false) }
     var editorWidget by remember { mutableStateOf<DashboardWidget?>(null) }
     var templateMenu by remember { mutableStateOf(false) }
+    val authSession by container.authRepository.session.collectAsState()
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val gridState = rememberLazyGridState()
     LaunchedEffect(landscape) { gridState.scrollToItem(0) }
@@ -104,25 +104,54 @@ fun ConfigurableDashboardScreen(
         .sortedBy { if (landscape) it.landscapeOrder else it.portraitOrder }
 
     Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().background(if (editing) TougeCyan.copy(alpha = .12f) else Color.Transparent).padding(horizontal = 12.dp, vertical = if (landscape) 0.dp else 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box {
-                TextButton(onClick = { templateMenu = true }) { Text(template.localizedName(), fontWeight = FontWeight.Bold) }
+        if (!editing) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 1.dp else 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                Box(
+                    Modifier.weight(1f).background(Color.White.copy(alpha = .05f), CutCornerShape(8.dp)).border(1.dp, Color.White.copy(alpha = .08f), CutCornerShape(8.dp)).clickable { templateMenu = true }.padding(horizontal = 12.dp, vertical = if (landscape) 3.dp else 10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.DashboardCustomize, null, tint = TougeCyan, modifier = Modifier.size(18.dp))
+                        Column(Modifier.padding(start = 9.dp).weight(1f)) {
+                            Text(template.localizedName(), fontSize = if (landscape) 10.sp else 12.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                            if (!landscape) Text(if (authSession == null) appText("SAVED ON DEVICE", "ZAPISANY NA URZĄDZENIU") else appText("CLOUD SYNC ACTIVE", "SYNCHRONIZACJA ONLINE"), color = if (authSession == null) TougeMuted else TougeMint, fontSize = 7.sp, fontWeight = FontWeight.Black, letterSpacing = .65.sp)
+                        }
+                        Text("⌄", color = TougeMuted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
                 DropdownMenu(expanded = templateMenu, onDismissRequest = { templateMenu = false }) {
                     templates.forEach { item -> DropdownMenuItem(text = { Text(item.localizedName()) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.select(item.id) } }) }
                     DropdownMenuItem(text = { Text(appText("New dashboard", "Nowy dashboard")) }, leadingIcon = { Icon(Icons.Default.Add, null) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.create() } })
                     DropdownMenuItem(text = { Text(appText("Duplicate", "Duplikuj")) }, leadingIcon = { Icon(Icons.Default.ContentCopy, null) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.duplicate(template) } })
                 }
+                Row(
+                    Modifier.background(TougeCyan, CutCornerShape(8.dp)).clickable { editing = true }.padding(horizontal = if (landscape) 11.dp else 13.dp, vertical = if (landscape) 5.dp else 13.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Edit, null, tint = Color.Black, modifier = Modifier.size(17.dp))
+                    if (!landscape) Text(appText(" Edit dashboard", " Edytuj dashboard"), color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                }
             }
-            Box(Modifier.weight(1f))
-            if (BuildConfig.DEBUG && connection.state != ConnectionState.Connected) TextButton(onClick = { setPreview(!preview) }) { Text(if (preview) "LIVE" else "DEMO") }
-            IconButton(onClick = { editing = !editing }) { Icon(if (editing) Icons.Default.Done else Icons.Default.Edit, null, tint = if (editing) TougeMint else TougeCyan) }
+        } else {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 3.dp else 8.dp).background(TougeCyan.copy(alpha = .065f), CutCornerShape(10.dp)).border(1.dp, TougeCyan.copy(alpha = .32f), CutCornerShape(10.dp)).padding(horizontal = 11.dp, vertical = if (landscape) 6.dp else 9.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.DashboardCustomize, null, tint = TougeCyan, modifier = Modifier.size(20.dp))
+                Column(Modifier.padding(start = 9.dp).weight(1f)) {
+                    Text(appText("EDITING DASHBOARD", "EDYTUJESZ DASHBOARD"), color = TougeCyan, fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    if (!landscape) Text(appText("Hold and drag a card to move it", "Przytrzymaj i przeciągnij kartę, aby ją przenieść"), color = TougeMuted, fontSize = 9.sp)
+                }
+                Row(Modifier.background(TougeCyan, CutCornerShape(7.dp)).clickable { editing = false }.padding(horizontal = 13.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Done, null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    Text(appText(" Done", " Gotowe"), color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                }
+            }
         }
-        if (editing) Text(appText("EDIT MODE  •  hold and drag a card to move it", "TRYB EDYCJI  •  przytrzymaj i przeciągnij kartę"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         LazyVerticalGrid(
             columns = GridCells.Fixed(12),
             state = gridState,
-            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = if (landscape) 5.dp else 12.dp)
+            horizontalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (landscape) 6.dp else 12.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 3.dp else 7.dp)
         ) {
             items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) { widget ->
                 EditableDashboardCard(
@@ -173,58 +202,89 @@ private fun EditableDashboardCard(
             )
         }
     ) {
-        if (widget.kind == DashboardWidgetKind.CHART) ChartCard(widget, snapshot, chartPoints)
+        if (widget.kind == DashboardWidgetKind.CHART) ChartCard(widget, snapshot, chartPoints, landscape)
         else DashboardCard(widget, snapshot, landscape)
         if (editing) {
-            Row(Modifier.align(Alignment.TopEnd).padding(4.dp)) {
-                IconButton(onClick = edit, modifier = Modifier.size(34.dp).background(TougeCyan, CircleShape)) { Icon(Icons.Default.Settings, null, tint = Color.Black, modifier = Modifier.size(18.dp)) }
-                IconButton(onClick = remove, modifier = Modifier.size(34.dp).background(TougeRed, CircleShape)) { Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(18.dp)) }
+            Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(7.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(30.dp).background(TougeRed.copy(alpha = .88f), CircleShape).border(1.dp, Color.White.copy(alpha = .18f), CircleShape).clickable(onClick = remove), contentAlignment = Alignment.Center) { Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(15.dp)) }
+                Box(Modifier.weight(1f))
+                Row(Modifier.background(Color.Black.copy(alpha = .72f), RoundedCornerShape(18.dp)).border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(18.dp)).padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DragHandle, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(15.dp))
+                    if (!landscape && widget.portraitSpan == 12) Text(appText(" DRAG", " PRZECIĄGNIJ"), color = Color.White.copy(alpha = .8f), fontSize = 7.sp, fontWeight = FontWeight.Black, letterSpacing = .6.sp)
+                }
+                Box(Modifier.weight(1f))
+                Box(Modifier.size(30.dp).background(TougeCyan.copy(alpha = .9f), CircleShape).border(1.dp, Color.White.copy(alpha = .18f), CircleShape).clickable(onClick = edit), contentAlignment = Alignment.Center) { Icon(Icons.Default.Edit, null, tint = Color.Black, modifier = Modifier.size(15.dp)) }
             }
         }
     }
 }
 
 @Composable
-private fun ChartCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, points: List<TimedTelemetry>) {
+private fun ChartCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, points: List<TimedTelemetry>, landscape: Boolean) {
     val metric = widget.metrics.first()
     val accent = widget.accent.color()
     val duration = widget.chartDurationSeconds ?: 30
     val now = snapshot.updatedAt
     val values = points.filter { now - it.recordedAt <= duration * 1_000L }.map { metric.value(it.snapshot).toFloat() }
-    Column(Modifier.fillMaxWidth().background(TougePanel, RoundedCornerShape(3.dp)).padding(14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(metric.localizedName(), color = accent, fontWeight = FontWeight.Bold)
-            Text("${metric.format(metric.value(snapshot))} ${metric.unit}  •  ${duration}s", fontWeight = FontWeight.Black)
-        }
-        Canvas(Modifier.fillMaxWidth().size(110.dp)) {
-            if (values.size > 1) {
-                val min = (widget.gaugeMinimum ?: metric.defaultMin).toFloat()
-                val max = (widget.gaugeMaximum ?: metric.defaultMax).toFloat()
-                values.zipWithNext().forEachIndexed { index, pair ->
-                    val x1 = index.toFloat() / (values.size - 1) * size.width
-                    val x2 = (index + 1).toFloat() / (values.size - 1) * size.width
-                    val y1 = size.height * (1 - ((pair.first - min) / (max - min)).coerceIn(0f, 1f))
-                    val y2 = size.height * (1 - ((pair.second - min) / (max - min)).coerceIn(0f, 1f))
-                    drawLine(accent, androidx.compose.ui.geometry.Offset(x1, y1), androidx.compose.ui.geometry.Offset(x2, y2), strokeWidth = 3.dp.toPx())
+    TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 112.dp else 220.dp)) {
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TelemetryGlyph(metric, accent, Modifier.size(18.dp))
+                    Text(metric.localizedName(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                }
+                Text("${metric.format(metric.value(snapshot))} ${metric.unit}  •  ${duration}s", fontWeight = FontWeight.Black)
+            }
+            Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = 13.dp)) {
+                if (values.size > 1) {
+                    val min = (widget.gaugeMinimum ?: metric.defaultMin).toFloat()
+                    val max = (widget.gaugeMaximum ?: metric.defaultMax).toFloat()
+                    repeat(3) { line -> drawLine(Color.White.copy(alpha = .045f), androidx.compose.ui.geometry.Offset(0f, size.height * line / 2f), androidx.compose.ui.geometry.Offset(size.width, size.height * line / 2f), strokeWidth = 1f) }
+                    values.zipWithNext().forEachIndexed { index, pair ->
+                        val x1 = index.toFloat() / (values.size - 1) * size.width
+                        val x2 = (index + 1).toFloat() / (values.size - 1) * size.width
+                        val y1 = size.height * (1 - ((pair.first - min) / (max - min)).coerceIn(0f, 1f))
+                        val y2 = size.height * (1 - ((pair.second - min) / (max - min)).coerceIn(0f, 1f))
+                        drawLine(accent, androidx.compose.ui.geometry.Offset(x1, y1), androidx.compose.ui.geometry.Offset(x2, y2), strokeWidth = 3.dp.toPx())
+                    }
                 }
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (DashboardWidget) -> Unit) {
     var value by remember(initial.id) { mutableStateOf(initial) }
     var title by remember(initial.id) { mutableStateOf(initial.title.orEmpty()) }
+    val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     AlertDialog(
         onDismissRequest = dismiss,
-        title = { Text(appText("Dashboard card", "Karta dashboardu")) },
+        shape = CutCornerShape(18.dp),
+        containerColor = Color(0xFF10191F),
+        titleContentColor = Color.White,
+        textContentColor = Color.White,
+        title = {
+            Column {
+                Text(appText("Dashboard card", "Karta dashboardu"), fontWeight = FontWeight.Black)
+                Text(appText("Choose how this parameter is presented", "Wybierz sposób prezentacji parametru"), color = TougeMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            }
+        },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.heightIn(max = if (landscape) 205.dp else 540.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Text(appText("TYPE", "TYP"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp), maxItemsInEachRow = 2) {
                     listOf(DashboardWidgetKind.VALUE, DashboardWidgetKind.GAUGE, DashboardWidgetKind.CHART, DashboardWidgetKind.COMPACT).forEach { kind ->
-                        FilterChip(selected = value.kind == kind, onClick = { value = value.copy(kind = kind) }, label = { Text(kind.localizedName()) })
+                        FilterChip(
+                            selected = value.kind == kind,
+                            onClick = { value = value.copy(kind = kind, wideKind = null) },
+                            modifier = Modifier.widthIn(min = 104.dp),
+                            label = { Text(kind.localizedName(), maxLines = 1) }
+                        )
                     }
                 }
                 OutlinedTextField(title, { title = it }, label = { Text(appText("Custom title", "Własny tytuł")) }, singleLine = true)
@@ -247,7 +307,7 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                 }
             }
         },
-        confirmButton = { Button(onClick = { save(value.copy(title = title.ifBlank { null })) }) { Text(appText("Save", "Zapisz")) } },
+        confirmButton = { Button(onClick = { save(value.copy(title = title.ifBlank { null })) }, shape = CutCornerShape(8.dp)) { Text(appText("Save", "Zapisz"), fontWeight = FontWeight.Black) } },
         dismissButton = { TextButton(onClick = dismiss) { Text(appText("Cancel", "Anuluj")) } }
     )
 }

@@ -20,7 +20,6 @@
     <string name="made_by">Made with</string>
     <string name="by_lets_code_it">by Let’s Code It — Karol Sójka</string>
     <string name="edit_dashboard">Edit dashboard</string>
-    <string name="demo_data">Preview data</string>
     <string name="connected">Connected</string>
     <string name="disconnected">Disconnected</string>
 </resources>

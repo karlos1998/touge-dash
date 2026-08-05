@@ -7,10 +7,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -20,10 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -31,21 +29,16 @@ import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -62,8 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
@@ -79,7 +72,6 @@ import it.letscode.tougedash.di.AppContainer
 import it.letscode.tougedash.data.local.VehicleEntity
 import it.letscode.tougedash.model.ConnectionState
 import it.letscode.tougedash.model.DashboardAccent
-import it.letscode.tougedash.model.DashboardTemplate
 import it.letscode.tougedash.model.DashboardWidget
 import it.letscode.tougedash.model.DashboardWidgetKind
 import it.letscode.tougedash.model.TelemetryConnection
@@ -90,8 +82,6 @@ import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
 import it.letscode.tougedash.ui.theme.TougeMuted
 import it.letscode.tougedash.ui.theme.TougeOrange
-import it.letscode.tougedash.ui.theme.TougePanel
-import it.letscode.tougedash.ui.theme.TougePanelLight
 import it.letscode.tougedash.ui.theme.TougeRed
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -110,7 +100,6 @@ fun TougeDashApp(
 ) {
     var tab by remember { mutableIntStateOf(0) }
     var showConnection by remember { mutableStateOf(false) }
-    var preview by remember { mutableStateOf(false) }
     var selectedSessionId by remember { mutableStateOf<String?>(null) }
     var showCamera by remember { mutableStateOf(false) }
     var vehicleToName by remember { mutableStateOf<VehicleEntity?>(null) }
@@ -122,30 +111,49 @@ fun TougeDashApp(
         val vehicle = vehicles.firstOrNull { it.localHardwareId == hardwareId } ?: return@LaunchedEffect
         if (!namePrompts.getBoolean(hardwareId, false)) vehicleToName = vehicle
     }
-    val visibleSnapshot = if (preview && BuildConfig.DEBUG) TelemetrySnapshot.Preview else snapshot
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     Scaffold(
+        containerColor = Color.Transparent,
+        contentColor = Color(0xFFF2FAFC),
         bottomBar = {
-            NavigationBar(containerColor = TougePanel) {
+            NavigationBar(
+                containerColor = Color(0xF20A1218),
+                tonalElevation = 0.dp,
+                modifier = Modifier.height(if (landscape) 54.dp else 80.dp).border(width = 1.dp, color = Color.White.copy(alpha = .06f))
+            ) {
                 listOf(
                     Triple(R.string.dashboard, Icons.Default.DirectionsCar, 0),
                     Triple(R.string.history, Icons.Default.History, 1),
                     Triple(R.string.alerts, Icons.Default.Notifications, 2),
                     Triple(R.string.more, Icons.Default.MoreHoriz, 3)
                 ).forEach { item ->
-                    NavigationBarItem(selected = tab == item.third, onClick = { tab = item.third }, icon = { Icon(item.second, null) }, label = { Text(stringResource(item.first)) })
+                    NavigationBarItem(
+                        selected = tab == item.third,
+                        onClick = { tab = item.third },
+                        icon = { Icon(item.second, null, modifier = Modifier.size(if (landscape) 19.dp else 24.dp)) },
+                        label = { Text(stringResource(item.first), fontSize = if (landscape) 9.sp else 12.sp, fontWeight = if (tab == item.third) FontWeight.Black else FontWeight.SemiBold) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = TougeCyan,
+                            selectedTextColor = Color.White,
+                            indicatorColor = TougeCyan.copy(alpha = .12f),
+                            unselectedIconColor = TougeMuted,
+                            unselectedTextColor = TougeMuted
+                        )
+                    )
                 }
             }
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
-            if (landscape) CompactAppHeader(connection, { showConnection = true }, { showCamera = true })
-            else AppHeader(connection, { showConnection = true }, { showCamera = true })
-            when (tab) {
-                0 -> ConfigurableDashboardScreen(container, visibleSnapshot, connection, preview, { preview = it })
-                1 -> HistoryScreen(container, selectedSessionId, { selectedSessionId = it }, { selectedSessionId = null })
-                2 -> AlertsScreen(container, connection.hardwareId ?: "local-default")
-                else -> MoreScreen(container)
+        DashboardBackdrop(Modifier.padding(padding)) {
+            Column(Modifier.fillMaxSize()) {
+                if (landscape) CompactAppHeader(connection, { showConnection = true }, { showCamera = true })
+                else AppHeader(connection, { showConnection = true }, { showCamera = true })
+                when (tab) {
+                    0 -> ConfigurableDashboardScreen(container, snapshot)
+                    1 -> HistoryScreen(container, selectedSessionId, { selectedSessionId = it }, { selectedSessionId = null })
+                    2 -> AlertsScreen(container, connection.hardwareId ?: "local-default")
+                    else -> MoreScreen(container)
+                }
             }
         }
     }
@@ -161,60 +169,53 @@ fun TougeDashApp(
 
 @Composable
 private fun AppHeader(connection: TelemetryConnection, onConnection: () -> Unit, camera: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(38.dp).background(TougeCyan.copy(alpha = .12f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-            Text("⌁", color = TougeCyan, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(44.dp).background(TougeCyan.copy(alpha = .12f), CutCornerShape(9.dp)).border(1.dp, TougeCyan.copy(alpha = .10f), CutCornerShape(9.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            DashboardLogoMark(Modifier.size(27.dp))
         }
-        Column(Modifier.padding(start = 10.dp).weight(1f)) {
-            Text("TOUGE DASH", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-            Text(appText("EMU BLACK / DRIVER DISPLAY", "EMU BLACK / WYŚWIETLACZ KIEROWCY"), color = TougeMuted, fontSize = 9.sp, letterSpacing = 1.sp)
+        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+            Text("TOUGE DASH", fontSize = 18.sp, fontWeight = FontWeight.Black, letterSpacing = 2.1.sp)
+            Text("EMU BLACK  /  DRIVER DISPLAY", color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp, maxLines = 1)
         }
-        IconButton(onClick = camera, modifier = Modifier.size(38.dp)) { Icon(Icons.Default.Videocam, null, tint = TougeMuted) }
-        Row(Modifier.clickable(onClick = onConnection).border(1.dp, if (connection.state == ConnectionState.Connected) TougeMint.copy(alpha = .5f) else TougeMuted.copy(alpha = .3f), RoundedCornerShape(18.dp)).padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeOrange, RoundedCornerShape(4.dp)))
+        IconButton(
+            onClick = camera,
+            modifier = Modifier.size(38.dp).background(Color.White.copy(alpha = .045f), CutCornerShape(8.dp))
+        ) { Icon(Icons.Default.Videocam, null, tint = TougeMuted, modifier = Modifier.size(20.dp)) }
+        Row(Modifier.padding(start = 8.dp).clickable(onClick = onConnection).background(Color.White.copy(alpha = .05f), RoundedCornerShape(22.dp)).border(1.dp, if (connection.state == ConnectionState.Connected) TougeMint.copy(alpha = .32f) else Color.White.copy(alpha = .09f), RoundedCornerShape(22.dp)).padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
             Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 7.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
-    HorizontalDivider(color = TougeMuted.copy(alpha = .12f))
 }
 
 @Composable
 private fun CompactAppHeader(connection: TelemetryConnection, onConnection: () -> Unit, camera: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("TOUGE DASH", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-        Text("  /  EMU BLACK", color = TougeMuted, fontSize = 9.sp)
+    Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(28.dp).background(TougeCyan.copy(alpha = .12f), CutCornerShape(7.dp)), contentAlignment = Alignment.Center) { DashboardLogoMark(Modifier.size(18.dp)) }
+        Text("TOUGE DASH", Modifier.padding(start = 10.dp), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+        Text("  /  EMU BLACK", color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
-        IconButton(onClick = camera) { Icon(Icons.Default.Videocam, null, tint = TougeMuted) }
-        Row(Modifier.clickable(onClick = onConnection).border(1.dp, TougeMuted.copy(alpha = .3f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeOrange, CircleShape))
+        IconButton(onClick = camera, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.Videocam, null, tint = TougeMuted, modifier = Modifier.size(17.dp)) }
+        Row(Modifier.clickable(onClick = onConnection).background(Color.White.copy(alpha = .05f), RoundedCornerShape(18.dp)).border(1.dp, Color.White.copy(alpha = .09f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
             Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 6.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun DashboardScreen(snapshot: TelemetrySnapshot, connection: TelemetryConnection, preview: Boolean, setPreview: (Boolean) -> Unit) {
-    val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
-    val template = remember { DashboardTemplate.factory() }
-    val widgets = template.definition.widgets.filter { (if (landscape) it.landscapeSpan else it.portraitSpan) > 0 }
-        .sortedBy { if (landscape) it.landscapeOrder else it.portraitOrder }
-    Column(Modifier.fillMaxSize()) {
-        if (BuildConfig.DEBUG && connection.state != ConnectionState.Connected) {
-            TextButton(onClick = { setPreview(!preview) }, modifier = Modifier.align(Alignment.End)) {
-                Text(if (preview) appText("Hide preview", "Ukryj podgląd") else stringResource(R.string.demo_data))
-            }
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(12),
-            contentPadding = PaddingValues(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.weight(1f)
-        ) {
-            items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) {
-                DashboardCard(it, snapshot, landscape)
-            }
-        }
+private fun DashboardLogoMark(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val points = listOf(
+            Offset(0f, size.height * .55f), Offset(size.width * .22f, size.height * .55f),
+            Offset(size.width * .32f, size.height * .18f), Offset(size.width * .46f, size.height * .86f),
+            Offset(size.width * .60f, size.height * .35f), Offset(size.width * .72f, size.height * .55f),
+            Offset(size.width, size.height * .55f)
+        )
+        points.zipWithNext().forEach { (start, end) -> drawLine(TougeCyan, start, end, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round) }
     }
 }
 
@@ -222,46 +223,67 @@ private fun DashboardScreen(snapshot: TelemetrySnapshot, connection: TelemetryCo
 internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, landscape: Boolean) {
     val accent = widget.accent.color()
     val kind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
+    val compactLandscape = landscape && LocalConfiguration.current.screenHeightDp < 600
     val height = if (landscape) {
         when (kind) {
-            DashboardWidgetKind.GROUP -> 126.dp
-            DashboardWidgetKind.COMPACT -> 88.dp
-            else -> 105.dp
+            DashboardWidgetKind.HERO -> if (compactLandscape) 138.dp else 210.dp
+            DashboardWidgetKind.GROUP -> if (compactLandscape) 100.dp else 178.dp
+            DashboardWidgetKind.COMPACT -> if (compactLandscape) 50.dp else 70.dp
+            DashboardWidgetKind.GAUGE -> if (compactLandscape) 82.dp else 180.dp
+            else -> if (compactLandscape) 82.dp else 145.dp
         }
-    } else if (kind == DashboardWidgetKind.HERO) 265.dp else if (kind == DashboardWidgetKind.COMPACT) 92.dp else 164.dp
-    Card(colors = CardDefaults.cardColors(containerColor = TougePanel), shape = RoundedCornerShape(3.dp), modifier = Modifier.fillMaxWidth().height(height)) {
-        Box(Modifier.fillMaxSize().border(1.dp, accent.copy(alpha = .16f), RoundedCornerShape(3.dp)).padding(14.dp)) {
+    } else {
+        when (kind) {
+            DashboardWidgetKind.HERO -> 250.dp
+            DashboardWidgetKind.GROUP -> 190.dp
+            DashboardWidgetKind.COMPACT -> 70.dp
+            DashboardWidgetKind.GAUGE -> 210.dp
+            DashboardWidgetKind.CHART -> 220.dp
+            else -> 145.dp
+        }
+    }
+    val warning = widget.metrics.any { it.isWarning(snapshot) }
+    TougePanelSurface(accent = accent, warning = warning, modifier = Modifier.fillMaxWidth().height(height)) {
+        Box(Modifier.fillMaxSize().padding(if (compactLandscape) 13.dp else 17.dp)) {
             when (kind) {
-                DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, accent)
-                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, accent)
-                DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, accent)
-                else -> ValueWidget(widget.metrics.first(), snapshot, accent, widget.kind == DashboardWidgetKind.COMPACT)
+                DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
+                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
+                DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
+                else -> ValueWidget(widget.metrics.first(), snapshot, if (warning) TougeRed else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape)
             }
         }
     }
 }
 
 @Composable
-private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color) {
+private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
     val metric = widget.metrics.first()
     val value = metric.value(snapshot)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(metric.localizedName(), color = TougeMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-            Text(stringResource(R.string.live_data).uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TelemetryGlyph(metric, TougeMuted, Modifier.size(if (compact) 14.dp else 16.dp))
+                Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.25.sp)
+            }
+            StatusTag(stringResource(R.string.live_data).uppercase(), accent, compact)
         }
         Column {
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(metric.format(value), fontSize = 58.sp, lineHeight = 58.sp, fontWeight = FontWeight.Black)
-                Text(metric.unit.uppercase(), Modifier.padding(start = 7.dp, bottom = 9.dp), color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(metric.format(value), fontSize = if (compact) 48.sp else 68.sp, lineHeight = if (compact) 48.sp else 68.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                Text(metric.unit.uppercase(), Modifier.padding(start = 7.dp, bottom = if (compact) 6.dp else 10.dp), color = accent, fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp)
             }
             val min = widget.gaugeMinimum ?: metric.defaultMin
             val max = widget.gaugeMaximum ?: metric.defaultMax
             val progress = ((value - min) / (max - min)).coerceIn(0.0, 1.0).toFloat()
-            Box(Modifier.fillMaxWidth().height(7.dp).background(TougePanelLight, RoundedCornerShape(4.dp))) {
-                Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(accent, RoundedCornerShape(4.dp)))
+            Box(Modifier.fillMaxWidth().height(if (compact) 7.dp else 9.dp).background(Color.White.copy(alpha = .075f), RoundedCornerShape(5.dp))) {
+                Box(Modifier.fillMaxWidth(progress.coerceAtLeast(.018f)).fillMaxHeight().background(Brush.horizontalGradient(listOf(TougeBlue.copy(alpha = .75f), accent)), RoundedCornerShape(5.dp)))
             }
-            Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                ScaleText(metric.format(min))
+                ScaleText(metric.format((min + max) / 2))
+                ScaleText("${metric.format(max)} ${metric.unit.uppercase()}")
+            }
+            Row(Modifier.fillMaxWidth().padding(top = if (compact) 5.dp else 9.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 widget.metrics.drop(1).take(3).forEach { InlineMetric(it, snapshot, accent) }
             }
         }
@@ -270,22 +292,38 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
 
 @Composable
 private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color) {
-    Column {
-        Text(metric.localizedName(), color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-        Text("${metric.format(metric.value(snapshot))} ${metric.unit}", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    Column(Modifier.fillMaxWidth(.3f)) {
+        Text(metric.localizedName(), color = TougeMuted.copy(alpha = .8f), fontSize = 7.sp, fontWeight = FontWeight.Black, letterSpacing = .7.sp)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(metric.format(metric.value(snapshot)), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(metric.unit, Modifier.padding(start = 3.dp, bottom = 1.dp), color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
 @Composable
-private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color) {
+private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
+    val warning = widget.metrics.any { it.isWarning(snapshot) }
     Column(Modifier.fillMaxSize()) {
-        Text((widget.title?.takeUnless { it.equals("Engine health", ignoreCase = true) } ?: stringResource(R.string.engine_health)).uppercase(), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        Row(Modifier.fillMaxSize().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            widget.metrics.forEach { metric ->
-                Column(Modifier.weight(1f)) {
-                    Text(metric.localizedName(), color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                    Text(metric.format(metric.value(snapshot)), fontSize = 29.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                    Text(metric.unit, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Build, null, tint = TougeMuted, modifier = Modifier.size(if (compact) 14.dp else 16.dp))
+                Text((widget.title?.takeUnless { it.equals("Engine health", ignoreCase = true) } ?: stringResource(R.string.engine_health)).uppercase(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.35.sp)
+            }
+            StatusTag(if (warning) appText("CHECK", "SPRAWDŹ") else appText("NOMINAL", "NOMINALNIE"), if (warning) TougeRed else accent, compact)
+        }
+        Row(Modifier.fillMaxWidth().weight(1f).padding(top = if (compact) 2.dp else 18.dp), verticalAlignment = Alignment.Bottom) {
+            widget.metrics.take(3).forEachIndexed { index, metric ->
+                if (index > 0) Box(Modifier.fillMaxHeight(.78f).width(1.dp).background(Color.White.copy(alpha = .08f)))
+                Column(Modifier.weight(1f).padding(horizontal = if (compact) 8.dp else 12.dp), verticalArrangement = Arrangement.Bottom) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TelemetryGlyph(metric, metricAccent(metric, accent), Modifier.size(if (compact) 10.dp else 15.dp))
+                        Text(metric.localizedName(), Modifier.padding(start = 5.dp), color = TougeMuted, fontSize = if (compact) 6.sp else 8.sp, fontWeight = FontWeight.Black, letterSpacing = .55.sp, maxLines = 1)
+                    }
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 21.sp else 37.sp, lineHeight = if (compact) 22.sp else 39.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                        Text(metric.unit, Modifier.padding(start = 4.dp, bottom = if (compact) 2.dp else 5.dp), color = metricAccent(metric, accent), fontSize = if (compact) 7.sp else 10.sp, fontWeight = FontWeight.Black)
+                    }
                 }
             }
         }
@@ -293,33 +331,87 @@ private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
 }
 
 @Composable
-private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
+private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, compactLandscape: Boolean) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-        Text(metric.localizedName(), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 24.sp else 35.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Clip)
-            Text(metric.unit, Modifier.padding(start = 4.dp, bottom = 4.dp), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(metric.localizedName(), color = TougeMuted, fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, maxLines = 1)
+            TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else 22.dp))
+        }
+        if (compact) {
+            Text("${metric.format(metric.value(snapshot))}${if (metric.unit == "%") "%" else " ${metric.unit}"}", color = accent, fontSize = if (compactLandscape) 21.sp else 23.sp, lineHeight = 23.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        } else {
+            Column {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(metric.format(metric.value(snapshot)), fontSize = if (compactLandscape) 34.sp else 43.sp, lineHeight = if (compactLandscape) 35.sp else 44.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Clip)
+                    if (metric != TelemetryMetric.AFR && metric != TelemetryMetric.BATTERY_VOLTAGE) {
+                        Text(metric.unit, Modifier.padding(start = 5.dp, bottom = 5.dp), color = accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
+                }
+                Text(valueSubtitle(metric, snapshot), color = TougeMuted, fontSize = if (compactLandscape) 9.sp else 12.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
 
 @Composable
-private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color) {
+private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
     val metric = widget.metrics.first()
     val min = widget.gaugeMinimum ?: metric.defaultMin
     val max = widget.gaugeMaximum ?: metric.defaultMax
     val progress = ((metric.value(snapshot) - min) / (max - min)).coerceIn(0.0, 1.0).toFloat()
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxHeight(.75f).aspectRatio(1f)) {
-            drawArc(TougePanelLight, 150f, 240f, false, style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
-            drawArc(accent, 150f, 240f * progress, false, style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
+    Box(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), color = TougeMuted, fontSize = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+            TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else 20.dp))
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(metric.localizedName(), color = TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            Text(metric.format(metric.value(snapshot)), fontSize = 28.sp, fontWeight = FontWeight.Black)
-            Text(metric.unit, color = accent, fontSize = 9.sp)
+        Box(Modifier.fillMaxSize().padding(top = if (compact) 7.dp else 14.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxHeight(.88f).aspectRatio(1f)) {
+                drawArc(Color.White.copy(alpha = .07f), 150f, 240f, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
+                drawArc(Brush.sweepGradient(listOf(TougeBlue, accent)), 150f, 240f * progress, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 24.sp else 38.sp, lineHeight = if (compact) 25.sp else 39.sp, fontWeight = FontWeight.Black)
+                Text(metric.unit, color = accent, fontSize = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Black)
+            }
         }
     }
+}
+
+@Composable
+private fun StatusTag(title: String, tint: Color, compact: Boolean) {
+    Row(
+        Modifier.background(tint.copy(alpha = .09f), RoundedCornerShape(18.dp)).border(1.dp, tint.copy(alpha = .35f), RoundedCornerShape(18.dp)).padding(horizontal = if (compact) 7.dp else 10.dp, vertical = if (compact) 3.dp else 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(if (compact) 5.dp else 6.dp).background(tint, CircleShape))
+        Text(title, Modifier.padding(start = 6.dp), color = tint, fontSize = if (compact) 6.sp else 8.sp, fontWeight = FontWeight.Black, letterSpacing = .8.sp)
+    }
+}
+
+@Composable
+private fun ScaleText(value: String) {
+    Text(value, color = TougeMuted.copy(alpha = .58f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+}
+
+private fun TelemetryMetric.isWarning(snapshot: TelemetrySnapshot): Boolean = when (this) {
+    TelemetryMetric.COOLANT -> snapshot.coolantCelsius >= 110
+    TelemetryMetric.OIL_TEMPERATURE -> snapshot.oilTemperatureCelsius >= 120
+    TelemetryMetric.OIL_PRESSURE -> snapshot.rpm >= 3_000 && snapshot.oilPressureBar in .01..1.49
+    TelemetryMetric.BATTERY_VOLTAGE -> snapshot.rpm > 500 && snapshot.batteryVoltage in .01..11.49
+    else -> false
+}
+
+private fun metricAccent(metric: TelemetryMetric, fallback: Color): Color = when (metric) {
+    TelemetryMetric.OIL_TEMPERATURE -> TougeOrange
+    TelemetryMetric.COOLANT -> TougeBlue
+    else -> fallback
+}
+
+@Composable
+private fun valueSubtitle(metric: TelemetryMetric, snapshot: TelemetrySnapshot): String = when (metric) {
+    TelemetryMetric.AFR -> "λ ${TelemetryMetric.LAMBDA.format(snapshot.lambda)}"
+    TelemetryMetric.BATTERY_VOLTAGE -> metric.unit
+    else -> metric.unit
 }
 
 @Composable
@@ -341,10 +433,10 @@ private fun MoreScreen(container: AppContainer) {
         routeEnabled = granted
         container.locationTracker.setEnabled(granted)
     }
-    Column(Modifier.fillMaxSize().padding(20.dp)) {
-        Column(Modifier.weight(1f)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+        Column(Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.more), fontSize = 30.sp, fontWeight = FontWeight.Black)
-            Card(Modifier.fillMaxWidth().padding(top = 14.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
+            TougePanelSurface(TougeCyan, Modifier.fillMaxWidth().padding(top = 14.dp)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(appText("Record route", "Zapisuj trasę"), fontWeight = FontWeight.Bold)
@@ -359,9 +451,9 @@ private fun MoreScreen(container: AppContainer) {
             if (vehicles.isNotEmpty()) {
                 Text(appText("GARAGE", "GARAŻ"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
                 vehicles.forEach { vehicle ->
-                    Card(
-                        Modifier.fillMaxWidth().padding(top = 7.dp).clickable { rename = vehicle },
-                        colors = CardDefaults.cardColors(containerColor = TougePanel)
+                    TougePanelSurface(
+                        TougeMint,
+                        Modifier.fillMaxWidth().padding(top = 7.dp).clickable { rename = vehicle }
                     ) {
                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.DirectionsCar, null, tint = TougeMint)
@@ -439,8 +531,12 @@ internal fun DashboardAccent.color(): Color = when (this) {
     DashboardAccent.WHITE -> Color.White
 }
 
-internal fun TelemetryMetric.format(value: Double): String = when (precision) {
-    0 -> value.roundToInt().toString()
-    1 -> String.format(Locale.getDefault(), "%.1f", value)
-    else -> String.format(Locale.getDefault(), "%.2f", value)
+@Composable
+internal fun TelemetryMetric.format(value: Double): String {
+    val locale = if (androidx.compose.ui.text.intl.Locale.current.language == "pl") Locale.forLanguageTag("pl-PL") else Locale.US
+    return when (precision) {
+        0 -> value.roundToInt().toString()
+        1 -> String.format(locale, "%.1f", value)
+        else -> String.format(locale, "%.2f", value)
+    }
 }

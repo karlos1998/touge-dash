@@ -20,7 +20,6 @@
     <string name="made_by">Stworzono z</string>
     <string name="by_lets_code_it">przez Let’s Code It — Karol Sójka</string>
     <string name="edit_dashboard">Edytuj dashboard</string>
-    <string name="demo_data">Dane podglądowe</string>
     <string name="connected">Połączono</string>
     <string name="disconnected">Rozłączono</string>
 </resources>

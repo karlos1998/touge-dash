@@ -8,13 +8,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -39,7 +36,6 @@ import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
 import it.letscode.tougedash.ui.theme.TougeMuted
 import it.letscode.tougedash.ui.theme.TougeOrange
-import it.letscode.tougedash.ui.theme.TougePanel
 import kotlinx.coroutines.launch
 
 @Composable
@@ -55,7 +51,7 @@ fun AlertsScreen(container: AppContainer, hardwareId: String) {
             Text(appText("Limits are assigned to this vehicle and work offline while a drive is being recorded.", "Progi są przypisane do tego auta i działają offline podczas zapisu przejazdu."), color = TougeMuted)
         }
         item {
-            Row(Modifier.fillMaxWidth().background(TougeMint.copy(alpha = .08f), RoundedCornerShape(5.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().background(TougeMint.copy(alpha = .08f), CutCornerShape(9.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Security, null, tint = TougeMint)
                 Column(Modifier.padding(start = 12.dp)) { Text(appText("READ-ONLY DATA ANALYSIS", "WYŁĄCZNIE ANALIZA DANYCH"), color = TougeMint, fontWeight = FontWeight.Bold, fontSize = 11.sp); Text(appText("Changing these limits never writes anything to the ECU or EMULOGGER.", "Zmiana progów nigdy nie zapisuje niczego do ECU ani EMULOGGERA."), color = TougeMuted, fontSize = 12.sp) }
             }
@@ -97,7 +93,7 @@ private data class RuleField(val label: String, val value: Double, val unit: Str
 
 @Composable
 private fun AlertRuleCard(title: String, subtitle: String, enabled: Boolean, toggle: (Boolean) -> Unit, accent: Color, fields: List<RuleField>) {
-    Card(colors = CardDefaults.cardColors(containerColor = TougePanel), shape = RoundedCornerShape(4.dp)) {
+    TougePanelSurface(accent, Modifier.fillMaxWidth()) {
         Column(Modifier.padding(15.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Black, fontSize = 19.sp); Text(subtitle, color = TougeMuted, fontSize = 12.sp) }

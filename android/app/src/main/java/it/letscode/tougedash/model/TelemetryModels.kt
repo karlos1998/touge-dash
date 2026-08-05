@@ -25,15 +25,6 @@ data class TelemetrySnapshot(
     val isFresh: Boolean get() = System.currentTimeMillis() - updatedAt < 2_500
     val hasCheckEngine: Boolean get() = checkEngineMask != 0
 
-    companion object {
-        val Preview = TelemetrySnapshot(
-            rpm = 6_420.0, boostBar = 1.18, mapKpa = 219.0, throttlePercent = 84.0,
-            coolantCelsius = 91.0, intakeCelsius = 34.0, oilTemperatureCelsius = 104.0,
-            oilPressureBar = 4.2, fuelPressureBar = 3.4, afr = 12.4, lambda = 0.84,
-            batteryVoltage = 13.8, ignitionDegrees = 18.5, injectorDutyPercent = 67.0,
-            speedKph = 128.0
-        )
-    }
 }
 
 @Serializable
