@@ -167,12 +167,12 @@ private fun AppHeader(connection: TelemetryConnection, onConnection: () -> Unit,
         }
         Column(Modifier.padding(start = 10.dp).weight(1f)) {
             Text("TOUGE DASH", fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-            Text("EMU BLACK / DRIVER DISPLAY", color = TougeMuted, fontSize = 9.sp, letterSpacing = 1.sp)
+            Text(appText("EMU BLACK / DRIVER DISPLAY", "EMU BLACK / WYŚWIETLACZ KIEROWCY"), color = TougeMuted, fontSize = 9.sp, letterSpacing = 1.sp)
         }
         IconButton(onClick = camera, modifier = Modifier.size(38.dp)) { Icon(Icons.Default.Videocam, null, tint = TougeMuted) }
         Row(Modifier.clickable(onClick = onConnection).border(1.dp, if (connection.state == ConnectionState.Connected) TougeMint.copy(alpha = .5f) else TougeMuted.copy(alpha = .3f), RoundedCornerShape(18.dp)).padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeOrange, RoundedCornerShape(4.dp)))
-            Text(connection.deviceName ?: connection.state.name.uppercase(), Modifier.padding(start = 7.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 7.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
     HorizontalDivider(color = TougeMuted.copy(alpha = .12f))
@@ -187,7 +187,7 @@ private fun CompactAppHeader(connection: TelemetryConnection, onConnection: () -
         IconButton(onClick = camera) { Icon(Icons.Default.Videocam, null, tint = TougeMuted) }
         Row(Modifier.clickable(onClick = onConnection).border(1.dp, TougeMuted.copy(alpha = .3f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeOrange, CircleShape))
-            Text(connection.deviceName ?: connection.state.name.uppercase(), Modifier.padding(start = 6.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 6.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -201,7 +201,7 @@ private fun DashboardScreen(snapshot: TelemetrySnapshot, connection: TelemetryCo
     Column(Modifier.fillMaxSize()) {
         if (BuildConfig.DEBUG && connection.state != ConnectionState.Connected) {
             TextButton(onClick = { setPreview(!preview) }, modifier = Modifier.align(Alignment.End)) {
-                Text(if (preview) "Hide preview" else stringResource(R.string.demo_data))
+                Text(if (preview) appText("Hide preview", "Ukryj podgląd") else stringResource(R.string.demo_data))
             }
         }
         LazyVerticalGrid(
@@ -247,7 +247,7 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
     val value = metric.value(snapshot)
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(metric.shortName, color = TougeMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            Text(metric.localizedName(), color = TougeMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
             Text(stringResource(R.string.live_data).uppercase(), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
         Column {
@@ -271,7 +271,7 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
 @Composable
 private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color) {
     Column {
-        Text(metric.shortName, color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        Text(metric.localizedName(), color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         Text("${metric.format(metric.value(snapshot))} ${metric.unit}", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
@@ -279,11 +279,11 @@ private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, a
 @Composable
 private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color) {
     Column(Modifier.fillMaxSize()) {
-        Text((widget.title ?: stringResource(R.string.engine_health)).uppercase(), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+        Text((widget.title?.takeUnless { it.equals("Engine health", ignoreCase = true) } ?: stringResource(R.string.engine_health)).uppercase(), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
         Row(Modifier.fillMaxSize().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             widget.metrics.forEach { metric ->
                 Column(Modifier.weight(1f)) {
-                    Text(metric.shortName, color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    Text(metric.localizedName(), color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                     Text(metric.format(metric.value(snapshot)), fontSize = 29.sp, fontWeight = FontWeight.Black, maxLines = 1)
                     Text(metric.unit, color = accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
@@ -295,7 +295,7 @@ private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
 @Composable
 private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-        Text(metric.shortName, color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text(metric.localizedName(), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
         Row(verticalAlignment = Alignment.Bottom) {
             Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 24.sp else 35.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Clip)
             Text(metric.unit, Modifier.padding(start = 4.dp, bottom = 4.dp), color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
@@ -315,7 +315,7 @@ private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
             drawArc(accent, 150f, 240f * progress, false, style = Stroke(12.dp.toPx(), cap = StrokeCap.Round))
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(metric.shortName, color = TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(metric.localizedName(), color = TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             Text(metric.format(metric.value(snapshot)), fontSize = 28.sp, fontWeight = FontWeight.Black)
             Text(metric.unit, color = accent, fontSize = 9.sp)
         }
@@ -413,10 +413,10 @@ private fun ConnectionDialog(connection: TelemetryConnection, close: () -> Unit,
         title = { Text(stringResource(R.string.connection_details)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(connection.deviceName ?: connection.state.name, fontWeight = FontWeight.Bold)
+                Text(connection.deviceName ?: connection.state.localizedLabel(), fontWeight = FontWeight.Bold)
                 connection.hardwareId?.let { Text(it, color = TougeMuted, fontSize = 12.sp) }
                 connection.message?.let { Text(it) }
-                Text("Frames ${connection.validFrames} • checksum ${connection.badChecksums} • dropped ${connection.droppedBytes}", color = TougeMuted, fontSize = 12.sp)
+                Text("${appText("Frames", "Ramki")} ${connection.validFrames} • ${appText("checksum", "błędne sumy")} ${connection.badChecksums} • ${appText("dropped", "pominięte bajty")} ${connection.droppedBytes}", color = TougeMuted, fontSize = 12.sp)
                 if (connection.state == ConnectionState.PermissionRequired) Text(stringResource(R.string.permissions_explanation))
             }
         },

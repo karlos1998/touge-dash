@@ -106,9 +106,9 @@ fun ConfigurableDashboardScreen(
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().background(if (editing) TougeCyan.copy(alpha = .12f) else Color.Transparent).padding(horizontal = 12.dp, vertical = if (landscape) 0.dp else 5.dp), verticalAlignment = Alignment.CenterVertically) {
             Box {
-                TextButton(onClick = { templateMenu = true }) { Text(template.name, fontWeight = FontWeight.Bold) }
+                TextButton(onClick = { templateMenu = true }) { Text(template.localizedName(), fontWeight = FontWeight.Bold) }
                 DropdownMenu(expanded = templateMenu, onDismissRequest = { templateMenu = false }) {
-                    templates.forEach { item -> DropdownMenuItem(text = { Text(item.name) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.select(item.id) } }) }
+                    templates.forEach { item -> DropdownMenuItem(text = { Text(item.localizedName()) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.select(item.id) } }) }
                     DropdownMenuItem(text = { Text(appText("New dashboard", "Nowy dashboard")) }, leadingIcon = { Icon(Icons.Default.Add, null) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.create() } })
                     DropdownMenuItem(text = { Text(appText("Duplicate", "Duplikuj")) }, leadingIcon = { Icon(Icons.Default.ContentCopy, null) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.duplicate(template) } })
                 }
@@ -193,7 +193,7 @@ private fun ChartCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, poin
     val values = points.filter { now - it.recordedAt <= duration * 1_000L }.map { metric.value(it.snapshot).toFloat() }
     Column(Modifier.fillMaxWidth().background(TougePanel, RoundedCornerShape(3.dp)).padding(14.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(metric.shortName, color = accent, fontWeight = FontWeight.Bold)
+            Text(metric.localizedName(), color = accent, fontWeight = FontWeight.Bold)
             Text("${metric.format(metric.value(snapshot))} ${metric.unit}  •  ${duration}s", fontWeight = FontWeight.Black)
         }
         Canvas(Modifier.fillMaxWidth().size(110.dp)) {
@@ -224,7 +224,7 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                 Text(appText("TYPE", "TYP"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(DashboardWidgetKind.VALUE, DashboardWidgetKind.GAUGE, DashboardWidgetKind.CHART, DashboardWidgetKind.COMPACT).forEach { kind ->
-                        FilterChip(selected = value.kind == kind, onClick = { value = value.copy(kind = kind) }, label = { Text(kind.name.lowercase()) })
+                        FilterChip(selected = value.kind == kind, onClick = { value = value.copy(kind = kind) }, label = { Text(kind.localizedName()) })
                     }
                 }
                 OutlinedTextField(title, { title = it }, label = { Text(appText("Custom title", "Własny tytuł")) }, singleLine = true)
@@ -256,9 +256,9 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
 private fun MetricDropdown(selected: TelemetryMetric, changed: (TelemetryMetric) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        Button(onClick = { open = true }) { Text("${selected.shortName} — ${selected.unit}") }
+        Button(onClick = { open = true }) { Text("${selected.localizedName()} — ${selected.unit}") }
         DropdownMenu(open, { open = false }) {
-            TelemetryMetric.entries.forEach { metric -> DropdownMenuItem(text = { Text("${metric.shortName}  ${metric.unit}") }, onClick = { open = false; changed(metric) }) }
+            TelemetryMetric.entries.forEach { metric -> DropdownMenuItem(text = { Text("${metric.localizedName()}  ${metric.unit}") }, onClick = { open = false; changed(metric) }) }
         }
     }
 }

@@ -63,6 +63,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -120,14 +121,14 @@ private fun SessionRow(session: DriveSessionEntity, select: (String) -> Unit) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(session.startedAt)), fontWeight = FontWeight.Bold)
-                    Text("${duration(session.endedAt - session.startedAt)}  •  ${session.sampleCount} samples", color = TougeMuted, fontSize = 12.sp)
+                    Text("${duration(session.endedAt - session.startedAt)}  •  ${session.sampleCount} ${appText("samples", "próbek")}", color = TougeMuted, fontSize = 12.sp)
                 }
                 SyncBadge(session)
             }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                MiniValue("BOOST MAX", "${"%.2f".format(session.maxBoostBar)} bar", TougeCyan)
-                MiniValue("OIL MAX", "${session.maxOilTemperatureCelsius.roundToInt()}°C", TougeOrange)
-                MiniValue("COOLANT MAX", "${session.maxCoolantCelsius.roundToInt()}°C", TougeMint)
+                MiniValue(appText("MAX BOOST", "MAX DOŁADOWANIE"), "${"%.2f".format(session.maxBoostBar)} bar", TougeCyan)
+                MiniValue(appText("MAX OIL", "MAX OLEJ"), "${session.maxOilTemperatureCelsius.roundToInt()}°C", TougeOrange)
+                MiniValue(appText("MAX COOLANT", "MAX PŁYN"), "${session.maxCoolantCelsius.roundToInt()}°C", TougeMint)
             }
             if (session.syncState == SyncState.UPLOADING || session.syncProgress > 0f && session.syncProgress < 1f) {
                 LinearProgressIndicator(progress = { session.syncProgress }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
@@ -141,10 +142,10 @@ private fun SessionRow(session: DriveSessionEntity, select: (String) -> Unit) {
 @Composable
 private fun SyncBadge(session: DriveSessionEntity) {
     val (icon, color, text) = when (session.syncState) {
-        SyncState.SYNCED -> Triple(Icons.Default.CloudDone, TougeMint, "SYNCED")
-        SyncState.FAILED -> Triple(Icons.Default.Error, TougeRed, "ERROR")
-        SyncState.UPLOADING -> Triple(Icons.Default.CloudDone, TougeCyan, "SYNCING")
-        else -> Triple(Icons.Default.CloudOff, TougeOrange, "LOCAL")
+        SyncState.SYNCED -> Triple(Icons.Default.CloudDone, TougeMint, appText("SYNCED", "ZSYNCHRONIZOWANO"))
+        SyncState.FAILED -> Triple(Icons.Default.Error, TougeRed, appText("ERROR", "BŁĄD"))
+        SyncState.UPLOADING -> Triple(Icons.Default.CloudDone, TougeCyan, appText("SYNCING", "SYNCHRONIZACJA"))
+        else -> Triple(Icons.Default.CloudOff, TougeOrange, appText("LOCAL", "LOKALNIE"))
     }
     Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, Modifier.size(16.dp), tint = color); Text(text, color = color, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 4.dp)) }
 }
@@ -187,9 +188,9 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
                 Slider(scrubber, { scrubber = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
                 Text(appText("Move the time cursor; the page remains vertically scrollable", "Przesuwaj kursor czasu; stronę nadal możesz przewijać pionowo"), color = TougeMuted, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 18.dp))
             }
-            item { TelemetryChart("Boost / oil pressure", samples, selected, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint)) }
-            item { TelemetryChart("Temperatures", samples, selected, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
-            item { TelemetryChart("RPM / speed", samples, selected, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
+            item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), samples, selected, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint)) }
+            item { TelemetryChart(appText("Temperatures", "Temperatury"), samples, selected, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
+            item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), samples, selected, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
             if (annotations.isNotEmpty()) item { AnnotationSection(annotations, session!!.startedAt) }
             item { DriveVideoSection(container, session!!, samples, scrubber) }
             if (samples.any { it.latitude != null && it.longitude != null }) item { RouteMap(samples) }
@@ -210,9 +211,9 @@ private fun SessionSummary(session: DriveSessionEntity) {
     Card(Modifier.fillMaxWidth().padding(14.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                MiniValue("DURATION", duration(session.endedAt - session.startedAt), TougeCyan)
-                MiniValue("SAMPLES", session.sampleCount.toString(), TougeMint)
-                MiniValue("DISTANCE", "%.1f km".format(session.distanceMeters / 1000), TougeOrange)
+                MiniValue(appText("DURATION", "CZAS"), duration(session.endedAt - session.startedAt), TougeCyan)
+                MiniValue(appText("SAMPLES", "PRÓBKI"), session.sampleCount.toString(), TougeMint)
+                MiniValue(appText("DISTANCE", "DYSTANS"), "%.1f km".format(session.distanceMeters / 1000), TougeOrange)
             }
             Spacer(Modifier.height(12.dp)); SyncBadge(session)
             if (session.syncProgress > 0 && session.syncProgress < 1) LinearProgressIndicator(progress = { session.syncProgress }, modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
@@ -224,21 +225,22 @@ private fun SessionSummary(session: DriveSessionEntity) {
 private fun TelemetryCursor(sample: TelemetrySampleEntity?, startedAt: Long) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         listOf(
-            Triple("TIME", sample?.let { duration(it.recordedAt - startedAt) } ?: "—", TougeCyan),
-            Triple("BOOST", sample?.let { "%.2f bar".format(it.boostBar) } ?: "—", TougeCyan),
-            Triple("OIL", sample?.let { "${it.oilTemperatureCelsius.roundToInt()}°C" } ?: "—", TougeOrange),
-            Triple("SPEED", sample?.let { "${it.speedKph.roundToInt()} km/h" } ?: "—", TougeMint)
+            Triple(appText("TIME", "CZAS"), sample?.let { duration(it.recordedAt - startedAt) } ?: "—", TougeCyan),
+            Triple(appText("BOOST", "DOŁADOWANIE"), sample?.let { "%.2f bar".format(it.boostBar) } ?: "—", TougeCyan),
+            Triple(appText("OIL", "OLEJ"), sample?.let { "${it.oilTemperatureCelsius.roundToInt()}°C" } ?: "—", TougeOrange),
+            Triple(appText("SPEED", "PRĘDKOŚĆ"), sample?.let { "${it.speedKph.roundToInt()} km/h" } ?: "—", TougeMint)
         ).forEach { MiniValue(it.first, it.second, it.third) }
     }
 }
 
 @Composable
 private fun TelemetryChart(title: String, samples: List<TelemetrySampleEntity>, selected: TelemetrySampleEntity?, series: List<Pair<TelemetryMetric, Color>>) {
+    val language = Locale.current.language
     Card(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
         Column(Modifier.padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Text(series.joinToString("  ") { it.first.shortName }, color = TougeMuted, fontSize = 9.sp)
+                Text(series.joinToString("  ") { it.first.localizedName(language) }, color = TougeMuted, fontSize = 9.sp)
             }
             Canvas(Modifier.fillMaxWidth().height(180.dp).padding(top = 12.dp)) {
                 if (samples.size < 2) return@Canvas
@@ -271,8 +273,8 @@ private fun IncidentSection(values: List<IncidentEntity>, startedAt: Long, selec
         values.forEach { incident ->
             Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).background(TougeRed.copy(alpha = .08f), RoundedCornerShape(4.dp)).clickable { select(incident) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Flag, null, tint = TougeRed)
-                Column(Modifier.padding(start = 10.dp).weight(1f)) { Text(incident.kind.replace('_', ' '), fontWeight = FontWeight.Bold); Text("${duration(incident.triggeredAt - startedAt)} • ${incident.triggerValue} ${incident.triggerUnit}", color = TougeMuted, fontSize = 11.sp) }
-                Text(incident.severity, color = TougeRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Column(Modifier.padding(start = 10.dp).weight(1f)) { Text(localizedIncidentKind(incident.kind), fontWeight = FontWeight.Bold); Text("${duration(incident.triggeredAt - startedAt)} • ${incident.triggerValue} ${incident.triggerUnit}", color = TougeMuted, fontSize = 11.sp) }
+                Text(if (incident.severity == "CRITICAL") appText("CRITICAL", "KRYTYCZNY") else appText("WARNING", "OSTRZEŻENIE"), color = TougeRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -297,7 +299,7 @@ private fun IncidentReportDialog(incident: IncidentEntity, container: AppContain
         title = {
             Column {
                 Text(appText("INCIDENT REPORT", "RAPORT INCYDENTU"), color = TougeRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Text(incident.kind.replace('_', ' '), fontWeight = FontWeight.Black)
+                Text(localizedIncidentKind(incident.kind), fontWeight = FontWeight.Black)
             }
         },
         text = {
@@ -442,3 +444,16 @@ private fun TelemetryMetric.from(value: TelemetrySampleEntity): Double = when (t
 
 private fun duration(ms: Long): String { val total = (ms.coerceAtLeast(0) / 1000); return "%d:%02d".format(total / 60, total % 60) }
 private fun bytes(value: Long): String = when { value >= 1_048_576 -> "%.1f MB".format(value / 1_048_576.0); value >= 1024 -> "%.0f kB".format(value / 1024.0); else -> "$value B" }
+
+@Composable
+private fun localizedIncidentKind(value: String): String = when (value) {
+    "LOW_OIL_PRESSURE" -> appText("Low oil pressure", "Niskie ciśnienie oleju")
+    "LEAN_UNDER_BOOST" -> appText("Lean mixture under boost", "Uboga mieszanka pod doładowaniem")
+    "OVERBOOST" -> appText("Overboost", "Przekroczone doładowanie")
+    "HIGH_COOLANT_TEMPERATURE" -> appText("High coolant temperature", "Wysoka temperatura płynu")
+    "HIGH_OIL_TEMPERATURE" -> appText("High oil temperature", "Wysoka temperatura oleju")
+    "LOW_FUEL_PRESSURE" -> appText("Low fuel pressure", "Niskie ciśnienie paliwa")
+    "LOW_BATTERY_VOLTAGE" -> appText("Low battery voltage", "Niskie napięcie akumulatora")
+    "CHECK_ENGINE" -> appText("Check engine", "Błąd silnika")
+    else -> value.replace('_', ' ')
+}

@@ -93,7 +93,7 @@ fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samp
         if (task.operation != null) {
             Card(Modifier.fillMaxWidth().padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
                 Column(Modifier.padding(12.dp)) {
-                    Text(task.operation!!, fontWeight = FontWeight.Bold)
+                    Text(localizedVideoOperation(task.operation!!), fontWeight = FontWeight.Bold)
                     LinearProgressIndicator(progress = { task.progress }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp))
                     Text("${(task.progress * 100).roundToInt()}%${if (task.totalBytes > 0) "  •  ${videoBytes(task.transferredBytes)} / ${videoBytes(task.totalBytes)}" else ""}", color = TougeMuted, fontSize = 10.sp)
                     task.error?.let { Text(it, color = TougeRed) }
@@ -101,8 +101,8 @@ fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samp
                 }
             }
         }
-        VideoGroup("RECORDED BY TOUGE DASH", videos.filter { it.sourceKind == "CAMERA" }, editing = { editing = it }, delete = container.videoRepository::delete)
-        VideoGroup("GALLERY EDITS", videos.filter { it.sourceKind == "GALLERY" }, editing = { editing = it }, delete = container.videoRepository::delete)
+        VideoGroup(appText("RECORDED BY TOUGE DASH", "NAGRANE PRZEZ TOUGE DASH"), videos.filter { it.sourceKind == "CAMERA" }, editing = { editing = it }, delete = container.videoRepository::delete)
+        VideoGroup(appText("GALLERY EDITS", "PROJEKTY Z GALERII"), videos.filter { it.sourceKind == "GALLERY" }, editing = { editing = it }, delete = container.videoRepository::delete)
         if (videos.isEmpty() && task.operation == null) Text(appText("Record a drive with the phone camera or attach footage from a dashcam. The source video stays local on this device.", "Nagraj przejazd kamerą telefonu albo dodaj film z wideorejestratora. Film źródłowy pozostaje lokalnie na tym urządzeniu."), color = TougeMuted, modifier = Modifier.padding(top = 12.dp))
     }
     editing?.let { project -> VideoAlignmentEditor(project, driveDuration, samples, container, { editing = null }, { changed -> container.videoRepository.update(changed); editing = changed }) }
@@ -117,7 +117,7 @@ private fun VideoGroup(title: String, videos: List<VideoProjectEntity>, editing:
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Movie, null, Modifier.size(34.dp), tint = TougeCyan)
                 Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                    Text(video.sourceDisplayName ?: if (video.sourceKind == "CAMERA") "Drive recording" else "Gallery video", fontWeight = FontWeight.Bold)
+                    Text(video.sourceDisplayName ?: if (video.sourceKind == "CAMERA") appText("Drive recording", "Nagranie przejazdu") else appText("Gallery video", "Film z galerii"), fontWeight = FontWeight.Bold)
                     Text("${videoDuration(video.durationSeconds)}  •  ${videoBytes(video.fileSizeBytes)}  •  ${video.pixelWidth}×${video.pixelHeight}", color = TougeMuted, fontSize = 11.sp)
                 }
                 IconButton(onClick = { delete(video) }) { Icon(Icons.Default.Delete, null, tint = TougeRed) }
@@ -192,12 +192,12 @@ private fun VideoAlignmentEditor(
                         Icon(if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White)
                     }
                 }
-                Text("VIDEO START  ${videoDuration(value.videoTrimStartSeconds)}", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
+                Text("${appText("VIDEO START", "POCZĄTEK FILMU")}  ${videoDuration(value.videoTrimStartSeconds)}", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
                 Slider(value.videoTrimStartSeconds.toFloat(), { new -> value = value.copy(videoTrimStartSeconds = new.toDouble()); player.seekTo((new * 1000).toLong()) }, valueRange = 0f..(value.durationSeconds - value.exportDurationSeconds).coerceAtLeast(.01).toFloat())
-                Text("TELEMETRY START  ${videoDuration(value.telemetryTrimStartSeconds)} of ${videoDuration(driveDuration)}", color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("${appText("TELEMETRY START", "POCZĄTEK TELEMETRII")}  ${videoDuration(value.telemetryTrimStartSeconds)} ${appText("of", "z")} ${videoDuration(driveDuration)}", color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Slider(value.telemetryTrimStartSeconds.toFloat(), { value = value.copy(telemetryTrimStartSeconds = it.toDouble()) }, valueRange = 0f..(driveDuration - value.exportDurationSeconds).coerceAtLeast(.01).toFloat())
                 val maxDuration = minOf(value.durationSeconds - value.videoTrimStartSeconds, driveDuration - value.telemetryTrimStartSeconds).coerceAtLeast(.1)
-                Text("EXPORT LENGTH  ${videoDuration(value.exportDurationSeconds)}", color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("${appText("EXPORT LENGTH", "DŁUGOŚĆ EKSPORTU")}  ${videoDuration(value.exportDurationSeconds)}", color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Slider(value.exportDurationSeconds.coerceAtMost(maxDuration).toFloat(), { value = value.copy(exportDurationSeconds = it.toDouble()) }, valueRange = .1f..maxDuration.coerceAtLeast(.11).toFloat())
                 Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -242,3 +242,10 @@ private fun HudPreview(sample: TelemetrySampleEntity, style: OverlayStyle, modif
 
 private fun videoDuration(seconds: Double): String { val value = seconds.coerceAtLeast(0.0).roundToInt(); return "%d:%02d".format(value / 60, value % 60) }
 private fun videoBytes(value: Long): String = when { value >= 1_073_741_824 -> "%.1f GB".format(value / 1_073_741_824.0); value >= 1_048_576 -> "%.1f MB".format(value / 1_048_576.0); else -> "%.0f kB".format(value / 1024.0) }
+
+@Composable
+private fun localizedVideoOperation(value: String): String = when (value) {
+    "Copying video from gallery" -> appText("Copying video from gallery", "Kopiowanie filmu z galerii")
+    "Rendering telemetry HUD" -> appText("Rendering telemetry HUD", "Renderowanie HUD-u z telemetrią")
+    else -> value
+}
