@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Delete
@@ -77,6 +78,7 @@ import it.letscode.tougedash.data.local.AccelerationAttemptEntity
 import it.letscode.tougedash.di.AppContainer
 import it.letscode.tougedash.history.CapturedTelemetryPoint
 import it.letscode.tougedash.model.TelemetryMetric
+import it.letscode.tougedash.model.ConnectionState
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
 import it.letscode.tougedash.ui.theme.TougeMuted
@@ -103,10 +105,17 @@ fun HistoryScreen(container: AppContainer, selectedId: String?, select: (String)
 @Composable
 private fun SessionList(container: AppContainer, select: (String) -> Unit) {
     val sessions by container.historyRepository.sessions.collectAsState(initial = emptyList())
+    val activeSession by container.historyRepository.activeSession.collectAsState()
+    val connection by container.runtime.connection.collectAsState()
     var deleteSession by remember { mutableStateOf<DriveSessionEntity?>(null) }
+    var showSplitConfirmation by remember { mutableStateOf(false) }
+    val canSplit = connection.state == ConnectionState.Connected && activeSession != null
     Column(Modifier.fillMaxSize()) {
         Text(appText("DRIVE ARCHIVE", "ARCHIWUM PRZEJAZDÓW"), color = TougeCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 18.dp, top = 18.dp))
         Text(appText("History", "Historia"), fontSize = 34.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 18.dp))
+        if (canSplit) {
+            ManualSessionSplitCard(activeSession!!.sampleCount) { showSplitConfirmation = true }
+        }
         if (sessions.isEmpty()) {
             Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Default.DirectionsCar, null, Modifier.size(54.dp), tint = TougeMuted)
@@ -115,6 +124,30 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
         } else LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(sessions, key = { it.id }) { SessionRow(it, select) { deleteSession = it } }
         }
+    }
+    if (showSplitConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showSplitConfirmation = false },
+            title = { Text(appText("Split the current drive?", "Podziel bieżący przejazd?")) },
+            text = {
+                Text(
+                    appText(
+                        "Existing data will remain in the first drive. Bluetooth will stay connected and subsequent samples will be recorded as a new drive. An active video and acceleration measurement will be split at the same point.",
+                        "Dotychczasowe dane pozostaną w pierwszym przejeździe. Bluetooth pozostanie połączony, a kolejne próbki trafią do nowego przejazdu. Aktywne nagranie i trwający pomiar przyspieszenia zostaną rozdzielone w tym samym miejscu."
+                    ),
+                    color = TougeMuted
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    container.runtime.requestDriveSplit()
+                    showSplitConfirmation = false
+                }) { Text(appText("Save and start a new drive", "Zapisz i rozpocznij nowy")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSplitConfirmation = false }) { Text(appText("Cancel", "Anuluj")) }
+            }
+        )
     }
     deleteSession?.let { session ->
         AlertDialog(
@@ -130,6 +163,44 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
             }) { Text(appText("Delete", "Usuń")) } },
             dismissButton = { TextButton(onClick = { deleteSession = null }) { Text(appText("Cancel", "Anuluj")) } }
         )
+    }
+}
+
+@Composable
+private fun ManualSessionSplitCard(sampleCount: Int, split: () -> Unit) {
+    TougePanelSurface(TougeCyan, Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(42.dp).background(TougeCyan.copy(alpha = .13f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.ContentCut, null, tint = TougeCyan)
+                }
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    Text(appText("CURRENT DRIVE", "BIEŻĄCY PRZEJAZD"), fontSize = 11.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        appText("$sampleCount samples · recording", "$sampleCount próbek · zapis trwa"),
+                        color = TougeMuted,
+                        fontSize = 12.sp
+                    )
+                }
+                Box(Modifier.size(8.dp).background(TougeMint, RoundedCornerShape(50)))
+            }
+            Text(
+                appText(
+                    "Finish the current recording without disconnecting EMULOGGER. The next sample will start a separate drive.",
+                    "Zamknij bieżący zapis bez rozłączania EMULOGGERA. Następna próbka rozpocznie osobny przejazd."
+                ),
+                color = TougeMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+            Button(onClick = split, modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                Icon(Icons.Default.ContentCut, null, Modifier.size(17.dp))
+                Text(appText("Save and start a new drive", "Zapisz i rozpocznij nowy"), modifier = Modifier.padding(start = 8.dp))
+            }
+        }
     }
 }
 

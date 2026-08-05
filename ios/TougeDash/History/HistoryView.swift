@@ -15,7 +15,12 @@ struct HistoryView: View {
     @ObservedObject var cloudSync: CloudSyncManager
     @ObservedObject var videoRecorder: DriveVideoRecorder
     @ObservedObject var videoOverlays: VideoOverlayTemplateStore
+    let canSplitActiveDrive: Bool
+    let activeSessionSampleCount: Int
+    let onSplitActiveDrive: () -> Bool
     let onShowDashboard: (() -> Void)?
+    @State private var showingSplitConfirmation = false
+    @State private var splitFeedback = 0
 
     var body: some View {
         NavigationStack {
@@ -25,6 +30,11 @@ struct HistoryView: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 14) {
                         CloudSyncCard(account: cloudAccount, sync: cloudSync)
+                        if canSplitActiveDrive {
+                            ManualSessionSplitCard(sampleCount: activeSessionSampleCount) {
+                                showingSplitConfirmation = true
+                            }
+                        }
                         LocationRecordingCard(locationTracker: locationTracker)
                         DriveVideoRecordingCard(recorder: videoRecorder)
 
@@ -115,6 +125,15 @@ struct HistoryView: View {
             }
             .navigationTitle("Historia")
             .navigationBarTitleDisplayMode(.inline)
+            .alert(localized("Podziel bieżący przejazd?"), isPresented: $showingSplitConfirmation) {
+                Button(localized("Anuluj"), role: .cancel) {}
+                Button(localized("Zapisz i rozpocznij nowy")) {
+                    if onSplitActiveDrive() { splitFeedback += 1 }
+                }
+            } message: {
+                Text(localized("Dotychczasowe dane pozostaną w pierwszym przejeździe. Bluetooth pozostanie połączony, a kolejne próbki trafią do nowego przejazdu. Aktywne nagranie i trwający pomiar zostaną rozdzielone w tym samym miejscu."))
+            }
+            .sensoryFeedback(.success, trigger: splitFeedback)
             .toolbar {
                 if let onShowDashboard {
                     ToolbarItem(placement: .topBarLeading) {
@@ -145,6 +164,55 @@ struct HistoryView: View {
         annotations.forEach(modelContext.delete)
         modelContext.delete(session)
         try? modelContext.save()
+    }
+}
+
+private struct ManualSessionSplitCard: View {
+    let sampleCount: Int
+    let action: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                ZStack {
+                    CutCornerPanel(cut: 9)
+                        .fill(Color.tougeCyan.opacity(0.13))
+                    Image(systemName: "scissors")
+                        .foregroundStyle(Color.tougeCyan)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localized("BIEŻĄCY PRZEJAZD"))
+                        .font(.system(size: 12, weight: .black))
+                        .tracking(1)
+                    Text(String(format: localized("%@ próbek · zapis trwa"), sampleCount.formatted()))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Circle()
+                    .fill(Color.tougeMint)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: Color.tougeMint.opacity(0.7), radius: 5)
+            }
+
+            Text(localized("Zamknij bieżący zapis bez rozłączania EMULOGGERA. Następna próbka rozpocznie osobny przejazd."))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            Button(action: action) {
+                Label(localized("Zapisz i rozpocznij nowy"), systemImage: "scissors")
+                    .font(.caption.weight(.black))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.black)
+            .background(Color.tougeCyan, in: CutCornerPanel(cut: 8))
+        }
+        .padding(16)
+        .cardSurface(accent: .tougeCyan)
     }
 }
 

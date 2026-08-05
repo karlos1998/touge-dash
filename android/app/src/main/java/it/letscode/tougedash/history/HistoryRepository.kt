@@ -10,6 +10,8 @@ import it.letscode.tougedash.model.RecordedLocation
 import it.letscode.tougedash.model.TelemetrySnapshot
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
@@ -17,10 +19,12 @@ import kotlin.math.min
 class HistoryRepository(private val dao: TougeDashDao) {
     private val mutex = Mutex()
     private var active: DriveSessionEntity? = null
+    private val mutableActiveSession = MutableStateFlow<DriveSessionEntity?>(null)
     private val pending = ArrayList<TelemetrySampleEntity>(25)
     private var previousLocation: RecordedLocation? = null
 
     val sessions = dao.sessions()
+    val activeSession = mutableActiveSession.asStateFlow()
     fun session(id: String) = dao.session(id)
     fun samples(id: String) = dao.chartSamples(id)
     fun rawSamples(id: String) = dao.samples(id)
@@ -52,7 +56,7 @@ class HistoryRepository(private val dao: TougeDashDao) {
                 syncState = SyncState.PENDING_UPLOAD
             )
             dao.upsertSession(session)
-            active = session
+            setActive(session)
         }
         val elapsed = now - session.startedAt
         val chartEligible = elapsed <= 90_000 || session.sampleCount % 5 == 0
@@ -75,14 +79,14 @@ class HistoryRepository(private val dao: TougeDashDao) {
             syncState = SyncState.PENDING_UPLOAD,
             syncError = null
         )
-        active = session
+        setActive(session)
         if (pending.size >= 20) flushLocked(session)
         session.id
     }
 
     suspend fun finish() = mutex.withLock {
         active?.let { flushLocked(it.copy(modifiedAt = System.currentTimeMillis(), syncState = SyncState.PENDING_UPLOAD)) }
-        active = null
+        setActive(null)
         pending.clear()
         previousLocation = null
     }
@@ -99,8 +103,13 @@ class HistoryRepository(private val dao: TougeDashDao) {
             revision = current.revision + 1
         )?.let {
             dao.upsertSession(it)
-            if (active?.id == it.id) active = it
+            if (active?.id == it.id) setActive(it)
         }
+    }
+
+    private fun setActive(session: DriveSessionEntity?) {
+        active = session
+        mutableActiveSession.value = session
     }
 
     private suspend fun flushLocked(session: DriveSessionEntity) {

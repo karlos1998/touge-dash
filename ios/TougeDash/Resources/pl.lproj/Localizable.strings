@@ -228,6 +228,12 @@
 "POMIAR" = "POMIAR";
 "BRAK PRÓBY" = "BRAK PRÓBY";
 "NAJLEPSZY" = "NAJLEPSZY";
+"Podziel bieżący przejazd?" = "Podziel bieżący przejazd?";
+"Zapisz i rozpocznij nowy" = "Zapisz i rozpocznij nowy";
+"Dotychczasowe dane pozostaną w pierwszym przejeździe. Bluetooth pozostanie połączony, a kolejne próbki trafią do nowego przejazdu. Aktywne nagranie i trwający pomiar zostaną rozdzielone w tym samym miejscu." = "Dotychczasowe dane pozostaną w pierwszym przejeździe. Bluetooth pozostanie połączony, a kolejne próbki trafią do nowego przejazdu. Aktywne nagranie i trwający pomiar zostaną rozdzielone w tym samym miejscu.";
+"BIEŻĄCY PRZEJAZD" = "BIEŻĄCY PRZEJAZD";
+"%@ próbek · zapis trwa" = "%@ próbek · zapis trwa";
+"Zamknij bieżący zapis bez rozłączania EMULOGGERA. Następna próbka rozpocznie osobny przejazd." = "Zamknij bieżący zapis bez rozłączania EMULOGGERA. Następna próbka rozpocznie osobny przejazd.";
 "NAGRANIE PRZEJAZDU" = "NAGRANIE PRZEJAZDU";
 "Film i wykresy korzystają z tej samej osi czasu." = "Film i wykresy korzystają z tej samej osi czasu.";
 "Klipy: %d" = "Klipy: %d";

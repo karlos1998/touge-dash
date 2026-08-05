@@ -509,3 +509,9 @@
 "POMIAR" = "TIMING";
 "BRAK PRÓBY" = "NO ATTEMPT";
 "NAJLEPSZY" = "BEST";
+"Podziel bieżący przejazd?" = "Split the current drive?";
+"Zapisz i rozpocznij nowy" = "Save and start a new drive";
+"Dotychczasowe dane pozostaną w pierwszym przejeździe. Bluetooth pozostanie połączony, a kolejne próbki trafią do nowego przejazdu. Aktywne nagranie i trwający pomiar zostaną rozdzielone w tym samym miejscu." = "Existing data will remain in the first drive. Bluetooth will stay connected and subsequent samples will be recorded as a new drive. An active video and measurement will be split at the same point.";
+"BIEŻĄCY PRZEJAZD" = "CURRENT DRIVE";
+"%@ próbek · zapis trwa" = "%@ samples · recording";
+"Zamknij bieżący zapis bez rozłączania EMULOGGERA. Następna próbka rozpocznie osobny przejazd." = "Finish the current recording without disconnecting EMULOGGER. The next sample will start a separate drive.";

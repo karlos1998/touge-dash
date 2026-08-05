@@ -192,6 +192,20 @@ final class TelemetryController: ObservableObject {
         }
     }
 
+    @discardableResult
+    func splitActiveDrive() -> Bool {
+        guard isConnected, let sessionID = historyRecorder.activeSessionID else { return false }
+        incidentRecorder.finish(sessionID: sessionID)
+        guard historyRecorder.finishActiveSessionForManualSplit() != nil else { return false }
+        accelerationEngine.reset()
+        videoRecorder.telemetrySessionDidEnd()
+        lastVideoSessionID = nil
+        lastVideoHeartbeat = .distantPast
+        Task { await cloudSync.syncNow() }
+        objectWillChange.send()
+        return true
+    }
+
     private func ingest(_ data: Data) {
         totalReceivedBytes += data.count
         let frames = parser.feed(data)

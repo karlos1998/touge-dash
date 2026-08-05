@@ -1,6 +1,9 @@
 package it.letscode.tougedash.telemetry
 
+import it.letscode.tougedash.model.ConnectionState
+import it.letscode.tougedash.model.TelemetryConnection
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -38,5 +41,16 @@ class EmuProtocolTest {
             assertEquals(91.0, coolantCelsius, 0.001)
             assertEquals(128.0, speedKph, 0.001)
         }
+    }
+
+    @Test fun manualDriveSplitCanOnlyBeRequestedWhileConnectedAndIsConsumedOnce() {
+        TelemetryRuntime.updateConnection(TelemetryConnection(state = ConnectionState.Connected))
+
+        assertTrue(TelemetryRuntime.requestDriveSplit())
+        assertTrue(TelemetryRuntime.consumeDriveSplitRequest())
+        assertFalse(TelemetryRuntime.consumeDriveSplitRequest())
+
+        TelemetryRuntime.updateConnection(TelemetryConnection(state = ConnectionState.Idle))
+        assertFalse(TelemetryRuntime.requestDriveSplit())
     }
 }

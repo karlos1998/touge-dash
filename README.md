@@ -72,7 +72,10 @@ Bluetooth.
 
 Gdy z EMU napływa telemetria, Touge Dash automatycznie zapisuje 10 próbek
 na sekundę. Dłuższa niż 90 sekund przerwa rozpoczyna nowy przejazd. W zakładce
-`Historia` można później porównać na wspólnej osi czasu:
+`Historia` aktywny zapis można też ręcznie zamknąć bez rozłączania Bluetooth —
+następna próbka rozpoczyna wtedy osobny przejazd. Granica rozdziela również
+nagranie, raporty incydentów i rozpoczęty pomiar przyspieszenia. Później można
+porównać na wspólnej osi czasu:
 
 - temperaturę oleju i płynu chłodniczego,
 - boost i ciśnienie oleju,

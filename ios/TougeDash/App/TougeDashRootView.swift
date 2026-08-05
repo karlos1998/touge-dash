@@ -60,6 +60,9 @@ struct TougeDashRootView: View {
                 cloudSync: cloudSync,
                 videoRecorder: videoRecorder,
                 videoOverlays: videoOverlays,
+                canSplitActiveDrive: controller.isConnected && controller.historyRecorder.activeSessionID != nil,
+                activeSessionSampleCount: controller.historyRecorder.activeSessionSampleCount,
+                onSplitActiveDrive: controller.splitActiveDrive,
                 onShowDashboard: compactLandscape ? { selection = 0 } : nil
             )
                 .toolbarVisibility(compactLandscape ? .hidden : .automatic, for: .tabBar)

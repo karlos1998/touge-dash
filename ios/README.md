@@ -55,6 +55,9 @@ Przed jazdą porównaj RPM, MAP, temperatury i ciśnienia z EMU Black Client. Ap
 
 Odebrane próbki są archiwizowane lokalnie w SwiftData z częstotliwością 10 Hz.
 Przerwa dłuższa niż 90 sekund zamyka bieżącą sesję i rozpoczyna następną.
+Kartą bieżącego zapisu w zakładce `Historia` można też ręcznie postawić granicę
+bez rozłączania EMULOGGERA. Następna próbka otwiera nowy przejazd, a w tym samym
+miejscu rozdzielane są nagranie, incydenty i niedokończony pomiar przyspieszenia.
 Ekran szczegółów pokazuje zsynchronizowane wykresy temperatur, ciśnień,
 prędkości i RPM oraz pełny zestaw wartości dla wskazanego momentu. Na iPadzie
 wykresy automatycznie przechodzą w układ dwóch kolumn.

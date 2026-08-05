@@ -227,6 +227,18 @@ class TelemetryService : Service() {
                     val now = System.currentTimeMillis()
                     val snapshot = TelemetryRuntime.snapshot.value
                     val location = container.locationTracker.location.value
+                    if (TelemetryRuntime.consumeDriveSplitRequest()) {
+                        val closingSessionId = container.historyRepository.activeSessionId()
+                        if (closingSessionId != null) {
+                            container.incidentEngine.finish(hardwareId, closingSessionId)
+                            container.historyRepository.finish()
+                            container.accelerationEngine.reset()
+                            container.cameraRecordingController.stopWhenSessionEnds(null)
+                            container.cloudSyncRepository.schedule()
+                            lastHistoryAt = 0L
+                            lastPerformanceSourceAt = snapshot.updatedAt
+                        }
+                    }
                     if (now - lastHistoryAt >= 100) {
                         container.historyRepository.record(hardwareId, deviceName, snapshot, location)
                         lastHistoryAt = now

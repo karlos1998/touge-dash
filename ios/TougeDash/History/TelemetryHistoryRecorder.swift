@@ -6,10 +6,12 @@ import SwiftData
 final class TelemetryHistoryRecorder: ObservableObject {
     static let sampleInterval: TimeInterval = 0.1
     static let newSessionGap: TimeInterval = 90
+    private static let manuallyClosedSessionKeyPrefix = "TougeDash.history.manuallyClosedSession"
 
     let locationTracker: LocationTrackingService
 
     private let context: ModelContext
+    private let defaults: UserDefaults
     private var vehicleID: UUID
     private var activeSession: DriveSession?
     private var lastRecordedAt = Date.distantPast
@@ -17,9 +19,14 @@ final class TelemetryHistoryRecorder: ObservableObject {
     private var lastDistanceLocation: RecordedLocation?
     private var lastChartSampleAt = Date.distantPast
 
-    init(container: ModelContainer, locationTracker: LocationTrackingService) {
+    init(
+        container: ModelContainer,
+        locationTracker: LocationTrackingService,
+        defaults: UserDefaults = .standard
+    ) {
         context = ModelContext(container)
         context.autosaveEnabled = true
+        self.defaults = defaults
         vehicleID = LocalVehicleIdentity.resolve()
         self.locationTracker = locationTracker
         restoreRecentSession()
@@ -61,6 +68,22 @@ final class TelemetryHistoryRecorder: ObservableObject {
     }
 
     var activeSessionID: UUID? { activeSession?.id }
+    var activeSessionSampleCount: Int { activeSession?.sampleCount ?? 0 }
+
+    @discardableResult
+    func finishActiveSessionForManualSplit() -> UUID? {
+        guard let session = activeSession else { return nil }
+        defaults.set(session.id.uuidString, forKey: manuallyClosedSessionKey)
+        session.modifiedAt = .now
+        session.syncState = session.remoteID == nil ? .local : .changedAfterSync
+        session.revision += 1
+        saveNow()
+        activeSession = nil
+        lastDistanceLocation = nil
+        lastRecordedAt = .distantPast
+        lastChartSampleAt = .distantPast
+        return session.id
+    }
 
     func activateVehicle(_ id: UUID) {
         guard vehicleID != id else { return }
@@ -144,6 +167,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         let session = DriveSession(vehicleID: vehicleID, startedAt: timestamp)
         context.insert(session)
         activeSession = session
+        defaults.removeObject(forKey: manuallyClosedSessionKey)
         lastDistanceLocation = nil
         return session
     }
@@ -156,6 +180,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         )
         descriptor.fetchLimit = 1
         guard let session = try? context.fetch(descriptor).first,
+              defaults.string(forKey: manuallyClosedSessionKey) != session.id.uuidString,
               Date.now.timeIntervalSince(session.endedAt) <= Self.newSessionGap else { return }
         activeSession = session
         lastRecordedAt = session.endedAt
@@ -179,6 +204,10 @@ final class TelemetryHistoryRecorder: ObservableObject {
                 timestamp: lastSample.timestamp
             )
         }
+    }
+
+    private var manuallyClosedSessionKey: String {
+        "\(Self.manuallyClosedSessionKeyPrefix).\(vehicleID.uuidString)"
     }
 
     private func freshLocation(at timestamp: Date) -> RecordedLocation? {

@@ -171,6 +171,10 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
     }
 
     func connectionDidEnd() {
+        telemetrySessionDidEnd()
+    }
+
+    func telemetrySessionDidEnd() {
         latestTelemetrySessionID = nil
         latestTelemetryAt = .distantPast
         pendingSessionID = nil

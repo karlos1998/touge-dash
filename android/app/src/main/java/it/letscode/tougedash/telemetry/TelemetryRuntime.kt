@@ -2,8 +2,10 @@ package it.letscode.tougedash.telemetry
 
 import it.letscode.tougedash.model.TelemetryConnection
 import it.letscode.tougedash.model.TelemetrySnapshot
+import it.letscode.tougedash.model.ConnectionState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class TimedTelemetry(val recordedAt: Long, val snapshot: TelemetrySnapshot)
 
@@ -16,7 +18,16 @@ object TelemetryRuntime {
     val diagnostics = mutableDiagnostics.asStateFlow()
     private val mutableChartPoints = MutableStateFlow<List<TimedTelemetry>>(emptyList())
     val chartPoints = mutableChartPoints.asStateFlow()
+    private val driveSplitRequested = AtomicBoolean(false)
     private var lastChartPointAt = 0L
+
+    fun requestDriveSplit(): Boolean {
+        if (mutableConnection.value.state != ConnectionState.Connected) return false
+        driveSplitRequested.set(true)
+        return true
+    }
+
+    internal fun consumeDriveSplitRequest(): Boolean = driveSplitRequested.getAndSet(false)
 
     internal fun updateSnapshot(value: TelemetrySnapshot) {
         mutableSnapshot.value = value

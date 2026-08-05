@@ -206,6 +206,50 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertNotEqual(simulatorChange?.sessionID, realLoggerChange?.sessionID)
     }
 
+    @MainActor
+    func testManualDriveSplitSurvivesRecorderRestartAndCreatesANewSession() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: DriveSession.self,
+            TelemetryHistorySample.self,
+            DriveIncident.self,
+            TimelineAnnotation.self,
+            configurations: configuration
+        )
+        let suiteName = "TougeDashTests.manual-drive-split.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        UserDefaults.standard.set(false, forKey: LocationTrackingService.enabledDefaultsKey)
+        let start = Date.now
+
+        let firstRecorder = TelemetryHistoryRecorder(
+            container: container,
+            locationTracker: LocationTrackingService(),
+            defaults: defaults
+        )
+        let firstChange = try XCTUnwrap(firstRecorder.record(.preview, at: start))
+        XCTAssertEqual(firstRecorder.finishActiveSessionForManualSplit(), firstChange.sessionID)
+        XCTAssertNil(firstRecorder.activeSessionID)
+
+        let restartedRecorder = TelemetryHistoryRecorder(
+            container: container,
+            locationTracker: LocationTrackingService(),
+            defaults: defaults
+        )
+        XCTAssertNil(restartedRecorder.activeSessionID)
+        let secondChange = try XCTUnwrap(
+            restartedRecorder.record(.preview, at: start.addingTimeInterval(0.2))
+        )
+        restartedRecorder.saveNow()
+
+        let sessions = try container.mainContext.fetch(FetchDescriptor<DriveSession>())
+        let samples = try container.mainContext.fetch(FetchDescriptor<TelemetryHistorySample>())
+        XCTAssertEqual(sessions.count, 2)
+        XCTAssertEqual(samples.count, 2)
+        XCTAssertNotEqual(firstChange.sessionID, secondChange.sessionID)
+        XCTAssertEqual(Set(samples.compactMap { $0.session?.id }), [firstChange.sessionID, secondChange.sessionID])
+    }
+
     func testBluetoothPolicyNeverAllowsLoggerWrites() {
         let allProperties: CBCharacteristicProperties = [.read, .notify, .write, .writeWithoutResponse]
 
