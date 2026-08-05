@@ -10,16 +10,17 @@ import android.graphics.Typeface
 import androidx.media3.effect.BitmapOverlay
 import androidx.media3.effect.OverlaySettings
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
+import kotlinx.serialization.Serializable
 import kotlin.math.abs
 
+@Serializable
 enum class OverlayStyle { MINIMAL, RACE, UNDERGROUND }
 
 class TelemetryBitmapOverlay(
     private val samples: List<TelemetrySampleEntity>,
     private val telemetryStartSeconds: Double,
-    private val style: OverlayStyle,
-    private val x: Float,
-    private val y: Float
+    private val definition: VideoOverlayTemplateDefinition,
+    private val portrait: Boolean
 ) : BitmapOverlay() {
     private val bitmap = Bitmap.createBitmap(1600, 340, Bitmap.Config.ARGB_8888)
     private val canvas = Canvas(bitmap)
@@ -30,7 +31,7 @@ class TelemetryBitmapOverlay(
         bitmap.eraseColor(Color.TRANSPARENT)
         val target = firstTime + ((telemetryStartSeconds + presentationTimeUs / 1_000_000.0) * 1000).toLong()
         val sample = samples.minByOrNull { abs(it.recordedAt - target) } ?: return bitmap
-        when (style) {
+        when (definition.style) {
             OverlayStyle.MINIMAL -> drawMinimal(sample)
             OverlayStyle.RACE -> drawRace(sample)
             OverlayStyle.UNDERGROUND -> drawUnderground(sample)
@@ -39,9 +40,9 @@ class TelemetryBitmapOverlay(
     }
 
     override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings = OverlaySettings.Builder()
-        .setBackgroundFrameAnchor(x.coerceIn(-1f, 1f), y.coerceIn(-1f, 1f))
+        .setBackgroundFrameAnchor(definition.x(portrait).coerceIn(-1f, 1f), definition.y(portrait).coerceIn(-1f, 1f))
         .setOverlayFrameAnchor(0f, 0f)
-        .setScale(.92f, .92f)
+        .setScale(definition.scale.coerceIn(.45f, 1.25f), definition.scale.coerceIn(.45f, 1.25f))
         .build()
 
     private fun drawMinimal(s: TelemetrySampleEntity) {

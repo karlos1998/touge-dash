@@ -49,6 +49,7 @@ class AppContainer(val application: Application) {
 
     fun initialize() {
         cloudSyncRepository.schedulePeriodic()
+        videoRepository.ensureOverlayTemplates()
         applicationScope.launch { authRepository.session.filterNotNull().collect { cloudSyncRepository.schedule() } }
         applicationScope.launch(Dispatchers.IO) {
             if (dao.templates().first().isEmpty()) {

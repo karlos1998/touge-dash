@@ -19,11 +19,13 @@ import androidx.media3.transformer.Transformer
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
 import it.letscode.tougedash.data.local.TougeDashDao
 import it.letscode.tougedash.data.local.VideoProjectEntity
+import it.letscode.tougedash.data.local.OverlayTemplateEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -31,6 +33,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.UUID
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 data class VideoTaskState(
     val operation: String? = null,
@@ -47,9 +52,25 @@ class VideoRepository(
     private val dao: TougeDashDao,
     private val scope: CoroutineScope
 ) {
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     private val mutableTask = MutableStateFlow(VideoTaskState())
     val task = mutableTask.asStateFlow()
     private var transformer: Transformer? = null
+    val overlayTemplates = dao.overlayTemplates().map { entities -> entities.mapNotNull(::decodeTemplate) }
+
+    fun ensureOverlayTemplates() {
+        scope.launch(Dispatchers.IO) {
+            if (dao.overlayTemplatesOnce().isEmpty()) {
+                defaultTemplates().forEach { dao.upsertOverlayTemplate(it.entity) }
+            }
+        }
+    }
+
+    fun updateOverlayTemplate(template: VideoOverlayTemplate) {
+        scope.launch(Dispatchers.IO) {
+            dao.upsertOverlayTemplate(template.entity.copy(definitionJson = json.encodeToString(template.definition), modifiedAt = System.currentTimeMillis()))
+        }
+    }
 
     fun importFromGallery(sessionId: String, driveDurationSeconds: Double, uri: Uri) {
         scope.launch {
@@ -123,7 +144,7 @@ class VideoRepository(
 
     fun clearTask() { mutableTask.value = VideoTaskState() }
 
-    fun export(project: VideoProjectEntity, samples: List<TelemetrySampleEntity>, style: OverlayStyle, x: Float = 0f, y: Float = -.72f) {
+    fun export(project: VideoProjectEntity, samples: List<TelemetrySampleEntity>, definition: VideoOverlayTemplateDefinition) {
         scope.launch(Dispatchers.Main) {
             val directory = File(context.cacheDir, "exports").apply { mkdirs() }
             val output = File(directory, "touge-${UUID.randomUUID()}.mp4")
@@ -132,7 +153,7 @@ class VideoRepository(
                 .setEndPositionMs(((project.videoTrimStartSeconds + project.exportDurationSeconds) * 1000).toLong())
                 .build()
             val item = MediaItem.Builder().setUri(project.localUri).setClippingConfiguration(clipping).build()
-            val overlay = TelemetryBitmapOverlay(samples, project.telemetryTrimStartSeconds, style, x, y)
+            val overlay = TelemetryBitmapOverlay(samples, project.telemetryTrimStartSeconds, definition, project.pixelHeight > project.pixelWidth)
             val edited = EditedMediaItem.Builder(item).setEffects(Effects(emptyList(), listOf(OverlayEffect(listOf(overlay))))).build()
             mutableTask.value = VideoTaskState("Rendering telemetry HUD", projectId = project.id)
             transformer = Transformer.Builder(context).addListener(object : Transformer.Listener {
@@ -178,6 +199,21 @@ class VideoRepository(
 
     private fun displayName(uri: Uri): String? = context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         if (cursor.moveToFirst()) cursor.getString(0) else null
+    }
+
+    private fun decodeTemplate(entity: OverlayTemplateEntity): VideoOverlayTemplate? = runCatching {
+        VideoOverlayTemplate(entity, json.decodeFromString(entity.definitionJson))
+    }.getOrNull()
+
+    private fun defaultTemplates(): List<VideoOverlayTemplate> = listOf(
+        template("MINIMAL", "Minimal", VideoOverlayTemplateDefinition(OverlayStyle.MINIMAL, portraitY = -.68f, landscapeY = -.72f, scale = .78f)),
+        template("RACE", "Race HUD", VideoOverlayTemplateDefinition(OverlayStyle.RACE, portraitY = -.70f, landscapeY = -.72f, scale = .90f)),
+        template("UNDERGROUND", "Underground", VideoOverlayTemplateDefinition(OverlayStyle.UNDERGROUND, portraitY = -.66f, landscapeY = -.70f, scale = .86f))
+    )
+
+    private fun template(id: String, name: String, definition: VideoOverlayTemplateDefinition): VideoOverlayTemplate {
+        val entity = OverlayTemplateEntity(id, name, json.encodeToString(definition), selected = id == "RACE")
+        return VideoOverlayTemplate(entity, definition)
     }
 
     private data class Metadata(val durationSeconds: Double, val width: Int, val height: Int, val fps: Double, val hasAudio: Boolean)

@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,8 +48,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -65,6 +71,7 @@ import it.letscode.tougedash.ui.theme.TougeOrange
 import it.letscode.tougedash.ui.theme.TougePanel
 import it.letscode.tougedash.ui.theme.TougeRed
 import it.letscode.tougedash.video.OverlayStyle
+import it.letscode.tougedash.video.VideoOverlayTemplateDefinition
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -130,7 +137,14 @@ private fun VideoAlignmentEditor(
 ) {
     val context = LocalContext.current
     var value by remember(initial.id) { mutableStateOf(initial) }
-    var style by remember(initial.id) { mutableStateOf(runCatching { OverlayStyle.valueOf(initial.overlayTemplateId ?: "RACE") }.getOrDefault(OverlayStyle.RACE)) }
+    val templates by container.videoRepository.overlayTemplates.collectAsState(initial = emptyList())
+    var templateId by remember(initial.id) { mutableStateOf(initial.overlayTemplateId ?: "RACE") }
+    var overlayDefinition by remember(initial.id) { mutableStateOf(VideoOverlayTemplateDefinition(runCatching { OverlayStyle.valueOf(initial.overlayTemplateId ?: "RACE") }.getOrDefault(OverlayStyle.RACE))) }
+    val portraitVideo = initial.pixelHeight > initial.pixelWidth
+    var previewSize by remember { mutableStateOf(IntSize.Zero) }
+    LaunchedEffect(templates, templateId) {
+        templates.firstOrNull { it.entity.id == templateId }?.let { overlayDefinition = it.definition }
+    }
     val player = remember(initial.id) { ExoPlayer.Builder(context).build().apply { setMediaItem(MediaItem.fromUri(initial.localUri)); prepare(); seekTo((initial.videoTrimStartSeconds * 1000).toLong()) } }
     var position by remember { mutableLongStateOf((initial.videoTrimStartSeconds * 1000).toLong()) }
     DisposableEffect(player) { onDispose { player.release() } }
@@ -143,9 +157,37 @@ private fun VideoAlignmentEditor(
         title = { Text(appText("Align video with telemetry", "Dopasuj film do telemetrii")) },
         text = {
             Column {
-                Box(Modifier.fillMaxWidth().height(220.dp).background(Color.Black)) {
+                Box(Modifier.fillMaxWidth().height(220.dp).background(Color.Black).onSizeChanged { previewSize = it }) {
                     AndroidView(factory = { PlayerView(it).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxWidth().height(220.dp))
-                    sample?.let { HudPreview(it, style, Modifier.align(Alignment.BottomCenter)) }
+                    sample?.let {
+                        val x = overlayDefinition.x(portraitVideo)
+                        val y = overlayDefinition.y(portraitVideo)
+                        HudPreview(
+                            it,
+                            overlayDefinition.style,
+                            Modifier
+                                .align(Alignment.Center)
+                                .fillMaxWidth(.86f)
+                                .graphicsLayer {
+                                    translationX = x * previewSize.width * .42f
+                                    translationY = y * previewSize.height * .42f
+                                    scaleX = overlayDefinition.scale
+                                    scaleY = overlayDefinition.scale
+                                }
+                                .pointerInput(previewSize, portraitVideo, x, y) {
+                                    detectDragGestures { change, drag ->
+                                        change.consume()
+                                        if (previewSize.width > 0 && previewSize.height > 0) {
+                                            overlayDefinition = overlayDefinition.positioned(
+                                                portraitVideo,
+                                                (x + drag.x / (previewSize.width * .42f)).coerceIn(-1f, 1f),
+                                                (y + drag.y / (previewSize.height * .42f)).coerceIn(-1f, 1f)
+                                            )
+                                        }
+                                    }
+                                }
+                        )
+                    }
                     IconButton(onClick = { if (player.isPlaying) player.pause() else { if (position / 1000.0 !in value.videoTrimStartSeconds..(value.videoTrimStartSeconds + value.exportDurationSeconds)) player.seekTo((value.videoTrimStartSeconds * 1000).toLong()); player.play() } }, modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .45f), RoundedCornerShape(30.dp))) {
                         Icon(if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White)
                     }
@@ -157,21 +199,41 @@ private fun VideoAlignmentEditor(
                 val maxDuration = minOf(value.durationSeconds - value.videoTrimStartSeconds, driveDuration - value.telemetryTrimStartSeconds).coerceAtLeast(.1)
                 Text("EXPORT LENGTH  ${videoDuration(value.exportDurationSeconds)}", color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Slider(value.exportDurationSeconds.coerceAtMost(maxDuration).toFloat(), { value = value.copy(exportDurationSeconds = it.toDouble()) }, valueRange = .1f..maxDuration.coerceAtLeast(.11).toFloat())
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { OverlayStyle.entries.forEach { item -> FilterChip(selected = style == item, onClick = { style = item; value = value.copy(overlayTemplateId = item.name) }, label = { Text(item.name.lowercase()) }) } }
+                Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    templates.forEach { item ->
+                        FilterChip(
+                            selected = templateId == item.entity.id,
+                            onClick = { templateId = item.entity.id; overlayDefinition = item.definition; value = value.copy(overlayTemplateId = item.entity.id) },
+                            label = { Text(item.entity.name) }
+                        )
+                    }
+                }
+                Text(appText("Drag the HUD on the preview or fine-tune its position below.", "Przeciągnij HUD palcem na podglądzie albo dopasuj pozycję poniżej."), color = TougeMuted, fontSize = 10.sp)
+                Text("${appText("Horizontal position", "Pozycja pozioma")}: ${"%.2f".format(overlayDefinition.x(portraitVideo))}", fontSize = 10.sp)
+                Slider(overlayDefinition.x(portraitVideo), { overlayDefinition = overlayDefinition.positioned(portraitVideo, it, overlayDefinition.y(portraitVideo)) }, valueRange = -1f..1f)
+                Text("${appText("Vertical position", "Pozycja pionowa")}: ${"%.2f".format(overlayDefinition.y(portraitVideo))}", fontSize = 10.sp)
+                Slider(overlayDefinition.y(portraitVideo), { overlayDefinition = overlayDefinition.positioned(portraitVideo, overlayDefinition.x(portraitVideo), it) }, valueRange = -1f..1f)
+                Text("${appText("HUD size", "Rozmiar HUD")}: ${"%.0f".format(overlayDefinition.scale * 100)}%", fontSize = 10.sp)
+                Slider(overlayDefinition.scale, { overlayDefinition = overlayDefinition.positioned(portraitVideo, overlayDefinition.x(portraitVideo), overlayDefinition.y(portraitVideo), it) }, valueRange = .55f..1.2f)
+                OutlinedButton(
+                    onClick = { templates.firstOrNull { it.entity.id == templateId }?.let { container.videoRepository.updateOverlayTemplate(it.copy(definition = overlayDefinition)) } },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(appText("Save layout in this template", "Zapisz układ w tym szablonie")) }
                 Text(appText("The upper timeline is the selected video. The lower one chooses the matching fragment of the recorded drive.", "Górna oś to wybrany film. Dolna wybiera pasujący fragment zapisanego przejazdu."), color = TougeMuted, fontSize = 10.sp)
             }
         },
         confirmButton = {
-            Button(onClick = { save(value.copy(overlayTemplateId = style.name)); container.videoRepository.export(value.copy(overlayTemplateId = style.name), samples, style); dismiss() }) { Icon(Icons.Default.Download, null); Text(appText(" Export to gallery", " Eksportuj do galerii")) }
+            Button(onClick = { save(value.copy(overlayTemplateId = templateId)); container.videoRepository.export(value.copy(overlayTemplateId = templateId), samples, overlayDefinition); dismiss() }) { Icon(Icons.Default.Download, null); Text(appText(" Export to gallery", " Eksportuj do galerii")) }
         },
-        dismissButton = { TextButton(onClick = { save(value.copy(overlayTemplateId = style.name)); dismiss() }) { Text(appText("Save project", "Zapisz projekt")) } }
+        dismissButton = { TextButton(onClick = { save(value.copy(overlayTemplateId = templateId)); dismiss() }) { Text(appText("Save project", "Zapisz projekt")) } }
     )
 }
 
 @Composable
 private fun HudPreview(sample: TelemetrySampleEntity, style: OverlayStyle, modifier: Modifier = Modifier) {
     val background = when (style) { OverlayStyle.UNDERGROUND -> Color.Black.copy(alpha = .75f); else -> Color(0xDD071014) }
-    Row(modifier.fillMaxWidth().background(background).padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.background(background).padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column { Text("${sample.speedKph.toInt()}", fontSize = 30.sp, fontWeight = FontWeight.Black); Text("KM/H", color = TougeCyan, fontSize = 8.sp) }
         Column { Text("RPM ${sample.rpm.toInt()}", fontWeight = FontWeight.Black); Text("BOOST %.2f bar".format(sample.boostBar), color = TougeMint, fontSize = 11.sp) }
         Column { Text("OIL %.1f bar".format(sample.oilPressureBar), color = TougeOrange, fontSize = 11.sp); Text("%.0f°C / WATER %.0f°C".format(sample.oilTemperatureCelsius, sample.coolantCelsius), fontSize = 10.sp) }
