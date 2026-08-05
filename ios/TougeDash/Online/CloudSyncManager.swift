@@ -26,7 +26,6 @@ struct CloudSyncProgress: Equatable, Sendable {
 }
 
 enum CloudSyncBlockReason: Equatable, Sendable {
-    case simulatorData
     case vehicleNotLinked
     case parentVehicleMismatch
 }
@@ -67,8 +66,6 @@ final class CloudSyncManager: ObservableObject {
     @Published private(set) var progress: CloudSyncProgress?
     @Published private(set) var lastTransferBytes: Int64 = 0
     @Published private(set) var lastSynchronizedAt: Date?
-    @Published private(set) var blockedTestSessions = 0
-    @Published private(set) var blockedTestIncidents = 0
     @Published private(set) var uploadablePendingItems = 0
     @Published private(set) var sessionStatuses: [UUID: CloudSyncItemStatus] = [:]
     @Published private(set) var incidentStatuses: [UUID: CloudSyncItemStatus] = [:]
@@ -117,6 +114,7 @@ final class CloudSyncManager: ObservableObject {
             _ = restoreActiveVehicle()
         }
         state = account.isAuthenticated ? .ready : .signedOut
+        repairPendingChildVehicleAssignments()
         updatePendingCount()
 
         monitor.pathUpdateHandler = { [weak self] path in
@@ -391,7 +389,6 @@ final class CloudSyncManager: ObservableObject {
     func sessionStatus(for session: DriveSession) -> CloudSyncItemStatus {
         if let transient = sessionStatuses[session.id] { return transient }
         if session.syncState == .synced { return .synced }
-        if session.vehicleID == LocalVehicleIdentity.simulatorID { return .blocked(.simulatorData) }
         if remoteVehicleID(for: session.vehicleID) == nil { return .blocked(.vehicleNotLinked) }
         return .queued
     }
@@ -404,77 +401,16 @@ final class CloudSyncManager: ObservableObject {
         var descriptor = FetchDescriptor<DriveSession>(predicate: #Predicate { $0.id == sessionID })
         descriptor.fetchLimit = 1
         if let parent = try? context.fetch(descriptor).first {
-            if parent.vehicleID == LocalVehicleIdentity.simulatorID {
-                return .blocked(.simulatorData)
-            }
             if parent.vehicleID != incident.vehicleID {
                 return .blocked(.parentVehicleMismatch)
             }
         }
-        if incident.vehicleID == LocalVehicleIdentity.simulatorID { return .blocked(.simulatorData) }
         guard remoteVehicleID(for: incident.vehicleID) != nil else { return .blocked(.vehicleNotLinked) }
         return .queued
     }
 
     func retrySynchronization() async {
         await syncNow()
-    }
-
-    func assignTestSessionToActiveVehicle(sessionID: UUID) async {
-        await assignTestSessionsToActiveVehicle(sessionIDs: [sessionID])
-    }
-
-    func assignAllTestSessionsToActiveVehicle() async {
-        let testSessions = ((try? context.fetch(FetchDescriptor<DriveSession>())) ?? [])
-            .filter { $0.vehicleID == LocalVehicleIdentity.simulatorID && $0.syncState != .synced }
-        await assignTestSessionsToActiveVehicle(sessionIDs: Set(testSessions.map(\.id)))
-    }
-
-    private func assignTestSessionsToActiveVehicle(sessionIDs: Set<UUID>) async {
-        guard !sessionIDs.isEmpty else { return }
-        guard account.isAuthenticated,
-              let activeVehicle,
-              let association = currentAccountAssociations().first(where: { $0.vehicle.id == activeVehicle.id }) else {
-            state = .failed(localized("Najpierw zaloguj się i wybierz auto."))
-            return
-        }
-
-        do {
-            let sessions = try context.fetch(FetchDescriptor<DriveSession>())
-                .filter { sessionIDs.contains($0.id) && $0.vehicleID == LocalVehicleIdentity.simulatorID }
-            guard !sessions.isEmpty else { return }
-
-            let incidents = try context.fetch(FetchDescriptor<DriveIncident>())
-            let annotations = try context.fetch(FetchDescriptor<TimelineAnnotation>())
-            for session in sessions {
-                session.vehicleID = association.hardwareIdentifier
-                session.remoteID = nil
-                session.syncState = .local
-                sessionStatuses.removeValue(forKey: session.id)
-
-                for incident in incidents where incident.sessionID == session.id {
-                    incident.vehicleID = association.hardwareIdentifier
-                    incident.remoteID = nil
-                    incident.syncState = .local
-                    incidentStatuses.removeValue(forKey: incident.id)
-                }
-
-                for annotation in annotations where annotation.sessionID == session.id {
-                    annotation.vehicleID = association.hardwareIdentifier
-                    annotation.syncState = .local
-                }
-            }
-
-            try context.save()
-            updatePendingCount()
-            await syncNow()
-        } catch {
-            for sessionID in sessionIDs {
-                sessionStatuses[sessionID] = .failed(error.localizedDescription)
-            }
-            state = .failed(error.localizedDescription)
-            updatePendingCount()
-        }
     }
 
     func publishLive(_ snapshot: TelemetrySnapshot) {
@@ -794,11 +730,6 @@ final class CloudSyncManager: ObservableObject {
         let uploadableSessions = sessions.filter { linkedHardwareIDs.contains($0.vehicleID) }
         let allSessions = (try? context.fetch(FetchDescriptor<DriveSession>())) ?? []
         let sessionVehicles = Dictionary(uniqueKeysWithValues: allSessions.map { ($0.id, $0.vehicleID) })
-        blockedTestSessions = sessions.filter { $0.vehicleID == LocalVehicleIdentity.simulatorID }.count
-        blockedTestIncidents = incidents.filter {
-            $0.vehicleID == LocalVehicleIdentity.simulatorID ||
-                sessionVehicles[$0.sessionID] == LocalVehicleIdentity.simulatorID
-        }.count
         let uploadableIncidents = incidents.filter {
             linkedHardwareIDs.contains($0.vehicleID) && sessionVehicles[$0.sessionID] == $0.vehicleID
         }
@@ -808,6 +739,39 @@ final class CloudSyncManager: ObservableObject {
         uploadablePendingItems = uploadableSessions.count + uploadableIncidents.count + uploadableAnnotations.count
         pendingSamples = sessions.reduce(0) { $0 + $1.sampleCount } + incidents.reduce(0) { $0 + $1.sampleCount }
         estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample + Int64(annotations.count * 512)
+    }
+
+    private func repairPendingChildVehicleAssignments() {
+        do {
+            let sessions = try context.fetch(FetchDescriptor<DriveSession>())
+            let sessionVehicles = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0.vehicleID) })
+            let incidents = try context.fetch(FetchDescriptor<DriveIncident>(
+                predicate: #Predicate { $0.syncStateRaw != "synced" }
+            ))
+            let annotations = try context.fetch(FetchDescriptor<TimelineAnnotation>(
+                predicate: #Predicate { $0.syncStateRaw != "synced" }
+            ))
+            var changed = false
+
+            for incident in incidents {
+                guard let parentVehicleID = sessionVehicles[incident.sessionID],
+                      incident.vehicleID != parentVehicleID else { continue }
+                incident.vehicleID = parentVehicleID
+                incident.remoteID = nil
+                incident.syncState = .local
+                changed = true
+            }
+            for annotation in annotations {
+                guard let parentVehicleID = sessionVehicles[annotation.sessionID],
+                      annotation.vehicleID != parentVehicleID else { continue }
+                annotation.vehicleID = parentVehicleID
+                annotation.syncState = .local
+                changed = true
+            }
+            if changed { try context.save() }
+        } catch {
+            // The original local records remain untouched if reconciliation fails.
+        }
     }
 
     private func persistVehicleLinks() {

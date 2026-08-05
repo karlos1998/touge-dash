@@ -7,7 +7,6 @@ struct CloudSyncCard: View {
     @ObservedObject var sync: CloudSyncManager
     @State private var showingAuthentication = false
     @State private var showingDeleteConfirmation = false
-    @State private var showingTestAssignmentConfirmation = false
     @State private var vehicleName = ""
 
     var body: some View {
@@ -139,30 +138,6 @@ struct CloudSyncCard: View {
                             .tracking(0.55)
                             .foregroundStyle(Color.tougeOrange)
 
-                            if sync.blockedTestSessions > 0 || sync.blockedTestIncidents > 0 {
-                                Label(
-                                    String(
-                                        format: localized("Dane testowe: %@ przejazdów · %@ raportów. Otwórz element, aby przypisać go do auta."),
-                                        sync.blockedTestSessions.formatted(),
-                                        sync.blockedTestIncidents.formatted()
-                                    ),
-                                    systemImage: "testtube.2"
-                                )
-                                .font(.caption2.weight(.bold))
-                                .foregroundStyle(Color.tougeYellow)
-
-                                Button {
-                                    showingTestAssignmentConfirmation = true
-                                } label: {
-                                    Label(
-                                        String(format: localized("Przypisz wszystkie do %@"), vehicle.displayName),
-                                        systemImage: "car.side.fill"
-                                    )
-                                    .font(.caption.weight(.black))
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(.tougeYellow)
-                            }
                         } else if sync.lastTransferBytes > 0 {
                             Label(String(format: localized("Wysłano %@"), byteCount(sync.lastTransferBytes)), systemImage: "checkmark.circle.fill")
                                 .font(.caption2.weight(.bold))
@@ -214,20 +189,6 @@ struct CloudSyncCard: View {
             Button("Anuluj", role: .cancel) {}
         } message: {
             Text("Z serwera zostaną usunięte konto, auta, przejazdy, lokalizacje, udostępnienia i aktywne sesje. Lokalna historia na tym iPhonie pozostanie do czasu usunięcia aplikacji.")
-        }
-        .confirmationDialog(
-            localized("Przypisać wszystkie dane testowe do auta?"),
-            isPresented: $showingTestAssignmentConfirmation,
-            titleVisibility: .visible
-        ) {
-            if let vehicle = sync.activeVehicle {
-                Button(String(format: localized("Przypisz do %@ i synchronizuj"), vehicle.displayName)) {
-                    Task { await sync.assignAllTestSessionsToActiveVehicle() }
-                }
-            }
-            Button(localized("Anuluj"), role: .cancel) {}
-        } message: {
-            Text("Wszystkie lokalne przejazdy z EMULOGGER SIM oraz powiązane raporty zostaną zapisane w historii wybranego auta.")
         }
     }
 

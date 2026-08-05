@@ -36,11 +36,7 @@ struct IncidentReportView: View {
                         itemName: "RAPORT INCYDENTU",
                         sampleCount: incident.sampleCount,
                         status: cloudSync.incidentStatus(for: incident),
-                        activeVehicleName: cloudSync.activeVehicle?.displayName,
-                        onRetry: { Task { await cloudSync.retrySynchronization() } },
-                        onAssignTestData: {
-                            Task { await cloudSync.assignTestSessionToActiveVehicle(sessionID: incident.sessionID) }
-                        }
+                        onRetry: { Task { await cloudSync.retrySynchronization() } }
                     )
 
                     if let selectedSample {

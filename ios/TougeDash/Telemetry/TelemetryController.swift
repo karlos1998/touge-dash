@@ -80,9 +80,7 @@ final class TelemetryController: ObservableObject {
                         : identifier
                     self.historyRecorder.activateVehicle(historyIdentifier)
                     self.incidentRecorder.activateVehicle(historyIdentifier)
-                    if !self.bluetooth.connectedIsSimulator {
-                        Task { await self.cloudSync.prepareVehicle(hardwareIdentifier: identifier) }
-                    }
+                    Task { await self.cloudSync.prepareVehicle(hardwareIdentifier: historyIdentifier) }
                 }
             } else {
                 self.incidentRecorder.finish(sessionID: self.historyRecorder.activeSessionID)
@@ -261,9 +259,7 @@ final class TelemetryController: ObservableObject {
             }
             incidentRecorder.record(value, sessionID: sessionID)
         }
-        if !bluetooth.connectedIsSimulator {
-            cloudSync.publishLive(value)
-        }
+        cloudSync.publishLive(value)
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)
             lastSharedWrite = now

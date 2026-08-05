@@ -30,7 +30,6 @@ struct CloudSyncItemBadge: View {
         case let .uploading(completed, total, _):
             String(format: localized("%@ / %@"), completed.formatted(), total.formatted())
         case .synced: localized("W CHMURZE")
-        case .blocked(.simulatorData): localized("DANE TESTOWE")
         case .blocked: localized("WYMAGA UWAGI")
         case .failed: localized("BŁĄD SYNC")
         }
@@ -41,7 +40,6 @@ struct CloudSyncItemBadge: View {
         case .queued: "icloud.and.arrow.up"
         case .uploading: "arrow.up.circle.fill"
         case .synced: "icloud.fill"
-        case .blocked(.simulatorData): "testtube.2"
         case .blocked: "exclamationmark.triangle.fill"
         case .failed: "xmark.icloud.fill"
         }
@@ -51,7 +49,6 @@ struct CloudSyncItemBadge: View {
         switch status {
         case .queued, .uploading: .tougeCyan
         case .synced: .tougeMint
-        case .blocked(.simulatorData): .tougeYellow
         case .blocked, .failed: .tougeOrange
         }
     }
@@ -61,10 +58,7 @@ struct CloudSyncItemCard: View {
     let itemName: String
     let sampleCount: Int
     let status: CloudSyncItemStatus
-    let activeVehicleName: String?
     let onRetry: () -> Void
-    let onAssignTestData: (() -> Void)?
-    @State private var showingAssignmentConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -88,21 +82,6 @@ struct CloudSyncItemCard: View {
         }
         .padding(16)
         .cardSurface(accent: accent)
-        .confirmationDialog(
-            localized("Przypisać dane testowe do auta?"),
-            isPresented: $showingAssignmentConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(String(
-                format: localized("Przypisz do %@ i synchronizuj"),
-                activeVehicleName ?? localized("wybranego auta")
-            )) {
-                onAssignTestData?()
-            }
-            Button(localized("Anuluj"), role: .cancel) {}
-        } message: {
-            Text("Przejazd oraz wszystkie jego raporty zostaną zapisane w chmurze jako historia wybranego auta. Nie zmienia to żadnych danych w ECU ani EMULOGGERZE.")
-        }
     }
 
     @ViewBuilder
@@ -135,34 +114,15 @@ struct CloudSyncItemCard: View {
             .font(.caption2.monospacedDigit().weight(.bold))
             .foregroundStyle(.secondary)
 
-        case .blocked(.simulatorData):
-            Text("Ten przejazd powstał z programu EMULOGGER SIM na Macu. Dane testowe nie są automatycznie mieszane z historią prawdziwego auta.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if onAssignTestData != nil, activeVehicleName != nil {
-                Button {
-                    showingAssignmentConfirmation = true
-                } label: {
-                    Label(
-                        String(format: localized("Przypisz do %@"), activeVehicleName ?? ""),
-                        systemImage: "car.side.fill"
-                    )
-                    .font(.subheadline.weight(.black))
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.tougeYellow)
-                .foregroundStyle(.black)
-            } else {
-                Text("Zaloguj się i wybierz auto, aby przypisać ten materiał ręcznie.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
         case .blocked(.vehicleNotLinked):
-            Label("Logger użyty podczas tego przejazdu nie jest przypisany do auta na bieżącym koncie.", systemImage: "link.badge.plus")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(Color.tougeOrange)
+            VStack(alignment: .leading, spacing: 5) {
+                Label("Logger użyty podczas tego przejazdu nie jest przypisany do auta na bieżącym koncie.", systemImage: "link.badge.plus")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.tougeOrange)
+                Text("Połącz się z tym loggerem. Touge Dash poprosi o nazwę nowego auta i automatycznie wyśle jego oczekującą historię.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
 
         case .blocked(.parentVehicleMismatch):
             Label("Raport i jego przejazd mają różne przypisanie auta. Przypisz przejazd ponownie, aby naprawić komplet danych.", systemImage: "exclamationmark.triangle.fill")
@@ -187,7 +147,6 @@ struct CloudSyncItemCard: View {
     private var accent: Color {
         switch status {
         case .synced: .tougeMint
-        case .blocked(.simulatorData): .tougeYellow
         case .blocked, .failed: .tougeOrange
         case .queued, .uploading: .tougeCyan
         }

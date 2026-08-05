@@ -375,11 +375,7 @@ private struct DriveSessionDetailView: View {
                         itemName: "PRZEJAZD",
                         sampleCount: session.sampleCount,
                         status: cloudSync.sessionStatus(for: session),
-                        activeVehicleName: cloudSync.activeVehicle?.displayName,
-                        onRetry: { Task { await cloudSync.retrySynchronization() } },
-                        onAssignTestData: session.vehicleID == LocalVehicleIdentity.simulatorID
-                            ? { Task { await cloudSync.assignTestSessionToActiveVehicle(sessionID: session.id) } }
-                            : nil
+                        onRetry: { Task { await cloudSync.retrySynchronization() } }
                     )
 
                     DriveVideoHistorySection(

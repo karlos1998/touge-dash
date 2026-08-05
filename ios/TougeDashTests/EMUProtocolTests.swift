@@ -256,7 +256,7 @@ final class EMUProtocolTests: XCTestCase {
 
         XCTAssertEqual(try XCTUnwrap(uploading.fraction), 0.25, accuracy: 0.001)
         XCTAssertEqual(try XCTUnwrap(empty.fraction), 1, accuracy: 0.001)
-        XCTAssertNil(CloudSyncItemStatus.blocked(.simulatorData).fraction)
+        XCTAssertNil(CloudSyncItemStatus.blocked(.vehicleNotLinked).fraction)
         XCTAssertNil(CloudSyncItemStatus.failed("network").fraction)
     }
 }
