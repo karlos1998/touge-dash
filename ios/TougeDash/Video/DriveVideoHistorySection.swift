@@ -18,17 +18,26 @@ struct DriveVideoHistorySection: View {
     @State private var showingOverlayManager = false
     @State private var exportRecording: DriveVideoRecording?
     @State private var showingDeleteConfirmation = false
+    @State private var recordingPendingDeletion: DriveVideoRecording?
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isImportingVideo = false
     @State private var importError: String?
 
-    private var sortedRecordings: [DriveVideoRecording] {
-        recordings.sorted { $0.startedAt < $1.startedAt }
+    private var capturedRecordings: [DriveVideoRecording] {
+        recordings
+            .filter { $0.sourceKind == .camera }
+            .sorted { $0.startedAt < $1.startedAt }
+    }
+
+    private var externalProjects: [DriveVideoRecording] {
+        recordings
+            .filter { $0.sourceKind == .photoLibrary }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     private var selectedRecording: DriveVideoRecording? {
-        let requestedID = selectedRecordingID ?? sortedRecordings.first?.id
-        return sortedRecordings.first { $0.id == requestedID } ?? sortedRecordings.first
+        let requestedID = selectedRecordingID ?? capturedRecordings.first?.id
+        return capturedRecordings.first { $0.id == requestedID } ?? capturedRecordings.first
     }
 
     private var selectedSample: TelemetryHistorySample? {
@@ -41,24 +50,18 @@ struct DriveVideoHistorySection: View {
     }
 
     var body: some View {
-        cardContent
-            .padding(16)
-            .background {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.black.opacity(0.36))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(Color.tougeCyan.opacity(0.24), lineWidth: 1)
-                    }
-            }
+        VStack(spacing: 14) {
+            capturedVideosSection
+            externalProjectsSection
+        }
             .onAppear {
                 if selectedRecordingID == nil {
-                    selectedRecordingID = sortedRecordings.first?.id
+                    selectedRecordingID = capturedRecordings.first?.id
                 }
             }
-            .onChange(of: recordings.map(\.id)) { _, ids in
+            .onChange(of: capturedRecordings.map(\.id)) { _, ids in
                 if let selectedRecordingID, ids.contains(selectedRecordingID) { return }
-                self.selectedRecordingID = sortedRecordings.first?.id
+                self.selectedRecordingID = capturedRecordings.first?.id
             }
             .sheet(isPresented: $showingOverlayManager) {
                 VideoOverlayTemplateManagerView(store: overlayStore)
@@ -84,44 +87,35 @@ struct DriveVideoHistorySection: View {
                 guard let item else { return }
                 Task { await importVideo(from: item) }
             }
-            .confirmationDialog(localized("Usunąć nagranie z urządzenia?"), isPresented: $showingDeleteConfirmation) {
-                if let recording = selectedRecording {
-                    Button(localized("Usuń film"), role: .destructive) { onDelete(recording) }
+            .confirmationDialog(deletionTitle, isPresented: $showingDeleteConfirmation) {
+                if let recording = recordingPendingDeletion {
+                    Button(deletionActionTitle, role: .destructive) {
+                        onDelete(recording)
+                        recordingPendingDeletion = nil
+                    }
                 }
-                Button(localized("Anuluj"), role: .cancel) { }
+                Button(localized("Anuluj"), role: .cancel) { recordingPendingDeletion = nil }
             } message: {
-                Text(localized("Tej operacji nie można cofnąć. Dane i wykresy przejazdu pozostaną zapisane."))
+                Text(deletionMessage)
             }
     }
 
-    private var cardContent: some View {
-        let importTitle = sortedRecordings.isEmpty ? localized("Użyj mojego filmu") : localized("Dodaj film")
-        return VStack(alignment: .leading, spacing: 14) {
+    private var capturedVideosSection: some View {
+        sectionPanel(accent: .tougeCyan) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Label(localized("NAGRANIE PRZEJAZDU"), systemImage: "video.fill")
+                    Label(localized("NAGRANIA Z APLIKACJI"), systemImage: "video.fill")
                         .font(.system(size: 11, weight: .black))
                         .tracking(1.1)
                         .foregroundStyle(Color.tougeCyan)
-                    Text(localized("Film i wykresy korzystają z tej samej osi czasu."))
+                    Text(localized("Kamera Touge Dash · automatyczna synchronizacja z przejazdem"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                PhotosPicker(selection: $selectedPhotoItem, matching: .videos, preferredItemEncoding: .current) {
-                    Label(
-                        importTitle,
-                        systemImage: "photo.on.rectangle.angled"
-                    )
-                    .font(.caption.weight(.bold))
-                }
-                .buttonStyle(.bordered)
-                .tint(.tougeCyan)
-                .disabled(isImportingVideo)
-
-                if sortedRecordings.count > 1 {
+                if capturedRecordings.count > 1 {
                     Menu {
-                        ForEach(Array(sortedRecordings.enumerated()), id: \.element.id) { index, recording in
+                        ForEach(Array(capturedRecordings.enumerated()), id: \.element.id) { index, recording in
                             Button {
                                 selectedRecordingID = recording.id
                                 selectedTime = recording.startedAt
@@ -134,7 +128,7 @@ struct DriveVideoHistorySection: View {
                         }
                     } label: {
                         Label(
-                            String(format: localized("Klipy: %d"), sortedRecordings.count),
+                            String(format: localized("Klipy: %d"), capturedRecordings.count),
                             systemImage: "rectangle.stack.fill"
                         )
                         .font(.caption.weight(.bold))
@@ -199,6 +193,7 @@ struct DriveVideoHistorySection: View {
                             Label(localized("Eksportuj do Zdjęć"), systemImage: "square.and.arrow.up")
                         }
                         Button(role: .destructive) {
+                            recordingPendingDeletion = recording
                             showingDeleteConfirmation = true
                         } label: {
                             Label(localized("Usuń lokalny film"), systemImage: "trash")
@@ -211,29 +206,171 @@ struct DriveVideoHistorySection: View {
                 }
                 .font(.caption.weight(.bold))
             } else {
-                VStack(spacing: 12) {
-                    if isImportingVideo {
-                        ProgressView()
-                        Text(localized("Kopiowanie filmu na urządzenie…"))
-                            .font(.caption.weight(.bold))
-                    } else {
-                        Image(systemName: "video.badge.plus")
-                            .font(.system(size: 34, weight: .light))
-                            .foregroundStyle(Color.tougeCyan)
-                        Text(localized("Ten przejazd nie ma jeszcze filmu"))
-                            .font(.headline)
-                        Text(localized("Wybierz nagranie z galerii, np. z kamery samochodowej, a następnie zsynchronizuj je z zapisanymi parametrami."))
+                HStack(spacing: 12) {
+                    Image(systemName: "video.slash")
+                        .font(.title2)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(localized("Brak nagrania z kamery Touge Dash"))
+                            .font(.subheadline.weight(.bold))
+                        Text(localized("Ten przejazd zachował telemetrię, ale nagrywanie w aplikacji nie było aktywne."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-                .padding(.horizontal, 16)
+                .padding(14)
                 .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 16))
             }
         }
+    }
+
+    private var externalProjectsSection: some View {
+        sectionPanel(accent: .tougeMint) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(localized("MONTAŻ Z WŁASNEGO FILMU"), systemImage: "film.stack")
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(1.1)
+                        .foregroundStyle(Color.tougeMint)
+                    Text(localized("Osobne projekty · ręczne dopasowanie telemetrii"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                PhotosPicker(selection: $selectedPhotoItem, matching: .videos, preferredItemEncoding: .current) {
+                    Label(localized("Nowy montaż"), systemImage: "plus")
+                        .font(.caption.weight(.black))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.tougeMint)
+                .disabled(isImportingVideo)
+            }
+
+            if isImportingVideo {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(localized("Tworzenie lokalnej kopii roboczej…"))
+                        .font(.caption.weight(.bold))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(16)
+                .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 14))
+            } else if externalProjects.isEmpty {
+                VStack(spacing: 9) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.title2)
+                        .foregroundStyle(Color.tougeMint)
+                    Text(localized("Nie masz jeszcze montażu dla tego przejazdu"))
+                        .font(.subheadline.weight(.bold))
+                    Text(localized("Wybierz film z galerii, wskaż odpowiadający mu fragment danych i wyeksportuj gotową kopię z HUD-em."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(18)
+                .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 14))
+            } else {
+                VStack(spacing: 9) {
+                    ForEach(Array(externalProjects.enumerated()), id: \.element.id) { index, project in
+                        externalProjectRow(project, index: externalProjects.count - index)
+                    }
+                }
+            }
+
+            Label(
+                localized("Touge Dash zapisuje lokalną kopię roboczą filmu, aby projekt pozostał dostępny do edycji. Nie jest ona częścią nagrania przejazdu ani nie trafia do chmury."),
+                systemImage: "internaldrive"
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func externalProjectRow(_ project: DriveVideoRecording, index: Int) -> some View {
+        let alignment = DriveVideoTimelineAlignment(recording: project, session: session)
+        return HStack(spacing: 12) {
+            Image(systemName: "film.fill")
+                .font(.title3)
+                .foregroundStyle(Color.tougeMint)
+                .frame(width: 42, height: 42)
+                .background(Color.tougeMint.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(String(format: localized("Montaż %d"), index))
+                    .font(.subheadline.weight(.black))
+                Text("\(project.duration.videoDurationText) · \(DriveVideoFileStore.formattedSize(project.fileSizeBytes))")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                Text(String(
+                    format: localized("Dane przejazdu %@–%@"),
+                    alignment.telemetryStartSeconds.videoPreciseDurationText,
+                    alignment.telemetryEndSeconds.videoPreciseDurationText
+                ))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(Color.tougeCyan)
+            }
+
+            Spacer(minLength: 4)
+
+            Button {
+                exportRecording = project
+            } label: {
+                Text(localized("Edytuj"))
+                    .font(.caption.weight(.black))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.tougeMint)
+
+            Menu {
+                Button(role: .destructive) {
+                    recordingPendingDeletion = project
+                    showingDeleteConfirmation = true
+                } label: {
+                    Label(localized("Usuń projekt i kopię lokalną"), systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(12)
+        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func sectionPanel<Content: View>(
+        accent: Color,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14, content: content)
+            .padding(16)
+            .background {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(Color.black.opacity(0.36))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(accent.opacity(0.24), lineWidth: 1)
+                    }
+            }
+    }
+
+    private var deletionTitle: String {
+        recordingPendingDeletion?.sourceKind == .photoLibrary
+            ? localized("Usunąć projekt montażowy?")
+            : localized("Usunąć nagranie z urządzenia?")
+    }
+
+    private var deletionMessage: String {
+        recordingPendingDeletion?.sourceKind == .photoLibrary
+            ? localized("Lokalna kopia robocza zostanie usunięta. Oryginalny film w galerii i dane przejazdu pozostaną bez zmian.")
+            : localized("Tej operacji nie można cofnąć. Dane i wykresy przejazdu pozostaną zapisane.")
+    }
+
+    private var deletionActionTitle: String {
+        recordingPendingDeletion?.sourceKind == .photoLibrary
+            ? localized("Usuń projekt")
+            : localized("Usuń film")
     }
 
     @MainActor
@@ -273,8 +410,6 @@ struct DriveVideoHistorySection: View {
             modelContext.insert(recording)
             try modelContext.save()
             copiedFileName = nil
-            selectedRecordingID = recording.id
-            selectedTime = session.startedAt
             exportRecording = recording
         } catch {
             if let copiedFileName,
