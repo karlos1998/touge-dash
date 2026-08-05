@@ -280,8 +280,8 @@ final class DriveVideoFeatureTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: sourceURL) }
 
         let probe = PhotoLibrarySaverProbe()
-        let exporter = DriveVideoExporter { url in
-            await probe.save(url)
+        let exporter = DriveVideoExporter { url, creationDate in
+            await probe.save(url, creationDate: creationDate)
         }
         let recording = DriveVideoRecording(
             sessionID: UUID(),
@@ -297,11 +297,19 @@ final class DriveVideoFeatureTests: XCTestCase {
             hasAudio: false
         )
 
+        let exportStartedAt = Date()
         await exporter.export(recording: recording, samples: [], template: nil)
+        let exportFinishedAt = Date()
 
         XCTAssertEqual(exporter.state, .completed)
         let savedURL = await probe.savedURL
+        let savedCreationDate = await probe.creationDate
         XCTAssertEqual(savedURL, sourceURL)
+        XCTAssertNotNil(savedCreationDate)
+        if let savedCreationDate {
+            XCTAssertGreaterThanOrEqual(savedCreationDate, exportStartedAt)
+            XCTAssertLessThanOrEqual(savedCreationDate, exportFinishedAt)
+        }
     }
 
     @MainActor
@@ -380,8 +388,10 @@ final class DriveVideoFeatureTests: XCTestCase {
 
 private actor PhotoLibrarySaverProbe {
     private(set) var savedURL: URL?
+    private(set) var creationDate: Date?
 
-    func save(_ url: URL) {
+    func save(_ url: URL, creationDate: Date) {
         savedURL = url
+        self.creationDate = creationDate
     }
 }

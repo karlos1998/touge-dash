@@ -65,7 +65,7 @@ struct VideoTelemetryFrame: Sendable {
 
 @MainActor
 final class DriveVideoExporter: ObservableObject {
-    typealias PhotoLibrarySaver = @Sendable (URL) async throws -> Void
+    typealias PhotoLibrarySaver = @Sendable (URL, Date) async throws -> Void
 
     enum State: Equatable {
         case idle
@@ -127,7 +127,7 @@ final class DriveVideoExporter: ObservableObject {
             }
 
             state = .savingToPhotos
-            try await photoLibrarySaver(outputURL)
+            try await photoLibrarySaver(outputURL, Date())
             if let temporaryURL { try? FileManager.default.removeItem(at: temporaryURL) }
             state = .completed
         } catch {
@@ -252,7 +252,7 @@ final class DriveVideoExporter: ObservableObject {
 /// `DriveVideoExporter`'s MainActor isolation or Swift 6 traps at runtime when
 /// the export reaches 100% and the asset is added to the photo library.
 enum DriveVideoPhotoLibrarySaver {
-    nonisolated static func save(_ url: URL) async throws {
+    nonisolated static func save(_ url: URL, creationDate: Date) async throws {
         let authorization = await withCheckedContinuation { continuation in
             PHPhotoLibrary.requestAuthorization(for: .addOnly) { continuation.resume(returning: $0) }
         }
@@ -262,7 +262,8 @@ enum DriveVideoPhotoLibrarySaver {
 
         try await withCheckedThrowingContinuation { continuation in
             PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                let request = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                request?.creationDate = creationDate
             }, completionHandler: { succeeded, error in
                 if succeeded {
                     continuation.resume()
