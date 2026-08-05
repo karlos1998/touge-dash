@@ -61,6 +61,19 @@ class CloudAuthRepository(private val context: Context, private val json: Json) 
         if (refresh != null) runCatching { request("/api/v1/auth/logout", "POST", buildJsonObject { put("refreshToken", refresh) }, authorized = false) }
     }
 
+    suspend fun deleteAccount(): Boolean {
+        if (mutableSession.value == null) return true
+        mutableWorking.value = true
+        mutableError.value = null
+        return runCatching {
+            request("/api/v1/me", "DELETE")
+            clear()
+            true
+        }.onFailure { mutableError.value = it.message }
+            .getOrDefault(false)
+            .also { mutableWorking.value = false }
+    }
+
     suspend fun request(path: String, method: String = "GET", body: JsonElement? = null, authorized: Boolean = true): JsonElement = withContext(Dispatchers.IO) {
         var response = execute(path, method, body, if (authorized) mutableSession.value?.accessToken else null)
         if (authorized && response.first == 401) {

@@ -29,6 +29,7 @@ interface TougeDashDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertIncident(value: IncidentEntity)
     @Query("SELECT * FROM incidents ORDER BY triggeredAt DESC") fun incidents(): Flow<List<IncidentEntity>>
     @Query("SELECT * FROM incidents WHERE sessionId = :sessionId ORDER BY triggeredAt") fun incidentsForSession(sessionId: String): Flow<List<IncidentEntity>>
+    @Query("SELECT * FROM incidents WHERE id = :id") suspend fun incidentOnce(id: String): IncidentEntity?
     @Query("SELECT * FROM incidents WHERE syncState IN ('LOCAL','PENDING_UPLOAD','FAILED') ORDER BY triggeredAt LIMIT :limit") suspend fun pendingIncidents(limit: Int = 5): List<IncidentEntity>
     @Update suspend fun updateIncident(value: IncidentEntity)
 
@@ -54,4 +55,6 @@ interface TougeDashDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertOverlayTemplate(value: OverlayTemplateEntity)
     @Query("SELECT * FROM overlay_templates ORDER BY modifiedAt DESC") fun overlayTemplates(): Flow<List<OverlayTemplateEntity>>
+    @Query("SELECT * FROM overlay_templates ORDER BY modifiedAt DESC") suspend fun overlayTemplatesOnce(): List<OverlayTemplateEntity>
+    @Query("SELECT * FROM overlay_templates WHERE id = :id") suspend fun overlayTemplate(id: String): OverlayTemplateEntity?
 }

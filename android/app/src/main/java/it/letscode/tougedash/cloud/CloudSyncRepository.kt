@@ -10,6 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import it.letscode.tougedash.BuildConfig
 import it.letscode.tougedash.TougeDashApplication
 import it.letscode.tougedash.data.local.AlertConfigurationEntity
 import it.letscode.tougedash.data.local.DashboardTemplateEntity
@@ -37,6 +38,26 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class CloudSyncRepository(private val context: Context, private val dao: TougeDashDao, private val api: CloudAuthRepository, private val json: Json) {
+    suspend fun createIncidentShare(incidentId: String, unit: String, amount: Int?): String {
+        check(api.isAuthenticated) { "Sign in before sharing a report." }
+        check(sync()) { "Synchronize the report before sharing it." }
+        val incident = dao.incidentOnce(incidentId) ?: error("Incident report not found.")
+        var vehicle = dao.vehicle(incident.vehicleHardwareId) ?: error("Vehicle not found.")
+        vehicle = discover(vehicle)
+        val remoteVehicleId = vehicle.remoteId ?: error("Vehicle has not been synchronized.")
+        val body = buildJsonObject {
+            put("unit", unit)
+            if (unit != "FOREVER") put("amount", requireNotNull(amount))
+        }
+        val response = api.request(
+            "/api/v1/vehicles/$remoteVehicleId/incidents/${incident.id}/shares",
+            "POST",
+            body
+        ).jsonObject
+        val token = response["token"]?.jsonPrimitive?.content ?: error("Server did not return a share token.")
+        return BuildConfig.WEB_BASE_URL.trimEnd('/') + "/shared/incidents/" + token
+    }
+
     suspend fun renameVehicle(vehicle: VehicleEntity, displayName: String) {
         val name = displayName.trim().take(120)
         if (name.isBlank()) return

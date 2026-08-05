@@ -1,8 +1,10 @@
 package it.letscode.tougedash.ui
 
+import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,24 +13,31 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.NoteAdd
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -63,6 +72,7 @@ import it.letscode.tougedash.data.local.IncidentEntity
 import it.letscode.tougedash.data.local.SyncState
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
 import it.letscode.tougedash.di.AppContainer
+import it.letscode.tougedash.history.CapturedTelemetryPoint
 import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
@@ -71,6 +81,7 @@ import it.letscode.tougedash.ui.theme.TougeOrange
 import it.letscode.tougedash.ui.theme.TougePanel
 import it.letscode.tougedash.ui.theme.TougeRed
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -151,22 +162,26 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
     val annotations by container.historyRepository.annotations(id).collectAsState(initial = emptyList())
     var scrubber by remember(id) { mutableFloatStateOf(0f) }
     var noteDialog by remember { mutableStateOf(false) }
+    var selectedIncident by remember(id) { mutableStateOf<IncidentEntity?>(null) }
     val selected = samples.getOrNull(((samples.lastIndex.coerceAtLeast(0)) * scrubber).roundToInt())
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 30.dp)) {
         item {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = back) { Icon(Icons.Default.ArrowBack, null) }
+                IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
                 Column(Modifier.weight(1f)) {
                     Text(appText("DRIVE REPORT", "RAPORT PRZEJAZDU"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     Text(session?.let { DateFormat.getDateTimeInstance().format(Date(it.startedAt)) } ?: "…", fontWeight = FontWeight.Black)
                 }
-                IconButton(onClick = { noteDialog = true }) { Icon(Icons.Default.NoteAdd, null, tint = TougeMint) }
+                IconButton(onClick = { noteDialog = true }) { Icon(Icons.AutoMirrored.Filled.NoteAdd, null, tint = TougeMint) }
             }
         }
         if (session == null) item { Box(Modifier.fillMaxWidth().height(300.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         else {
             item { SessionSummary(session!!) }
-            if (incidents.isNotEmpty()) item { IncidentSection(incidents, session!!.startedAt) { timestamp -> scrubber = ((timestamp - session!!.startedAt).toFloat() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).coerceIn(0f, 1f) } }
+            if (incidents.isNotEmpty()) item { IncidentSection(incidents, session!!.startedAt) { incident ->
+                scrubber = ((incident.triggeredAt - session!!.startedAt).toFloat() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).coerceIn(0f, 1f)
+                selectedIncident = incident
+            } }
             item {
                 TelemetryCursor(selected, session!!.startedAt)
                 Slider(scrubber, { scrubber = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
@@ -187,6 +202,7 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
             container.dao.upsertAnnotation(AnnotationEntity(UUID.randomUUID().toString(), session!!.vehicleHardwareId, id, recordedAt = timestamp, body = body))
         }
     }
+    selectedIncident?.let { incident -> IncidentReportDialog(incident, container) { selectedIncident = null } }
 }
 
 @Composable
@@ -249,14 +265,130 @@ private fun TelemetryChart(title: String, samples: List<TelemetrySampleEntity>, 
 }
 
 @Composable
-private fun IncidentSection(values: List<IncidentEntity>, startedAt: Long, select: (Long) -> Unit) {
+private fun IncidentSection(values: List<IncidentEntity>, startedAt: Long, select: (IncidentEntity) -> Unit) {
     Column(Modifier.padding(horizontal = 14.dp, vertical = 7.dp)) {
         Text(appText("INCIDENTS", "INCYDENTY"), color = TougeRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         values.forEach { incident ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).background(TougeRed.copy(alpha = .08f), RoundedCornerShape(4.dp)).clickable { select(incident.triggeredAt) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).background(TougeRed.copy(alpha = .08f), RoundedCornerShape(4.dp)).clickable { select(incident) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Flag, null, tint = TougeRed)
                 Column(Modifier.padding(start = 10.dp).weight(1f)) { Text(incident.kind.replace('_', ' '), fontWeight = FontWeight.Bold); Text("${duration(incident.triggeredAt - startedAt)} • ${incident.triggerValue} ${incident.triggerUnit}", color = TougeMuted, fontSize = 11.sp) }
                 Text(incident.severity, color = TougeRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun IncidentReportDialog(incident: IncidentEntity, container: AppContainer, dismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val shareChooserTitle = appText("Send incident report", "Wyślij raport incydentu")
+    val points = remember(incident.id, incident.encodedSamples) {
+        runCatching { container.json.decodeFromString<List<CapturedTelemetryPoint>>(incident.encodedSamples) }.getOrDefault(emptyList())
+    }
+    var unit by remember { mutableStateOf("DAYS") }
+    var amount by remember { mutableStateOf(7) }
+    var working by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var shareUrl by remember { mutableStateOf<String?>(null) }
+    var note by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = {
+            Column {
+                Text(appText("INCIDENT REPORT", "RAPORT INCYDENTU"), color = TougeRed, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(incident.kind.replace('_', ' '), fontWeight = FontWeight.Black)
+            }
+        },
+        text = {
+            Column(Modifier.heightIn(max = 620.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    MiniValue(appText("TRIGGER", "WARTOŚĆ"), "${incident.triggerValue} ${incident.triggerUnit}", TougeRed)
+                    MiniValue(appText("LIMIT", "PRÓG"), "${incident.thresholdValue} ${incident.triggerUnit}", TougeOrange)
+                    MiniValue("RPM", incident.triggerRpm.roundToInt().toString(), TougeCyan)
+                }
+                Text(
+                    appText(
+                        "${points.size} samples • ${duration(incident.captureEndedAt - incident.captureStartedAt)} capture • 30 s before and up to 60 s after the trigger",
+                        "${points.size} próbek • ${duration(incident.captureEndedAt - incident.captureStartedAt)} zapisu • 30 s przed i do 60 s po zdarzeniu"
+                    ),
+                    color = TougeMuted,
+                    fontSize = 10.sp
+                )
+                IncidentSparkline(points)
+                Text(appText("SHARE WITH A MECHANIC", "WYŚLIJ MECHANIKOWI"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(appText("The link opens only this report and does not require an account.", "Link otwiera wyłącznie ten raport i nie wymaga konta."), color = TougeMuted, fontSize = 11.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(unit == "HOURS", { unit = "HOURS"; amount = amount.coerceIn(1, 168) }, label = { Text(appText("Hours", "Godziny")) })
+                    FilterChip(unit == "DAYS", { unit = "DAYS"; amount = amount.coerceIn(1, 365) }, label = { Text(appText("Days", "Dni")) })
+                    FilterChip(unit == "FOREVER", { unit = "FOREVER" }, label = { Text(appText("Forever", "Bezterminowo")) })
+                }
+                if (unit != "FOREVER") Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { amount = (amount - 1).coerceAtLeast(1) }) { Icon(Icons.Default.Remove, null) }
+                    Text(amount.toString(), fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 12.dp))
+                    IconButton(onClick = { amount = (amount + 1).coerceAtMost(if (unit == "HOURS") 168 else 365) }) { Icon(Icons.Default.Add, null) }
+                }
+                if (shareUrl == null) Button(
+                    enabled = !working && container.authRepository.isAuthenticated,
+                    onClick = {
+                        scope.launch {
+                            working = true; error = null
+                            runCatching { container.cloudSyncRepository.createIncidentShare(incident.id, unit, amount.takeUnless { unit == "FOREVER" }) }
+                                .onSuccess { shareUrl = it }
+                                .onFailure { error = it.message }
+                            working = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { if (working) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) else Icon(Icons.Default.Share, null); Text(if (working) appText(" Creating link…", " Tworzenie linku…") else appText(" Create secure link", " Utwórz bezpieczny link")) }
+                else {
+                    Text(shareUrl!!, color = TougeMint, fontSize = 10.sp)
+                    Button(onClick = {
+                        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareUrl) }, shareChooserTitle))
+                    }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Share, null); Text(appText(" Send to mechanic", " Wyślij mechanikowi")) }
+                }
+                if (!container.authRepository.isAuthenticated) Text(appText("Sign in to Touge Dash Cloud before creating a link.", "Zaloguj się do Touge Dash Cloud, aby utworzyć link."), color = TougeOrange, fontSize = 11.sp)
+                error?.let { Text(it, color = TougeRed, fontSize = 11.sp) }
+                Text(appText("NOTE AT THE TRIGGER", "NOTATKA PRZY ZDARZENIU"), color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                OutlinedTextField(note, { note = it }, modifier = Modifier.fillMaxWidth(), minLines = 2, placeholder = { Text(appText("What happened here?", "Co wydarzyło się w tym momencie?")) })
+                Button(enabled = note.isNotBlank(), onClick = {
+                    val body = note.trim(); note = ""
+                    scope.launch {
+                        container.dao.upsertAnnotation(AnnotationEntity(UUID.randomUUID().toString(), incident.vehicleHardwareId, incident.sessionId, incident.id, incident.triggeredAt, body))
+                        container.cloudSyncRepository.schedule()
+                    }
+                }) { Icon(Icons.AutoMirrored.Filled.NoteAdd, null); Text(appText(" Add note", " Dodaj notatkę")) }
+            }
+        },
+        confirmButton = { TextButton(onClick = dismiss) { Text(appText("Close", "Zamknij")) } }
+    )
+}
+
+@Composable
+private fun IncidentSparkline(points: List<CapturedTelemetryPoint>) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = .18f))) {
+        Column(Modifier.padding(10.dp)) {
+            Text(appText("BOOST • OIL PRESSURE • COOLANT", "BOOST • CIŚNIENIE OLEJU • PŁYN"), color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Canvas(Modifier.fillMaxWidth().height(130.dp).padding(top = 8.dp)) {
+                if (points.size < 2) return@Canvas
+                val series = listOf(
+                    points.map { it.boostBar } to TougeCyan,
+                    points.map { it.oilPressureBar } to TougeMint,
+                    points.map { it.coolantCelsius } to TougeOrange
+                )
+                series.forEach { (values, color) ->
+                    val minimum = values.minOrNull() ?: 0.0
+                    val maximum = (values.maxOrNull() ?: 1.0).takeIf { it > minimum } ?: minimum + 1
+                    val path = Path()
+                    values.forEachIndexed { index, value ->
+                        val x = index.toFloat() / values.lastIndex * size.width
+                        val y = size.height * (1 - ((value - minimum) / (maximum - minimum)).toFloat())
+                        if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    drawPath(path, color, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+                }
+                val triggerX = points.indexOfFirst { it.recordedAt >= points.first().recordedAt + 30_000 }.takeIf { it >= 0 }?.toFloat()?.div(points.lastIndex)?.times(size.width)
+                triggerX?.let { drawLine(TougeRed, Offset(it, 0f), Offset(it, size.height), 1.dp.toPx()) }
             }
         }
     }

@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -20,6 +22,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -49,6 +52,7 @@ fun CloudAccountCard(container: AppContainer) {
     val error by container.authRepository.error.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var confirmDelete by remember { mutableStateOf(false) }
     Card(Modifier.fillMaxWidth().padding(top = 14.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Text("TOUGE DASH CLOUD", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -57,9 +61,13 @@ fun CloudAccountCard(container: AppContainer) {
                 Text(account!!.account.email, color = TougeMuted)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { container.cloudSyncRepository.schedule() }) { Icon(Icons.Default.CloudSync, null); Text(appText(" Sync now", " Synchronizuj")) }
-                    OutlinedButton(onClick = { scope.launch { container.authRepository.logout() } }) { Icon(Icons.Default.Logout, null); Text(appText(" Sign out", " Wyloguj")) }
+                    OutlinedButton(onClick = { scope.launch { container.authRepository.logout() } }) { Icon(Icons.AutoMirrored.Filled.Logout, null); Text(appText(" Sign out", " Wyloguj")) }
                 }
                 OutlinedButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_BASE_URL + "/profile"))) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Language, null); Text(appText(" Profile, vehicles and sharing", " Profil, auta i udostępnianie")) }
+                TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Default.DeleteForever, null, tint = TougeRed)
+                    Text(appText(" Delete cloud account", " Usuń konto w chmurze"), color = TougeRed)
+                }
             } else {
                 var register by remember { mutableStateOf(false) }
                 var email by remember { mutableStateOf("") }
@@ -88,6 +96,20 @@ fun CloudAccountCard(container: AppContainer) {
             error?.let { Text(it, color = TougeRed, fontSize = 12.sp) }
         }
     }
+    if (confirmDelete) AlertDialog(
+        onDismissRequest = { confirmDelete = false },
+        title = { Text(appText("Delete account and cloud data?", "Usunąć konto i dane z chmury?")) },
+        text = { Text(appText(
+            "This permanently removes your account, vehicles, synchronized drives, locations, sharing links and active server sessions. Local history on this Android device stays available.",
+            "To bezpowrotnie usunie konto, auta, zsynchronizowane przejazdy, lokalizacje, linki udostępnień i aktywne sesje serwera. Lokalna historia na tym urządzeniu z Androidem pozostanie dostępna."
+        )) },
+        confirmButton = {
+            Button(onClick = { scope.launch { if (container.authRepository.deleteAccount()) confirmDelete = false } }) {
+                Text(if (working) appText("Deleting…", "Usuwanie…") else appText("Delete permanently", "Usuń bezpowrotnie"))
+            }
+        },
+        dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(appText("Cancel", "Anuluj")) } }
+    )
 }
 
 private fun passwordStrength(value: String): Float {
