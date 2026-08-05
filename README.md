@@ -1,7 +1,7 @@
 # Touge Dash
 
-Natywna aplikacja mobilna do podglądu danych z ECUMaster EMU Black na iPhonie,
-Apple Watch i ekranie CarPlay. Powstała po to, żeby najważniejsze parametry
+Natywne aplikacje mobilne do podglądu danych z ECUMaster EMU Black na Androidzie,
+iPhonie, Apple Watch i ekranie CarPlay. Powstały po to, żeby najważniejsze parametry
 silnika były zawsze pod ręką bez telefonu przyklejonego do szyby.
 
 Kod protokołu jest niezależną implementacją — projekt nie zawiera kodu ani
@@ -34,7 +34,7 @@ zasobów z oficjalnego eDash.
 - automatyczne wykrywanie i łączenie z interfejsami ECUMaster BLE,
 - odczyt ramek z `EMULOGGER` przez GATT `FFE0` / `FFE1`,
 - RPM, boost/MAP, TPS, AFR/lambda, temperatury, ciśnienia i napięcie,
-- adaptacyjny dashboard SwiftUI na iPhone'a i iPada, w pionie i poziomie,
+- konfigurowalny dashboard na Androida, iPhone'a i iPada, w pionie i poziomie,
 - lokalna historia przejazdów z interaktywnymi wykresami i opcjonalną trasą GPS,
 - lokalne nagrywanie przejazdu z odtwarzaniem zsynchronizowanym z telemetrią,
 - eksport filmu do Zdjęć z konfigurowalną nakładką parametrów,
@@ -54,6 +54,7 @@ zasobów z oficjalnego eDash.
 
 Aktualna wersja była testowana na:
 
+- emulatorze Pixel z Androidem 14 w pionie i poziomie,
 - iPhone 14 Pro z iOS 26.5.2,
 - Apple Watch Series 11 (46 mm) Simulator z watchOS 26.2,
 - ECUMaster EMU Black,
@@ -83,8 +84,8 @@ domyślnie wyłączony, a historia pozostaje wyłącznie na urządzeniu.
 Historia działa offline niezależnie od konta. Po zalogowaniu aplikacja rozpoznaje
 auto po UUID interfejsu Bluetooth, przy pierwszym połączeniu prosi o jego nazwę,
 a następnie wysyła zaległe sesje partiami. Utrata internetu nie przerywa zapisu:
-próbki zostają w SwiftData i są dosyłane po odzyskaniu połączenia. Tokeny sesji
-są zapisane w Keychain.
+próbki zostają w lokalnej bazie i są dosyłane po odzyskaniu połączenia. Tokeny
+sesji są przechowywane w Keychain na iOS i szyfrowanej pamięci na Androidzie.
 
 ### Nagrania przejazdów
 
@@ -124,6 +125,29 @@ mechanikowi bez udostępniania reszty garażu.
 Panel WWW korzysta z tego samego konta. Właściciel widzi tam wykresy, mapę,
 eksport CSV i dane live, a auto może udostępnić mechanikowi albo obserwatorowi.
 Backend oraz panel są utrzymywane w osobnych prywatnych repozytoriach.
+
+## Android
+
+Aplikacja Android jest natywna — Kotlin, Jetpack Compose, Room, WorkManager,
+CameraX i Media3. Nie jest opakowaniem strony WWW. Wymaga Androida 8.0 (API 26)
+lub nowszego. Wydanie można pobrać bez konta Google Play:
+
+[Pobierz najnowszy Touge Dash APK](https://github.com/karlos1998/touge-dash/releases/latest/download/touge-dash-android.apk)
+
+Po pobraniu system może poprosić o jednorazową zgodę na instalację aplikacji z
+przeglądarki. Aktualizacje są podpisywane tym samym kluczem, więc kolejne APK
+instalują się na poprzedniej wersji bez utraty lokalnej historii.
+
+Projekt otwiera się w Android Studio przez katalog `android/`. Build developerski:
+
+```bash
+cd android
+./gradlew testDebugUnitTest lintDebug assembleDebug
+```
+
+Android automatycznie wyszukuje wyłącznie pasujące interfejsy ECUMaster, zapamiętuje
+ostatni EMULOGGER i utrzymuje zapis w usłudze pierwszoplanowej po wygaszeniu ekranu.
+Połączenie z FFE1 pozostaje tylko do odczytu. Zapis GPS jest domyślnie wyłączony.
 
 ## iPhone
 
@@ -200,6 +224,7 @@ własną nazwę. Instrukcja uruchomienia znajduje się w
 
 ```text
 ios/                 aplikacje iPhone/Apple Watch, widgety i Live Activity
+android/             natywna aplikacja Android i konfiguracja wydania APK
 tools/EMULoggerSimulator/  natywny symulator BLE dla macOS
 docs/screenshots/    zrzuty ekranów używane w README
 ```
@@ -208,6 +233,15 @@ Backend Touge Dash Cloud i panel webowy są osobnymi częściami platformy i nie
 wchodzą w skład tego repozytorium.
 
 ## Testy
+
+Android:
+
+```bash
+cd android
+./gradlew testDebugUnitTest lintDebug assembleDebug
+```
+
+iOS:
 
 ```bash
 xcodebuild \
