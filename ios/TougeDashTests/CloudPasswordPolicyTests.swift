@@ -9,9 +9,9 @@ final class CloudPasswordPolicyTests: XCTestCase {
     }
 
     func testStrengthRewardsVarietyWithoutRequiringBankStylePassword() {
-        XCTAssertEqual(CloudPasswordPolicy.strength("telemetria42").label, "W porządku")
-        XCTAssertEqual(CloudPasswordPolicy.strength("DlugieHaslo").label, "Uzupełnij wymagania")
-        XCTAssertEqual(CloudPasswordPolicy.strength("Touge-Dash-42").label, "Mocne")
+        XCTAssertEqual(CloudPasswordPolicy.strength("telemetria42").label, localized("W porządku"))
+        XCTAssertEqual(CloudPasswordPolicy.strength("DlugieHaslo").label, localized("Uzupełnij wymagania"))
+        XCTAssertEqual(CloudPasswordPolicy.strength("Touge-Dash-42").label, localized("Mocne"))
     }
 }
 
