@@ -29,11 +29,17 @@ jobs:
         run: xcodebuild -version
       - name: Select an available iPhone simulator
         run: |
-          SIMULATOR_ID="$(xcodebuild \
+          DESTINATIONS="$(xcodebuild \
             -project ios/TougeDash.xcodeproj \
             -scheme TougeDash \
-            -showdestinations \
-            | awk -F 'id:' '/platform:iOS Simulator, arch:.*name:iPhone/ { split($2, id, ","); gsub(/[[:space:]]/, "", id[1]); print id[1]; exit }')"
+            -showdestinations)"
+          printf '%s\n' "$DESTINATIONS"
+          SIMULATOR_ID="$(printf '%s\n' "$DESTINATIONS" \
+            | awk -F 'id:' '/platform:iOS Simulator/ && /name:iPhone/ { split($2, id, ","); gsub(/[[:space:]]/, "", id[1]); print id[1]; exit }')"
+          if test -z "$SIMULATOR_ID"; then
+            SIMULATOR_ID="$(printf '%s\n' "$DESTINATIONS" \
+              | awk -F 'id:' '/platform:iOS Simulator/ && !/placeholder/ { split($2, id, ","); gsub(/[[:space:]]/, "", id[1]); print id[1]; exit }')"
+          fi
           test -n "$SIMULATOR_ID"
           echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
       - name: Run unit tests
