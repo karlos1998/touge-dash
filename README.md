@@ -191,9 +191,9 @@ albo 25 razy na sekundę, udostępnia gotowe scenariusze jazdy i pozwala ręczni
 zmieniać parametry. Dzięki temu można sprawdzić dashboard, nagrania, historię,
 alerty i reconnect bez uruchamiania samochodu.
 
-Symulator nie obsługuje zapisów do BLE ani komunikacji z ECU. Utworzone z nim
-przejazdy pozostają lokalne i nie trafiają do Touge Dash Cloud. Instrukcja
-uruchomienia znajduje się w
+Symulator nie obsługuje zapisów do BLE ani komunikacji z ECU. Przy włączonej
+synchronizacji online jest rozpoznawany jako osobne auto, któremu można nadać
+własną nazwę. Instrukcja uruchomienia znajduje się w
 [`tools/EMULoggerSimulator/README.md`](tools/EMULoggerSimulator/README.md).
 
 ## Układ repozytorium
@@ -204,10 +204,8 @@ tools/EMULoggerSimulator/  natywny symulator BLE dla macOS
 docs/screenshots/    zrzuty ekranów używane w README
 ```
 
-Pozostałe części platformy:
-
-- API Spring Boot: [karlos1998/touge-dash-api](https://github.com/karlos1998/touge-dash-api)
-- panel Angular: [karlos1998/touge-dash-web](https://github.com/karlos1998/touge-dash-web)
+Backend Touge Dash Cloud i panel webowy są osobnymi częściami platformy i nie
+wchodzą w skład tego repozytorium.
 
 ## Testy
 
