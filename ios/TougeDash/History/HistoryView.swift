@@ -371,15 +371,14 @@ private struct DriveSessionDetailView: View {
                 LazyVStack(spacing: 14) {
                     SessionDetailHeader(session: session)
 
-                    if !recordings.isEmpty {
-                        DriveVideoHistorySection(
-                            recordings: recordings,
-                            samples: cachedSamples,
-                            selectedTime: $selectedTime,
-                            overlayStore: videoOverlays,
-                            onDelete: deleteVideo
-                        )
-                    }
+                    DriveVideoHistorySection(
+                        session: session,
+                        recordings: recordings,
+                        samples: cachedSamples,
+                        selectedTime: $selectedTime,
+                        overlayStore: videoOverlays,
+                        onDelete: deleteVideo
+                    )
 
                     if let selectedSample {
                         SelectedTelemetryStrip(sample: selectedSample, startedAt: session.startedAt)

@@ -1,10 +1,12 @@
 import AVFoundation
 import AVKit
+import PhotosUI
 import SwiftData
 import SwiftUI
 
 struct DriveVideoHistorySection: View {
     @Environment(\.modelContext) private var modelContext
+    let session: DriveSession
     let recordings: [DriveVideoRecording]
     let samples: [TelemetryHistorySample]
     @Binding var selectedTime: Date?
@@ -14,8 +16,11 @@ struct DriveVideoHistorySection: View {
     @State private var selectedRecordingID: UUID?
     @State private var showsOverlayPreview = true
     @State private var showingOverlayManager = false
-    @State private var showingExport = false
+    @State private var exportRecording: DriveVideoRecording?
     @State private var showingDeleteConfirmation = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isImportingVideo = false
+    @State private var importError: String?
 
     private var sortedRecordings: [DriveVideoRecording] {
         recordings.sorted { $0.startedAt < $1.startedAt }
@@ -58,15 +63,26 @@ struct DriveVideoHistorySection: View {
             .sheet(isPresented: $showingOverlayManager) {
                 VideoOverlayTemplateManagerView(store: overlayStore)
             }
-            .sheet(isPresented: $showingExport) {
-                if let recording = selectedRecording {
-                    DriveVideoExportSheet(
-                        recording: recording,
-                        samples: samples,
-                        sample: selectedSample,
-                        overlayStore: overlayStore
-                    )
-                }
+            .sheet(item: $exportRecording) { recording in
+                DriveVideoExportSheet(
+                    session: session,
+                    recording: recording,
+                    samples: samples,
+                    sample: selectedSample,
+                    overlayStore: overlayStore
+                )
+            }
+            .alert(localized("Nie udało się dodać filmu"), isPresented: Binding(
+                get: { importError != nil },
+                set: { if !$0 { importError = nil } }
+            )) {
+                Button(localized("OK"), role: .cancel) { importError = nil }
+            } message: {
+                Text(importError ?? "")
+            }
+            .onChange(of: selectedPhotoItem) { _, item in
+                guard let item else { return }
+                Task { await importVideo(from: item) }
             }
             .confirmationDialog(localized("Usunąć nagranie z urządzenia?"), isPresented: $showingDeleteConfirmation) {
                 if let recording = selectedRecording {
@@ -79,7 +95,8 @@ struct DriveVideoHistorySection: View {
     }
 
     private var cardContent: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        let importTitle = sortedRecordings.isEmpty ? localized("Użyj mojego filmu") : localized("Dodaj film")
+        return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(localized("NAGRANIE PRZEJAZDU"), systemImage: "video.fill")
@@ -91,6 +108,17 @@ struct DriveVideoHistorySection: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                PhotosPicker(selection: $selectedPhotoItem, matching: .videos, preferredItemEncoding: .current) {
+                    Label(
+                        importTitle,
+                        systemImage: "photo.on.rectangle.angled"
+                    )
+                    .font(.caption.weight(.bold))
+                }
+                .buttonStyle(.bordered)
+                .tint(.tougeCyan)
+                .disabled(isImportingVideo)
+
                 if sortedRecordings.count > 1 {
                     Menu {
                         ForEach(Array(sortedRecordings.enumerated()), id: \.element.id) { index, recording in
@@ -118,6 +146,7 @@ struct DriveVideoHistorySection: View {
 
             if let recording = selectedRecording {
                 DriveVideoSynchronizedPlayer(
+                    session: session,
                     recording: recording,
                     selectedTime: $selectedTime,
                     overlay: showsOverlayPreview ? selectedOverlay : nil,
@@ -165,7 +194,7 @@ struct DriveVideoHistorySection: View {
 
                     Menu {
                         Button {
-                            showingExport = true
+                            exportRecording = recording
                         } label: {
                             Label(localized("Eksportuj do Zdjęć"), systemImage: "square.and.arrow.up")
                         }
@@ -181,7 +210,79 @@ struct DriveVideoHistorySection: View {
                     .tint(.tougeCyan)
                 }
                 .font(.caption.weight(.bold))
+            } else {
+                VStack(spacing: 12) {
+                    if isImportingVideo {
+                        ProgressView()
+                        Text(localized("Kopiowanie filmu na urządzenie…"))
+                            .font(.caption.weight(.bold))
+                    } else {
+                        Image(systemName: "video.badge.plus")
+                            .font(.system(size: 34, weight: .light))
+                            .foregroundStyle(Color.tougeCyan)
+                        Text(localized("Ten przejazd nie ma jeszcze filmu"))
+                            .font(.headline)
+                        Text(localized("Wybierz nagranie z galerii, np. z kamery samochodowej, a następnie zsynchronizuj je z zapisanymi parametrami."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 24)
+                .padding(.horizontal, 16)
+                .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 16))
             }
+        }
+    }
+
+    @MainActor
+    private func importVideo(from item: PhotosPickerItem) async {
+        guard !isImportingVideo else { return }
+        isImportingVideo = true
+        var copiedFileName: String?
+        var insertedRecording: DriveVideoRecording?
+        defer {
+            isImportingVideo = false
+            selectedPhotoItem = nil
+        }
+        do {
+            guard let transfer = try await item.loadTransferable(type: DriveVideoTransfer.self) else {
+                throw DriveVideoImportError.unavailable
+            }
+            let prepared = try await DriveVideoImportService.prepare(from: transfer)
+            copiedFileName = prepared.fileName
+            let recording = DriveVideoRecording(
+                sessionID: session.id,
+                fileName: prepared.fileName,
+                startedAt: session.startedAt,
+                endedAt: session.startedAt.addingTimeInterval(prepared.metadata.duration),
+                duration: prepared.metadata.duration,
+                fileSizeBytes: prepared.fileSizeBytes,
+                pixelWidth: prepared.metadata.width,
+                pixelHeight: prepared.metadata.height,
+                framesPerSecond: prepared.metadata.framesPerSecond,
+                cameraName: DriveVideoSourceKind.photoLibrary.title,
+                hasAudio: prepared.metadata.hasAudio,
+                preferredOverlayTemplateID: overlayStore.selectedTemplateID,
+                sourceKind: .photoLibrary,
+                sourceDisplayName: prepared.displayName,
+                telemetryTrimStartSeconds: 0
+            )
+            insertedRecording = recording
+            modelContext.insert(recording)
+            try modelContext.save()
+            copiedFileName = nil
+            selectedRecordingID = recording.id
+            selectedTime = session.startedAt
+            exportRecording = recording
+        } catch {
+            if let copiedFileName,
+               let directory = try? DriveVideoFileStore.directoryURL() {
+                try? FileManager.default.removeItem(at: directory.appending(path: copiedFileName))
+            }
+            if let insertedRecording { modelContext.delete(insertedRecording) }
+            importError = error.localizedDescription
         }
     }
 
@@ -212,6 +313,7 @@ struct DriveVideoHistorySection: View {
 }
 
 private struct DriveVideoSynchronizedPlayer: View {
+    let session: DriveSession
     let recording: DriveVideoRecording
     @Binding var selectedTime: Date?
     let overlay: VideoOverlayTemplate?
@@ -221,6 +323,10 @@ private struct DriveVideoSynchronizedPlayer: View {
     @State private var fileIsMissing = false
     @State private var lastPlayerTimestamp: Date?
     @State private var isFollowingPlayback = false
+
+    private var alignment: DriveVideoTimelineAlignment {
+        DriveVideoTimelineAlignment(recording: recording, session: session)
+    }
 
     var body: some View {
         ZStack {
@@ -248,8 +354,10 @@ private struct DriveVideoSynchronizedPlayer: View {
         .onDisappear { player?.pause() }
         .onChange(of: selectedTime) { _, newValue in
             guard !isFollowingPlayback, let newValue, let player else { return }
-            let seconds = newValue.timeIntervalSince(recording.startedAt)
-            guard seconds >= -0.15, seconds <= recording.duration + 0.15 else { return }
+            let telemetrySeconds = newValue.timeIntervalSince(session.startedAt)
+            let seconds = alignment.videoStartSeconds + telemetrySeconds - alignment.telemetryStartSeconds
+            guard seconds >= alignment.videoStartSeconds - 0.15,
+                  seconds <= alignment.videoEndSeconds + 0.15 else { return }
             let current = player.currentTime().seconds
             guard !current.isFinite || abs(current - seconds) > 0.28 else { return }
             player.seek(to: CMTime(seconds: max(0, seconds), preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
@@ -274,15 +382,20 @@ private struct DriveVideoSynchronizedPlayer: View {
 
         let newPlayer = AVPlayer(url: url)
         player = newPlayer
-        let initialSeconds = selectedTime.map { $0.timeIntervalSince(recording.startedAt) } ?? 0
-        if initialSeconds > 0, initialSeconds <= recording.duration {
+        let initialSeconds = selectedTime.map {
+            alignment.videoStartSeconds + $0.timeIntervalSince(session.startedAt) - alignment.telemetryStartSeconds
+        } ?? alignment.videoStartSeconds
+        if initialSeconds >= 0, initialSeconds <= recording.duration {
             await newPlayer.seek(to: CMTime(seconds: initialSeconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
         }
 
         while !Task.isCancelled, player === newPlayer {
             let seconds = newPlayer.currentTime().seconds
-            if seconds.isFinite, seconds >= 0 {
-                let timestamp = recording.startedAt.addingTimeInterval(seconds)
+            if seconds.isFinite,
+               seconds >= alignment.videoStartSeconds,
+               seconds <= alignment.videoEndSeconds + 0.15 {
+                let telemetrySeconds = alignment.telemetryStartSeconds + seconds - alignment.videoStartSeconds
+                let timestamp = session.startedAt.addingTimeInterval(telemetrySeconds)
                 if lastPlayerTimestamp.map({ abs($0.timeIntervalSince(timestamp)) > 0.08 }) ?? true {
                     isFollowingPlayback = true
                     lastPlayerTimestamp = timestamp
@@ -314,14 +427,40 @@ private struct VideoMetadataPill: View {
 private struct DriveVideoExportSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    let session: DriveSession
     let recording: DriveVideoRecording
     let samples: [TelemetryHistorySample]
     let sample: TelemetryHistorySample?
     @ObservedObject var overlayStore: VideoOverlayTemplateStore
+    private let timelineSpeedValues: [Double]
 
     @StateObject private var exporter = DriveVideoExporter()
     @State private var addsOverlay = true
     @State private var showingOverlayManager = false
+    @State private var alignment: DriveVideoTimelineAlignment
+    @State private var overlayDraft: VideoOverlayTemplate
+    @State private var selectedElementID: UUID?
+    @State private var player: AVPlayer?
+    @State private var fileIsMissing = false
+    @State private var previewTelemetryTime: Date?
+    @State private var thumbnails: [CGImage] = []
+
+    init(
+        session: DriveSession,
+        recording: DriveVideoRecording,
+        samples: [TelemetryHistorySample],
+        sample: TelemetryHistorySample?,
+        overlayStore: VideoOverlayTemplateStore
+    ) {
+        self.session = session
+        self.recording = recording
+        self.samples = samples
+        self.sample = sample
+        self.overlayStore = overlayStore
+        timelineSpeedValues = samples.videoTimelineValues(maxPoints: 480)
+        _alignment = State(initialValue: DriveVideoTimelineAlignment(recording: recording, session: session))
+        _overlayDraft = State(initialValue: overlayStore.template(id: recording.preferredOverlayTemplateID))
+    }
 
     var body: some View {
         NavigationStack {
@@ -342,14 +481,11 @@ private struct DriveVideoExportSheet: View {
             .sheet(isPresented: $showingOverlayManager) {
                 VideoOverlayTemplateManagerView(store: overlayStore)
             }
-            .onAppear {
-                if let preferred = recording.preferredOverlayTemplateID {
-                    overlayStore.select(preferred)
-                }
+            .task(id: recording.id) {
+                await preparePreview()
             }
-            .onChange(of: overlayStore.selectedTemplateID) { _, templateID in
-                recording.preferredOverlayTemplateID = templateID
-                try? modelContext.save()
+            .onDisappear {
+                player?.pause()
             }
         }
         .preferredColorScheme(.dark)
@@ -358,6 +494,7 @@ private struct DriveVideoExportSheet: View {
     private var exportContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             exportPreview
+            synchronizationEditor
             exportOptions
             exportStatus
             exportButton
@@ -370,17 +507,39 @@ private struct DriveVideoExportSheet: View {
     private var exportPreview: some View {
         ZStack {
             Color.black
-            if addsOverlay {
-                VideoTelemetryOverlayView(template: overlayStore.selectedTemplate, sample: sample)
+            if let player {
+                VideoPlayer(player: player)
+                if addsOverlay {
+                    EditableVideoTelemetryOverlayView(
+                        template: $overlayDraft,
+                        selectedElementID: $selectedElementID,
+                        sample: previewSample
+                    )
                     .padding(5)
+                }
+            } else if fileIsMissing {
+                ContentUnavailableView(localized("Brak lokalnego filmu"), systemImage: "video.slash")
             } else {
-                Image(systemName: "video.fill")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
+                ProgressView()
             }
         }
         .aspectRatio(exportAspectRatio, contentMode: .fit)
+        .frame(maxHeight: 520)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(selectedElementID == nil ? Color.white.opacity(0.12) : Color.tougeCyan.opacity(0.7), lineWidth: 1)
+        }
+        .overlay(alignment: .topLeading) {
+            if addsOverlay {
+                Label(localized("Przeciągnij element, aby zmienić jego pozycję"), systemImage: "hand.draw.fill")
+                    .font(.caption2.weight(.black))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(9)
+            }
+        }
     }
 
     private var exportAspectRatio: CGFloat {
@@ -395,7 +554,7 @@ private struct DriveVideoExportSheet: View {
                 .tint(.tougeCyan)
 
             if addsOverlay {
-                Picker(localized("Szablon HUD"), selection: $overlayStore.selectedTemplateID) {
+                Picker(localized("Szablon HUD"), selection: templateSelection) {
                     ForEach(overlayStore.templates) { template in
                         Text(template.name).tag(template.id)
                     }
@@ -417,8 +576,18 @@ private struct DriveVideoExportSheet: View {
     private var exportButton: some View {
         Button {
             Task {
-                let template = addsOverlay ? overlayStore.selectedTemplate : nil
-                await exporter.export(recording: recording, samples: exportSamples(), template: template)
+                alignment.persist(to: recording)
+                overlayDraft.modifiedAt = .now
+                if addsOverlay { overlayStore.save(overlayDraft) }
+                recording.preferredOverlayTemplateID = overlayDraft.id
+                try? modelContext.save()
+                await exporter.export(
+                    recording: recording,
+                    samples: exportSamples(),
+                    template: addsOverlay ? overlayDraft : nil,
+                    alignment: alignment,
+                    telemetryStartDate: alignment.telemetryStartDate(session: session)
+                )
             }
         } label: {
             Label(localized("Zapisz film w Zdjęciach"), systemImage: "square.and.arrow.down.fill")
@@ -433,8 +602,8 @@ private struct DriveVideoExportSheet: View {
 
     private func exportSamples() -> [TelemetryHistorySample] {
         let sessionID = recording.sessionID
-        let startedAt = recording.startedAt.addingTimeInterval(-0.25)
-        let endedAt = recording.endedAt.addingTimeInterval(0.25)
+        let startedAt = session.startedAt.addingTimeInterval(-0.25)
+        let endedAt = session.endedAt.addingTimeInterval(0.25)
         let descriptor = FetchDescriptor<TelemetryHistorySample>(
             predicate: #Predicate { sample in
                 sample.session?.id == sessionID && sample.timestamp >= startedAt && sample.timestamp <= endedAt
@@ -442,6 +611,174 @@ private struct DriveVideoExportSheet: View {
             sortBy: [SortDescriptor(\.timestamp)]
         )
         return (try? modelContext.fetch(descriptor)) ?? samples
+    }
+
+    private var previewSample: TelemetryHistorySample? {
+        guard let previewTelemetryTime else { return sample ?? samples.first }
+        return samples.videoNearest(to: previewTelemetryTime)
+    }
+
+    private var templateSelection: Binding<UUID> {
+        Binding(
+            get: { overlayDraft.id },
+            set: { id in
+                overlayDraft = overlayStore.template(id: id)
+                selectedElementID = nil
+            }
+        )
+    }
+
+    private var synchronizationEditor: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label(localized("SYNCHRONIZACJA FILMU I DANYCH"), systemImage: "timeline.selection")
+                        .font(.system(size: 11, weight: .black))
+                        .tracking(1)
+                        .foregroundStyle(Color.tougeCyan)
+                    Text(localized("Przesuń osobno film i zapis przejazdu. Zaznaczone fragmenty będą odtwarzane oraz eksportowane razem."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(alignment.duration.videoPreciseDurationText)
+                    .font(.caption.monospacedDigit().weight(.black))
+                    .foregroundStyle(Color.tougeMint)
+            }
+
+            TimelineAlignmentTrack(
+                title: localized("FILM Z GALERII"),
+                icon: "film.stack",
+                totalDuration: recording.duration,
+                start: videoStartBinding,
+                duration: durationBinding
+            ) {
+                VideoTimelineBackdrop(thumbnails: thumbnails)
+            }
+
+            TimelineAlignmentTrack(
+                title: localized("DANE PRZEJAZDU"),
+                icon: "waveform.path.ecg",
+                totalDuration: telemetryDuration,
+                start: telemetryStartBinding,
+                duration: durationBinding
+            ) {
+                TelemetryTimelineBackdrop(values: timelineSpeedValues)
+            }
+
+            HStack(spacing: 8) {
+                TimelineNudgeControl(
+                    title: localized("Początek filmu"),
+                    value: videoStartBinding,
+                    maximum: max(0, recording.duration - alignment.duration)
+                )
+                TimelineNudgeControl(
+                    title: localized("Początek danych"),
+                    value: telemetryStartBinding,
+                    maximum: max(0, telemetryDuration - alignment.duration)
+                )
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "link")
+                Text(String(
+                    format: localized("Film %@ odpowiada danym %@"),
+                    alignment.videoStartSeconds.videoPreciseDurationText,
+                    alignment.telemetryStartSeconds.videoPreciseDurationText
+                ))
+            }
+            .font(.caption.weight(.bold))
+            .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .background(Color.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var telemetryDuration: Double {
+        max(session.duration, samples.last?.timestamp.timeIntervalSince(session.startedAt) ?? 0, 0.1)
+    }
+
+    private var videoStartBinding: Binding<Double> {
+        Binding(
+            get: { alignment.videoStartSeconds },
+            set: { newValue in
+                alignment.videoStartSeconds = min(max(0, newValue), max(0, recording.duration - alignment.duration))
+                seekPreview(to: alignment.videoStartSeconds)
+            }
+        )
+    }
+
+    private var telemetryStartBinding: Binding<Double> {
+        Binding(
+            get: { alignment.telemetryStartSeconds },
+            set: { newValue in
+                alignment.telemetryStartSeconds = min(max(0, newValue), max(0, telemetryDuration - alignment.duration))
+                previewTelemetryTime = alignment.telemetryStartDate(session: session)
+            }
+        )
+    }
+
+    private var durationBinding: Binding<Double> {
+        Binding(
+            get: { alignment.duration },
+            set: { newValue in
+                let maximum = min(
+                    recording.duration - alignment.videoStartSeconds,
+                    telemetryDuration - alignment.telemetryStartSeconds
+                )
+                alignment.duration = min(max(0.1, newValue), max(0.1, maximum))
+            }
+        )
+    }
+
+    @MainActor
+    private func preparePreview() async {
+        player?.pause()
+        player = nil
+        fileIsMissing = false
+        guard let url = try? DriveVideoFileStore.url(for: recording),
+              FileManager.default.fileExists(atPath: url.path) else {
+            fileIsMissing = true
+            return
+        }
+        let newPlayer = AVPlayer(url: url)
+        player = newPlayer
+        await newPlayer.seek(
+            to: CMTime(seconds: alignment.videoStartSeconds, preferredTimescale: 600),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        )
+        previewTelemetryTime = alignment.telemetryStartDate(session: session)
+        thumbnails = await VideoTimelineThumbnailLoader.load(
+            url: url,
+            duration: recording.duration,
+            count: recording.pixelHeight > recording.pixelWidth ? 5 : 7
+        )
+
+        while !Task.isCancelled, player === newPlayer {
+            let seconds = newPlayer.currentTime().seconds
+            if seconds.isFinite {
+                let relative = min(max(0, seconds - alignment.videoStartSeconds), alignment.duration)
+                previewTelemetryTime = session.startedAt.addingTimeInterval(alignment.telemetryStartSeconds + relative)
+                if seconds > alignment.videoEndSeconds + 0.05 {
+                    newPlayer.pause()
+                    await newPlayer.seek(
+                        to: CMTime(seconds: alignment.videoStartSeconds, preferredTimescale: 600),
+                        toleranceBefore: .zero,
+                        toleranceAfter: .zero
+                    )
+                }
+            }
+            try? await Task.sleep(for: .milliseconds(80))
+        }
+    }
+
+    private func seekPreview(to seconds: Double) {
+        player?.seek(
+            to: CMTime(seconds: seconds, preferredTimescale: 600),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        )
     }
 
     @ViewBuilder
@@ -479,7 +816,173 @@ private struct DriveVideoExportSheet: View {
     }
 }
 
+private struct TimelineAlignmentTrack<Backdrop: View>: View {
+    let title: String
+    let icon: String
+    let totalDuration: Double
+    @Binding var start: Double
+    @Binding var duration: Double
+    @ViewBuilder let backdrop: () -> Backdrop
+
+    @State private var dragStart: Double?
+    @State private var dragDuration: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label(title, systemImage: icon)
+                    .font(.caption2.weight(.black))
+                    .tracking(0.8)
+                Spacer()
+                Text("\(start.videoPreciseDurationText) — \((start + duration).videoPreciseDurationText)")
+                    .font(.caption2.monospacedDigit().weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+
+            GeometryReader { proxy in
+                let safeTotal = max(0.1, totalDuration)
+                let selectionX = proxy.size.width * start / safeTotal
+                let selectionWidth = max(18, proxy.size.width * duration / safeTotal)
+                ZStack(alignment: .leading) {
+                    backdrop()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    Color.black.opacity(0.62)
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.tougeCyan.opacity(0.12))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.tougeCyan, lineWidth: 2)
+                        }
+                        .frame(width: min(selectionWidth, proxy.size.width - selectionX))
+                        .offset(x: selectionX)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let origin = dragStart ?? start
+                                    dragStart = origin
+                                    let delta = value.translation.width / max(1, proxy.size.width) * safeTotal
+                                    start = min(max(0, origin + delta), max(0, safeTotal - duration))
+                                }
+                                .onEnded { _ in dragStart = nil }
+                        )
+                    Capsule()
+                        .fill(Color.white)
+                        .frame(width: 5, height: 38)
+                        .shadow(color: .black.opacity(0.5), radius: 2)
+                        .offset(x: min(proxy.size.width - 5, selectionX + selectionWidth - 2.5))
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let origin = dragDuration ?? duration
+                                    dragDuration = origin
+                                    let delta = value.translation.width / max(1, proxy.size.width) * safeTotal
+                                    duration = min(max(0.1, origin + delta), max(0.1, safeTotal - start))
+                                }
+                                .onEnded { _ in dragDuration = nil }
+                        )
+                }
+            }
+            .frame(height: 62)
+        }
+    }
+}
+
+private struct VideoTimelineBackdrop: View {
+    let thumbnails: [CGImage]
+
+    var body: some View {
+        HStack(spacing: 1) {
+            if thumbnails.isEmpty {
+                ForEach(0..<7, id: \.self) { _ in
+                    Rectangle().fill(Color.white.opacity(0.08))
+                }
+            } else {
+                ForEach(Array(thumbnails.enumerated()), id: \.offset) { _, thumbnail in
+                    Image(decorative: thumbnail, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                }
+            }
+        }
+    }
+}
+
+private struct TelemetryTimelineBackdrop: View {
+    let values: [Double]
+
+    var body: some View {
+        Canvas { context, size in
+            guard values.count > 1 else { return }
+            let maximum = max(1, values.max() ?? 1)
+            var path = Path()
+            for index in values.indices {
+                let x = size.width * CGFloat(index) / CGFloat(max(1, values.count - 1))
+                let y = size.height * (1 - CGFloat(values[index] / maximum))
+                if index == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+            }
+            context.stroke(path, with: .color(.tougeMint), lineWidth: 2)
+        }
+        .background(Color.tougeMint.opacity(0.08))
+    }
+}
+
+private struct TimelineNudgeControl: View {
+    let title: String
+    @Binding var value: Double
+    let maximum: Double
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(title).font(.caption2.weight(.black)).foregroundStyle(.secondary)
+            HStack(spacing: 5) {
+                Button { value = max(0, value - 1) } label: { Image(systemName: "minus") }
+                Text(value.videoPreciseDurationText)
+                    .font(.caption.monospacedDigit().weight(.black))
+                    .frame(minWidth: 54)
+                Button { value = min(maximum, value + 1) } label: { Image(systemName: "plus") }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(9)
+        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private enum VideoTimelineThumbnailLoader {
+    nonisolated static func load(url: URL, duration: Double, count: Int) async -> [CGImage] {
+        guard duration > 0, count > 0 else { return [] }
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 280, height: 140)
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.35, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.35, preferredTimescale: 600)
+        var images: [CGImage] = []
+        for index in 0..<count {
+            guard !Task.isCancelled else { break }
+            let fraction = (Double(index) + 0.5) / Double(count)
+            let time = CMTime(seconds: duration * fraction, preferredTimescale: 600)
+            if let result = try? await generator.image(at: time) {
+                images.append(result.image)
+            }
+        }
+        return images
+    }
+}
+
 private extension Array where Element == TelemetryHistorySample {
+    func videoTimelineValues(maxPoints: Int) -> [Double] {
+        guard count > maxPoints, maxPoints > 1 else { return map(\.speedKPH) }
+        let step = Double(count - 1) / Double(maxPoints - 1)
+        return (0..<maxPoints).map { index in
+            self[Swift.min(count - 1, Int((Double(index) * step).rounded()))].speedKPH
+        }
+    }
+
     func videoNearest(to timestamp: Date) -> TelemetryHistorySample? {
         guard !isEmpty else { return nil }
         var lower = 0
@@ -501,5 +1004,12 @@ private extension TimeInterval {
     var videoDurationText: String {
         let total = max(0, Int(self.rounded()))
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    var videoPreciseDurationText: String {
+        let safe = max(0, self)
+        let minutes = Int(safe) / 60
+        let seconds = safe - Double(minutes * 60)
+        return String(format: "%d:%04.1f", minutes, seconds)
     }
 }
