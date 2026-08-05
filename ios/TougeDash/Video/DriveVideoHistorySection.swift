@@ -443,6 +443,9 @@ private struct DriveVideoExportSheet: View {
     @State private var player: AVPlayer?
     @State private var fileIsMissing = false
     @State private var previewTelemetryTime: Date?
+    @State private var previewRelativeSeconds = 0.0
+    @State private var isPreviewPlaying = false
+    @State private var showsAdvancedAlignment = false
     @State private var thumbnails: [CGImage] = []
 
     init(
@@ -494,6 +497,7 @@ private struct DriveVideoExportSheet: View {
     private var exportContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             exportPreview
+            previewControls
             synchronizationEditor
             exportOptions
             exportStatus
@@ -630,65 +634,84 @@ private struct DriveVideoExportSheet: View {
 
     private var synchronizationEditor: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Label(localized("SYNCHRONIZACJA FILMU I DANYCH"), systemImage: "timeline.selection")
-                        .font(.system(size: 11, weight: .black))
-                        .tracking(1)
-                        .foregroundStyle(Color.tougeCyan)
-                    Text(localized("Przesuń osobno film i zapis przejazdu. Zaznaczone fragmenty będą odtwarzane oraz eksportowane razem."))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(alignment.duration.videoPreciseDurationText)
-                    .font(.caption.monospacedDigit().weight(.black))
-                    .foregroundStyle(Color.tougeMint)
+            VStack(alignment: .leading, spacing: 4) {
+                Label(localized("DOPASUJ PARAMETRY DO FILMU"), systemImage: "timeline.selection")
+                    .font(.system(size: 11, weight: .black))
+                    .tracking(1)
+                    .foregroundStyle(Color.tougeCyan)
+                Text(String(
+                    format: localized("Film ma %@. Wybierz moment przejazdu, od którego ma rozpocząć się ten fragment parametrów."),
+                    alignment.duration.videoPreciseDurationText
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
-            TimelineAlignmentTrack(
-                title: localized("FILM Z GALERII"),
-                icon: "film.stack",
-                totalDuration: recording.duration,
-                start: videoStartBinding,
-                duration: durationBinding
-            ) {
-                VideoTimelineBackdrop(thumbnails: thumbnails)
-            }
-
-            TimelineAlignmentTrack(
-                title: localized("DANE PRZEJAZDU"),
-                icon: "waveform.path.ecg",
-                totalDuration: telemetryDuration,
+            TelemetryFragmentSelector(
                 start: telemetryStartBinding,
-                duration: durationBinding
-            ) {
-                TelemetryTimelineBackdrop(values: timelineSpeedValues)
-            }
-
-            HStack(spacing: 8) {
-                TimelineNudgeControl(
-                    title: localized("Początek filmu"),
-                    value: videoStartBinding,
-                    maximum: max(0, recording.duration - alignment.duration)
-                )
-                TimelineNudgeControl(
-                    title: localized("Początek danych"),
-                    value: telemetryStartBinding,
-                    maximum: max(0, telemetryDuration - alignment.duration)
-                )
-            }
+                duration: alignment.duration,
+                totalDuration: telemetryDuration,
+                values: timelineSpeedValues
+            )
 
             HStack(spacing: 6) {
-                Image(systemName: "link")
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.tougeMint)
                 Text(String(
-                    format: localized("Film %@ odpowiada danym %@"),
-                    alignment.videoStartSeconds.videoPreciseDurationText,
-                    alignment.telemetryStartSeconds.videoPreciseDurationText
+                    format: localized("Do eksportu: dane %@–%@ z przejazdu %@"),
+                    alignment.telemetryStartSeconds.videoPreciseDurationText,
+                    alignment.telemetryEndSeconds.videoPreciseDurationText,
+                    telemetryDuration.videoPreciseDurationText
                 ))
             }
             .font(.caption.weight(.bold))
             .foregroundStyle(.secondary)
+
+            DisclosureGroup(isExpanded: $showsAdvancedAlignment) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(localized("Tutaj możesz dodatkowo przyciąć początek lub koniec filmu oraz niezależnie przesunąć obie osie czasu."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    TimelineAlignmentTrack(
+                        title: localized("FILM Z GALERII"),
+                        icon: "film.stack",
+                        totalDuration: recording.duration,
+                        start: videoStartBinding,
+                        duration: durationBinding
+                    ) {
+                        VideoTimelineBackdrop(thumbnails: thumbnails)
+                    }
+
+                    TimelineAlignmentTrack(
+                        title: localized("DANE PRZEJAZDU"),
+                        icon: "waveform.path.ecg",
+                        totalDuration: telemetryDuration,
+                        start: telemetryStartBinding,
+                        duration: durationBinding
+                    ) {
+                        TelemetryTimelineBackdrop(values: timelineSpeedValues)
+                    }
+
+                    HStack(spacing: 8) {
+                        TimelineNudgeControl(
+                            title: localized("Początek filmu"),
+                            value: videoStartBinding,
+                            maximum: max(0, recording.duration - alignment.duration)
+                        )
+                        TimelineNudgeControl(
+                            title: localized("Początek danych"),
+                            value: telemetryStartBinding,
+                            maximum: max(0, telemetryDuration - alignment.duration)
+                        )
+                    }
+                }
+                .padding(.top, 12)
+            } label: {
+                Label(localized("Zaawansowane przycinanie obu osi"), systemImage: "slider.horizontal.3")
+                    .font(.caption.weight(.black))
+            }
+            .tint(.tougeCyan)
         }
         .padding(16)
         .background(Color.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 16))
@@ -703,7 +726,7 @@ private struct DriveVideoExportSheet: View {
             get: { alignment.videoStartSeconds },
             set: { newValue in
                 alignment.videoStartSeconds = min(max(0, newValue), max(0, recording.duration - alignment.duration))
-                seekPreview(to: alignment.videoStartSeconds)
+                resetPreview()
             }
         )
     }
@@ -713,7 +736,7 @@ private struct DriveVideoExportSheet: View {
             get: { alignment.telemetryStartSeconds },
             set: { newValue in
                 alignment.telemetryStartSeconds = min(max(0, newValue), max(0, telemetryDuration - alignment.duration))
-                previewTelemetryTime = alignment.telemetryStartDate(session: session)
+                resetPreview(seeksVideo: false)
             }
         )
     }
@@ -727,6 +750,7 @@ private struct DriveVideoExportSheet: View {
                     telemetryDuration - alignment.telemetryStartSeconds
                 )
                 alignment.duration = min(max(0.1, newValue), max(0.1, maximum))
+                resetPreview()
             }
         )
     }
@@ -749,6 +773,8 @@ private struct DriveVideoExportSheet: View {
             toleranceAfter: .zero
         )
         previewTelemetryTime = alignment.telemetryStartDate(session: session)
+        previewRelativeSeconds = 0
+        isPreviewPlaying = false
         thumbnails = await VideoTimelineThumbnailLoader.load(
             url: url,
             duration: recording.duration,
@@ -759,6 +785,8 @@ private struct DriveVideoExportSheet: View {
             let seconds = newPlayer.currentTime().seconds
             if seconds.isFinite {
                 let relative = min(max(0, seconds - alignment.videoStartSeconds), alignment.duration)
+                previewRelativeSeconds = relative
+                isPreviewPlaying = newPlayer.timeControlStatus == .playing
                 previewTelemetryTime = session.startedAt.addingTimeInterval(alignment.telemetryStartSeconds + relative)
                 if seconds > alignment.videoEndSeconds + 0.05 {
                     newPlayer.pause()
@@ -767,6 +795,9 @@ private struct DriveVideoExportSheet: View {
                         toleranceBefore: .zero,
                         toleranceAfter: .zero
                     )
+                    previewRelativeSeconds = 0
+                    previewTelemetryTime = alignment.telemetryStartDate(session: session)
+                    isPreviewPlaying = false
                 }
             }
             try? await Task.sleep(for: .milliseconds(80))
@@ -779,6 +810,84 @@ private struct DriveVideoExportSheet: View {
             toleranceBefore: .zero,
             toleranceAfter: .zero
         )
+    }
+
+    private var previewControls: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 9) {
+                Button(action: togglePreviewPlayback) {
+                    Label(
+                        isPreviewPlaying ? localized("Pauza") : localized("Odtwórz podgląd"),
+                        systemImage: isPreviewPlaying ? "pause.fill" : "play.fill"
+                    )
+                    .font(.subheadline.weight(.black))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.tougeCyan)
+                .disabled(player == nil || alignment.duration <= 0)
+
+                Button(action: resetPreview) {
+                    Image(systemName: "backward.end.fill")
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(localized("Od początku podglądu"))
+            }
+
+            HStack(spacing: 10) {
+                Text(previewRelativeSeconds.videoPreciseDurationText)
+                Slider(value: previewPositionBinding, in: 0...max(0.1, alignment.duration))
+                    .tint(.tougeMint)
+                Text(alignment.duration.videoPreciseDurationText)
+            }
+            .font(.caption2.monospacedDigit().weight(.bold))
+            .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(Color.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var previewPositionBinding: Binding<Double> {
+        Binding(
+            get: { min(previewRelativeSeconds, alignment.duration) },
+            set: { relative in
+                player?.pause()
+                isPreviewPlaying = false
+                previewRelativeSeconds = min(max(0, relative), alignment.duration)
+                previewTelemetryTime = session.startedAt.addingTimeInterval(
+                    alignment.telemetryStartSeconds + previewRelativeSeconds
+                )
+                seekPreview(to: alignment.videoStartSeconds + previewRelativeSeconds)
+            }
+        )
+    }
+
+    private func togglePreviewPlayback() {
+        guard let player else { return }
+        if player.timeControlStatus == .playing {
+            player.pause()
+            isPreviewPlaying = false
+            return
+        }
+        if previewRelativeSeconds >= alignment.duration - 0.05 {
+            resetPreview()
+        }
+        player.play()
+        isPreviewPlaying = true
+    }
+
+    private func resetPreview() {
+        resetPreview(seeksVideo: true)
+    }
+
+    private func resetPreview(seeksVideo: Bool) {
+        player?.pause()
+        isPreviewPlaying = false
+        previewRelativeSeconds = 0
+        previewTelemetryTime = alignment.telemetryStartDate(session: session)
+        if seeksVideo { seekPreview(to: alignment.videoStartSeconds) }
     }
 
     @ViewBuilder
@@ -812,6 +921,105 @@ private struct DriveVideoExportSheet: View {
                     .foregroundStyle(Color.tougeOrange)
                 Text(message).font(.caption).foregroundStyle(.secondary)
             }
+        }
+    }
+}
+
+private struct TelemetryFragmentSelector: View {
+    @Binding var start: Double
+    let duration: Double
+    let totalDuration: Double
+    let values: [Double]
+
+    private var maximumStart: Double { max(0, totalDuration - duration) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .lastTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(localized("POCZĄTEK DANYCH Z PRZEJAZDU"))
+                        .font(.caption2.weight(.black))
+                        .tracking(0.8)
+                        .foregroundStyle(.secondary)
+                    Text(start.videoPreciseDurationText)
+                        .font(.title2.monospacedDigit().weight(.black))
+                        .foregroundStyle(Color.tougeCyan)
+                }
+                Spacer()
+                Text("\(start.videoPreciseDurationText) – \((start + duration).videoPreciseDurationText)")
+                    .font(.caption.monospacedDigit().weight(.bold))
+                    .foregroundStyle(Color.tougeMint)
+            }
+
+            TelemetryFragmentOverview(
+                values: values,
+                start: start,
+                duration: duration,
+                totalDuration: totalDuration
+            )
+            .frame(height: 58)
+
+            Slider(
+                value: $start,
+                in: 0...max(0.001, maximumStart)
+            )
+            .tint(.tougeCyan)
+            .disabled(maximumStart <= 0)
+
+            HStack(spacing: 7) {
+                nudgeButton(seconds: -10)
+                nudgeButton(seconds: -1)
+                Spacer(minLength: 4)
+                nudgeButton(seconds: 1)
+                nudgeButton(seconds: 10)
+            }
+        }
+        .padding(14)
+        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func nudgeButton(seconds: Double) -> some View {
+        Button {
+            start = min(maximumStart, max(0, start + seconds))
+        } label: {
+            Text(seconds > 0 ? "+\(Int(seconds)) s" : "\(Int(seconds)) s")
+                .font(.caption.monospacedDigit().weight(.black))
+                .frame(minWidth: 48)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(
+            maximumStart <= 0 ||
+            (seconds < 0 && start <= 0) ||
+            (seconds > 0 && start >= maximumStart)
+        )
+    }
+}
+
+private struct TelemetryFragmentOverview: View {
+    let values: [Double]
+    let start: Double
+    let duration: Double
+    let totalDuration: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            let safeTotal = max(0.1, totalDuration)
+            let x = proxy.size.width * start / safeTotal
+            let width = max(6, proxy.size.width * duration / safeTotal)
+            ZStack(alignment: .leading) {
+                TelemetryTimelineBackdrop(values: values)
+                Color.black.opacity(0.32)
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color.tougeCyan.opacity(0.2))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5)
+                            .stroke(Color.tougeCyan, lineWidth: 2)
+                    }
+                    .frame(width: min(width, proxy.size.width - x))
+                    .offset(x: x)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }
 }

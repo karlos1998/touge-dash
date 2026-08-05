@@ -339,6 +339,15 @@
 "Początek filmu" = "Początek filmu";
 "Początek danych" = "Początek danych";
 "Film %@ odpowiada danym %@" = "Film %@ odpowiada danym %@";
+"DOPASUJ PARAMETRY DO FILMU" = "DOPASUJ PARAMETRY DO FILMU";
+"Film ma %@. Wybierz moment przejazdu, od którego ma rozpocząć się ten fragment parametrów." = "Film ma %@. Wybierz moment przejazdu, od którego ma rozpocząć się ten fragment parametrów.";
+"Do eksportu: dane %@–%@ z przejazdu %@" = "Do eksportu: dane %@–%@ z przejazdu %@";
+"Tutaj możesz dodatkowo przyciąć początek lub koniec filmu oraz niezależnie przesunąć obie osie czasu." = "Tutaj możesz dodatkowo przyciąć początek lub koniec filmu oraz niezależnie przesunąć obie osie czasu.";
+"Zaawansowane przycinanie obu osi" = "Zaawansowane przycinanie obu osi";
+"Pauza" = "Pauza";
+"Odtwórz podgląd" = "Odtwórz podgląd";
+"Od początku podglądu" = "Od początku podglądu";
+"POCZĄTEK DANYCH Z PRZEJAZDU" = "POCZĄTEK DANYCH Z PRZEJAZDU";
 "%@ km zapisanej trasy" = "%@ km zapisanej trasy";
 "%@ · %@ próbek" = "%@ · %@ próbek";
 "Anuluj" = "Anuluj";

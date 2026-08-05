@@ -448,3 +448,12 @@
 "Początek filmu" = "Video start";
 "Początek danych" = "Telemetry start";
 "Film %@ odpowiada danym %@" = "Video %@ matches telemetry %@";
+"DOPASUJ PARAMETRY DO FILMU" = "ALIGN TELEMETRY WITH VIDEO";
+"Film ma %@. Wybierz moment przejazdu, od którego ma rozpocząć się ten fragment parametrów." = "The video is %@ long. Choose where its matching telemetry should begin in the drive.";
+"Do eksportu: dane %@–%@ z przejazdu %@" = "Export range: telemetry %@–%@ of %@";
+"Tutaj możesz dodatkowo przyciąć początek lub koniec filmu oraz niezależnie przesunąć obie osie czasu." = "Here you can additionally trim the video start or end and move both timelines independently.";
+"Zaawansowane przycinanie obu osi" = "Advanced timeline trimming";
+"Pauza" = "Pause";
+"Odtwórz podgląd" = "Play preview";
+"Od początku podglądu" = "Restart preview";
+"POCZĄTEK DANYCH Z PRZEJAZDU" = "DRIVE TELEMETRY START";
