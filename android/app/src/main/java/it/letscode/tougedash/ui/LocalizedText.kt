@@ -49,4 +49,5 @@ internal fun DashboardWidgetKind.localizedName(): String = when (this) {
     DashboardWidgetKind.GAUGE -> appText("gauge", "zegar")
     DashboardWidgetKind.CHART -> appText("chart", "wykres")
     DashboardWidgetKind.COMPACT -> appText("compact", "mała")
+    DashboardWidgetKind.PERFORMANCE -> appText("acceleration", "przyspieszenie")
 }

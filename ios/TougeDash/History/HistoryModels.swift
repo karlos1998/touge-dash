@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import Combine
 
 enum HistorySyncState: String, Codable, Sendable {
     case local
@@ -48,6 +49,180 @@ enum IncidentKind: String, Codable, CaseIterable, Sendable {
 enum IncidentSeverity: String, Codable, Sendable {
     case warning = "WARNING"
     case critical = "CRITICAL"
+}
+
+enum AccelerationType: String, Codable, CaseIterable, Identifiable, Sendable {
+    case zeroTo100 = "ZERO_TO_100"
+    case hundredTo200 = "HUNDRED_TO_200"
+    case twoHundredTo250 = "TWO_HUNDRED_TO_250"
+
+    var id: String { rawValue }
+    var startKPH: Double { self == .zeroTo100 ? 0 : self == .hundredTo200 ? 100 : 200 }
+    var endKPH: Double { self == .zeroTo100 ? 100 : self == .hundredTo200 ? 200 : 250 }
+    var label: String { self == .zeroTo100 ? "0–100" : self == .hundredTo200 ? "100–200" : "200–250" }
+}
+
+struct ActiveAcceleration: Equatable, Sendable {
+    let type: AccelerationType
+    let startedAt: Date
+    let elapsed: TimeInterval
+    let currentSpeedKPH: Double
+    let progress: Double
+}
+
+@Model
+final class AccelerationAttempt {
+    @Attribute(.unique) var id: UUID
+    var sessionID: UUID
+    var typeRaw: String
+    var startedAt: Date
+    var endedAt: Date
+    var durationMillis: Int64
+    var startSpeedKPH: Double
+    var endSpeedKPH: Double
+    var sourceRaw: String
+    var qualityRaw: String
+    var sampleRateHz: Double
+    var shiftCount: Int
+    var revision: Int
+
+    init(
+        id: UUID = UUID(), sessionID: UUID, type: AccelerationType,
+        startedAt: Date, endedAt: Date, durationMillis: Int64,
+        sampleRateHz: Double, shiftCount: Int, quality: String
+    ) {
+        self.id = id
+        self.sessionID = sessionID
+        typeRaw = type.rawValue
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.durationMillis = durationMillis
+        startSpeedKPH = type.startKPH
+        endSpeedKPH = type.endKPH
+        sourceRaw = "ECU"
+        qualityRaw = quality
+        self.sampleRateHz = sampleRateHz
+        self.shiftCount = shiftCount
+        revision = 1
+    }
+
+    var type: AccelerationType { AccelerationType(rawValue: typeRaw) ?? .zeroTo100 }
+}
+
+@MainActor
+final class AccelerationEngine: ObservableObject {
+    private struct Point { let at: Date; let speed: Double; let rpm: Double; let throttle: Double }
+    private struct Running {
+        let type: AccelerationType
+        let startedAt: Date
+        var peakSpeed: Double
+        var lastProgressAt: Date
+        var previousRPM: Double
+        var previousThrottle: Double
+        var shiftDropActive = false
+        var shiftCount = 0
+        var sampleCount = 1
+    }
+
+    @Published private(set) var active: ActiveAcceleration?
+    @Published private(set) var recentResults: [AccelerationAttempt] = []
+    private var history: [Point] = []
+    private var previous: Point?
+    private var running: Running?
+    private var stationarySince: Date?
+    private var zeroArmed = false
+
+    func reset() {
+        history.removeAll(keepingCapacity: true)
+        previous = nil; running = nil; stationarySince = nil; zeroArmed = false; active = nil
+        recentResults = []
+    }
+
+    func sample(_ snapshot: TelemetrySnapshot, at: Date, sessionID: UUID?) -> AccelerationAttempt? {
+        let point = Point(at: at, speed: max(0, snapshot.speedKPH), rpm: snapshot.rpm, throttle: snapshot.throttlePercent)
+        let candidate = previous
+        let prior = candidate.flatMap { at.timeIntervalSince($0.at) <= 0.75 ? $0 : nil }
+        if candidate != nil, prior == nil {
+            abort()
+            history.removeAll(keepingCapacity: true)
+            stationarySince = nil
+            zeroArmed = false
+        }
+        previous = point
+        history.append(point)
+        history.removeAll { at.timeIntervalSince($0.at) > 2.5 }
+        updateStationary(point)
+        let completed = updateRunning(point, prior: prior, sessionID: sessionID)
+        if running == nil, let prior { tryStart(point, prior: prior) }
+        publish(point)
+        return completed
+    }
+
+    private func updateStationary(_ point: Point) {
+        if point.speed <= 2 {
+            if stationarySince == nil { stationarySince = point.at }
+            if point.at.timeIntervalSince(stationarySince ?? point.at) >= 0.8 { zeroArmed = true }
+        } else if point.speed > 5 { stationarySince = nil }
+    }
+
+    private func tryStart(_ point: Point, prior: Point) {
+        if zeroArmed, prior.speed <= 1, point.speed > 1 {
+            running = Running(type: .zeroTo100, startedAt: crossingTime(prior, point, threshold: 1), peakSpeed: point.speed, lastProgressAt: point.at, previousRPM: point.rpm, previousThrottle: point.throttle)
+            zeroArmed = false; stationarySince = nil
+            return
+        }
+        for type in [AccelerationType.hundredTo200, .twoHundredTo250] where prior.speed < type.startKPH && point.speed >= type.startKPH {
+            guard let approach = history.first(where: { $0.speed <= type.startKPH - 6 }) else { continue }
+            let seconds = max(0.001, point.at.timeIntervalSince(approach.at))
+            guard (point.speed - approach.speed) / seconds >= 3 else { continue }
+            running = Running(type: type, startedAt: crossingTime(prior, point, threshold: type.startKPH), peakSpeed: point.speed, lastProgressAt: point.at, previousRPM: point.rpm, previousThrottle: point.throttle)
+            return
+        }
+    }
+
+    private func updateRunning(_ point: Point, prior: Point?, sessionID: UUID?) -> AccelerationAttempt? {
+        guard var current = running else { return nil }
+        current.sampleCount += 1
+        if point.speed > current.peakSpeed + 0.25 { current.peakSpeed = point.speed; current.lastProgressAt = point.at }
+        else { current.peakSpeed = max(current.peakSpeed, point.speed) }
+        if !current.shiftDropActive, current.previousThrottle >= 35, point.throttle <= 15, current.previousRPM - point.rpm >= 250 {
+            current.shiftDropActive = true; current.shiftCount += 1
+        }
+        if point.throttle >= 25 { current.shiftDropActive = false }
+        current.previousRPM = point.rpm; current.previousThrottle = point.throttle
+        running = current
+
+        if let prior, prior.speed < current.type.endKPH, point.speed >= current.type.endKPH {
+            let endedAt = crossingTime(prior, point, threshold: current.type.endKPH)
+            let duration = max(0.001, endedAt.timeIntervalSince(current.startedAt))
+            let rate = Double(current.sampleCount) / duration
+            running = nil
+            guard let sessionID else { return nil }
+            let attempt = AccelerationAttempt(
+                sessionID: sessionID, type: current.type, startedAt: current.startedAt, endedAt: endedAt,
+                durationMillis: Int64((duration * 1_000).rounded()), sampleRateHz: rate,
+                shiftCount: current.shiftCount, quality: rate >= 20 && duration >= 1 ? "HIGH" : rate >= 8 ? "MEDIUM" : "ESTIMATED"
+            )
+            recentResults = Array(([attempt] + recentResults).prefix(12))
+            return attempt
+        }
+        if point.speed < current.type.startKPH - 8 || current.peakSpeed - point.speed > 8 || point.at.timeIntervalSince(current.lastProgressAt) > 3.2 { abort() }
+        return nil
+    }
+
+    private func publish(_ point: Point) {
+        active = running.map {
+            ActiveAcceleration(type: $0.type, startedAt: $0.startedAt, elapsed: max(0, point.at.timeIntervalSince($0.startedAt)), currentSpeedKPH: point.speed, progress: min(1, max(0, (point.speed - $0.type.startKPH) / ($0.type.endKPH - $0.type.startKPH))))
+        }
+    }
+
+    private func abort() { running = nil; active = nil }
+    private func crossingTime(_ before: Point, _ after: Point, threshold: Double) -> Date {
+        let delta = after.speed - before.speed
+        guard delta > 0.0001 else { return after.at }
+        let fraction = min(1, max(0, (threshold - before.speed) / delta))
+        return before.at.addingTimeInterval(after.at.timeIntervalSince(before.at) * fraction)
+    }
 }
 
 struct CapturedTelemetryPoint: Codable, Hashable, Identifiable, Sendable {

@@ -497,3 +497,15 @@
 "Raport i jego przejazd mają różne przypisanie auta. Przypisz przejazd ponownie, aby naprawić komplet danych." = "The report and its drive are assigned to different vehicles. Reassign the drive to repair the complete data set.";
 "Spróbuj ponownie" = "Try again";
 "Kontynuuj przez Google" = "Continue with Google";
+"POMIARY PRZYSPIESZENIA" = "ACCELERATION RUNS";
+"Dotknij, aby przejść na oś czasu" = "Tap to jump to the timeline";
+"prób" = "attempts";
+"najlepszy czas" = "best time";
+"Początek pomiaru" = "Measurement start";
+"Koniec pomiaru" = "Measurement end";
+"Przyspieszenie" = "Acceleration";
+"Pomiar przyspieszenia" = "Acceleration timing";
+"GOTOWY" = "READY";
+"POMIAR" = "TIMING";
+"BRAK PRÓBY" = "NO ATTEMPT";
+"NAJLEPSZY" = "BEST";

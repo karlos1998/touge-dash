@@ -259,6 +259,7 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
             DashboardWidgetKind.GROUP -> if (compactLandscape) 100.dp else 178.dp
             DashboardWidgetKind.COMPACT -> if (compactLandscape) 50.dp else 70.dp
             DashboardWidgetKind.GAUGE -> if (compactLandscape) 82.dp else 180.dp
+            DashboardWidgetKind.PERFORMANCE -> if (compactLandscape) 100.dp else 188.dp
             else -> if (compactLandscape) 82.dp else 145.dp
         }
     } else {
@@ -268,6 +269,7 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
             DashboardWidgetKind.COMPACT -> 70.dp
             DashboardWidgetKind.GAUGE -> 210.dp
             DashboardWidgetKind.CHART -> 220.dp
+            DashboardWidgetKind.PERFORMANCE -> 188.dp
             else -> 145.dp
         }
     }
@@ -278,6 +280,7 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
                 DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
                 DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, warning)
                 DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
+                DashboardWidgetKind.PERFORMANCE -> ValueWidget(TelemetryMetric.SPEED, snapshot, accent, false, compactLandscape)
                 else -> ValueWidget(widget.metrics.first(), snapshot, if (warning) TougeRed else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape)
             }
         }

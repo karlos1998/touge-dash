@@ -140,6 +140,36 @@ struct CloudSessionUpload: Encodable, Sendable {
     let minimumOilPressureBar: Double?
     let containsLocation: Bool
     let samples: [CloudSampleUpload]
+    let accelerationAttempts: [CloudAccelerationAttemptUpload]
+}
+
+struct CloudAccelerationAttemptUpload: Encodable, Sendable {
+    let id: UUID
+    let type: String
+    let startedAt: Date
+    let endedAt: Date
+    let durationMillis: Int64
+    let startSpeedKph: Double
+    let endSpeedKph: Double
+    let source: String
+    let quality: String
+    let sampleRateHz: Double
+    let shiftCount: Int
+    let revision: Int
+}
+
+struct CloudActiveAccelerationUpload: Encodable, Sendable {
+    let type: String
+    let startedAt: Date
+    let elapsedMillis: Int64
+    let currentSpeedKph: Double
+    let progress: Double
+}
+
+struct CloudAccelerationResultUpload: Encodable, Sendable {
+    let type: String
+    let durationMillis: Int64
+    let endedAt: Date
 }
 
 struct CloudSampleUpload: Encodable, Sendable {
@@ -188,6 +218,8 @@ struct CloudLiveUpload: Encodable, Sendable {
     let checkEngineMask: Int
     let latitude: Double?
     let longitude: Double?
+    let activeAcceleration: CloudActiveAccelerationUpload?
+    let recentAccelerationResults: [CloudAccelerationResultUpload]
 }
 
 struct CloudAPIErrorPayload: Decodable, Sendable {

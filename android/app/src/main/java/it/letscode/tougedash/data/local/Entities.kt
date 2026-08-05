@@ -74,6 +74,27 @@ data class TelemetrySampleEntity(
     val chartEligible: Boolean = true
 )
 
+@Entity(
+    tableName = "acceleration_attempts",
+    foreignKeys = [ForeignKey(entity = DriveSessionEntity::class, parentColumns = ["id"], childColumns = ["sessionId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("sessionId"), Index(value = ["sessionId", "type", "durationMillis"])]
+)
+data class AccelerationAttemptEntity(
+    @PrimaryKey val id: String,
+    val sessionId: String,
+    val type: String,
+    val startedAt: Long,
+    val endedAt: Long,
+    val durationMillis: Long,
+    val startSpeedKph: Double,
+    val endSpeedKph: Double,
+    val source: String,
+    val quality: String,
+    val sampleRateHz: Double,
+    val shiftCount: Int,
+    val revision: Int = 1
+)
+
 @Entity(tableName = "incidents", indices = [Index("sessionId"), Index("vehicleHardwareId"), Index("triggeredAt")])
 data class IncidentEntity(
     @PrimaryKey val id: String,

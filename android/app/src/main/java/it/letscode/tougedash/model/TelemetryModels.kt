@@ -49,6 +49,7 @@ data class TelemetryConnection(
     val droppedBytes: Long = 0
 )
 
+@Serializable
 enum class TelemetryMetric(
     val shortName: String,
     val unit: String,

@@ -260,3 +260,53 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertNil(CloudSyncItemStatus.failed("network").fraction)
     }
 }
+
+@MainActor
+final class AccelerationEngineTests: XCTestCase {
+    func testContinuousPullRecordsEverySupportedRange() {
+        let engine = AccelerationEngine()
+        let sessionID = UUID()
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var offset = 0.0
+        var results: [AccelerationAttempt] = []
+
+        for _ in 0..<26 {
+            _ = engine.sample(snapshot(speed: 0), at: start.addingTimeInterval(offset), sessionID: sessionID)
+            offset += 0.04
+        }
+        for speed in 0...260 {
+            if let result = engine.sample(
+                snapshot(speed: Double(speed)),
+                at: start.addingTimeInterval(offset),
+                sessionID: sessionID
+            ) {
+                results.append(result)
+            }
+            offset += 0.04
+        }
+
+        XCTAssertEqual(results.map(\.type), [.zeroTo100, .hundredTo200, .twoHundredTo250])
+    }
+
+    func testStaleBluetoothFrameCannotStartRollingMeasurement() {
+        let engine = AccelerationEngine()
+        let sessionID = UUID()
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var offset = 0.0
+
+        for speed in 85...99 {
+            _ = engine.sample(snapshot(speed: Double(speed)), at: start.addingTimeInterval(offset), sessionID: sessionID)
+            offset += 0.04
+        }
+        offset += 2
+        _ = engine.sample(snapshot(speed: 101), at: start.addingTimeInterval(offset), sessionID: sessionID)
+        for speed in 102...220 {
+            offset += 0.04
+            XCTAssertNil(engine.sample(snapshot(speed: Double(speed)), at: start.addingTimeInterval(offset), sessionID: sessionID))
+        }
+    }
+
+    private func snapshot(speed: Double) -> TelemetrySnapshot {
+        TelemetrySnapshot(rpm: 4_500, throttlePercent: 82, speedKPH: speed)
+    }
+}

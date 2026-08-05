@@ -81,6 +81,8 @@ import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.TelemetrySnapshot
 import it.letscode.tougedash.model.VehicleAlertRules
 import it.letscode.tougedash.telemetry.TimedTelemetry
+import it.letscode.tougedash.performance.AccelerationRuntimeState
+import it.letscode.tougedash.performance.AccelerationType
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
 import it.letscode.tougedash.ui.theme.TougeRed
@@ -97,6 +99,7 @@ fun ConfigurableDashboardScreen(
     val template by container.dashboardRepository.selected.collectAsState(initial = DashboardTemplate.factory())
     val templates by container.dashboardRepository.templates.collectAsState(initial = listOf(DashboardTemplate.factory()))
     val chartPoints by container.runtime.chartPoints.collectAsState()
+    val performance by container.accelerationEngine.state.collectAsState()
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
     var editorWidget by remember { mutableStateOf<DashboardWidget?>(null) }
@@ -171,7 +174,7 @@ fun ConfigurableDashboardScreen(
         ) {
             items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) { widget ->
                 EditableDashboardCard(
-                    widget, snapshot, chartPoints, alertRules, landscape, editing,
+                    widget, snapshot, chartPoints, performance, alertRules, landscape, editing,
                     edit = { editorWidget = widget },
                     remove = { scope.launch { saveWidgets(container, template, template.definition.widgets.filterNot { it.id == widget.id }) } },
                     move = { direction -> scope.launch { saveWidgets(container, template, moveWidget(template.definition.widgets, widget.id, direction, landscape)) } }
@@ -235,6 +238,7 @@ private fun EditableDashboardCard(
     widget: DashboardWidget,
     snapshot: TelemetrySnapshot,
     chartPoints: List<TimedTelemetry>,
+    performance: AccelerationRuntimeState,
     alertRules: VehicleAlertRules,
     landscape: Boolean,
     editing: Boolean,
@@ -256,6 +260,7 @@ private fun EditableDashboardCard(
     ) {
         val effectiveKind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
         if (effectiveKind == DashboardWidgetKind.CHART) ChartCard(widget, snapshot, chartPoints, landscape)
+        else if (effectiveKind == DashboardWidgetKind.PERFORMANCE) PerformanceCard(widget, performance, landscape)
         else DashboardCard(widget, snapshot, landscape, alertRules)
         if (editing) {
             Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(7.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -267,6 +272,44 @@ private fun EditableDashboardCard(
                 }
                 Box(Modifier.weight(1f))
                 Box(Modifier.size(30.dp).background(TougeCyan.copy(alpha = .9f), CircleShape).border(1.dp, Color.White.copy(alpha = .18f), CircleShape).clickable(onClick = edit), contentAlignment = Alignment.Center) { Icon(Icons.Default.Edit, null, tint = Color.Black, modifier = Modifier.size(15.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PerformanceCard(widget: DashboardWidget, state: AccelerationRuntimeState, landscape: Boolean) {
+    val accent = widget.accent.color()
+    val selected = widget.accelerationTypes.ifEmpty { AccelerationType.entries }
+    TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 112.dp else 188.dp)) {
+        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(widget.title ?: appText("ACCELERATION", "PRZYSPIESZENIE"), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                Text(if (state.active == null) appText("READY", "GOTOWY") else appText("MEASURING", "POMIAR"), color = if (state.active == null) TougeMint else accent, fontSize = 9.sp, fontWeight = FontWeight.Black)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                selected.forEach { type ->
+                    val active = state.active?.takeIf { it.type == type }
+                    val best = state.recentResults.filter { it.type == type.name }.minByOrNull { it.durationMillis }
+                    Column(Modifier.weight(1f).background(Color.Black.copy(alpha = .18f), CutCornerShape(7.dp)).padding(horizontal = 10.dp, vertical = 11.dp)) {
+                        Text(type.label, color = if (active != null) accent else TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        Text(
+                            when {
+                                active != null -> "%.2f s".format(active.elapsedMillis / 1_000.0)
+                                best != null -> "%.2f s".format(best.durationMillis / 1_000.0)
+                                else -> "—"
+                            },
+                            fontSize = if (landscape) 18.sp else 23.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            if (active != null) "${active.currentSpeedKph.toInt()} km/h" else if (best != null) appText("BEST THIS DRIVE", "NAJLEPSZY W TEJ JEŹDZIE") else appText("NO ATTEMPT", "BRAK PRÓBY"),
+                            color = if (active != null) accent else TougeMuted,
+                            fontSize = 7.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
     }
@@ -341,7 +384,21 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                     }
                 }
                 OutlinedTextField(title, { title = it }, label = { Text(appText("Custom title", "Własny tytuł")) }, singleLine = true)
-                Text(if (maximumMetricCount(value.kind) > 1) appText("PARAMETERS", "PARAMETRY") else appText("PARAMETER", "PARAMETR"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                if (value.kind == DashboardWidgetKind.PERFORMANCE) {
+                    Text(appText("MEASUREMENTS", "POMIARY"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    AccelerationType.entries.forEach { type ->
+                        FilterChip(
+                            selected = type in value.accelerationTypes,
+                            onClick = {
+                                val updated = if (type in value.accelerationTypes) value.accelerationTypes - type else value.accelerationTypes + type
+                                if (updated.isNotEmpty()) value = value.copy(accelerationTypes = updated)
+                            },
+                            label = { Text("${type.label} km/h") }
+                        )
+                    }
+                } else {
+                    Text(if (maximumMetricCount(value.kind) > 1) appText("PARAMETERS", "PARAMETRY") else appText("PARAMETER", "PARAMETR"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
                 repeat(maximumMetricCount(value.kind)) { index ->
                     val fallback = TelemetryMetric.entries.getOrElse(index) { TelemetryMetric.RPM }
                     val selected = value.metrics.getOrNull(index) ?: fallback
@@ -415,6 +472,7 @@ private fun SpanSelector(selected: Int, changed: (Int) -> Unit) {
 private fun maximumMetricCount(kind: DashboardWidgetKind): Int = when (kind) {
     DashboardWidgetKind.HERO -> 4
     DashboardWidgetKind.GROUP -> 3
+    DashboardWidgetKind.PERFORMANCE -> 0
     else -> 1
 }
 

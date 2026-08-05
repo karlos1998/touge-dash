@@ -33,6 +33,7 @@ struct ContentView: View {
                             template: templates.activeTemplate,
                             snapshot: controller.snapshot,
                             telemetryBuffer: telemetryBuffer,
+                            accelerationEngine: controller.accelerationEngine,
                             isWide: isWide,
                             compact: isCompactWide,
                             isEditing: isEditingDashboard,

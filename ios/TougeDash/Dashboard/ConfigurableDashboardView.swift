@@ -5,6 +5,7 @@ struct ConfigurableDashboardView: View {
     let template: DashboardTemplateRecord
     let snapshot: TelemetrySnapshot
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
+    @ObservedObject var accelerationEngine: AccelerationEngine
     let isWide: Bool
     let compact: Bool
     let isEditing: Bool
@@ -35,6 +36,7 @@ struct ConfigurableDashboardView: View {
                     widgets: row,
                     snapshot: snapshot,
                     telemetryBuffer: telemetryBuffer,
+                    accelerationEngine: accelerationEngine,
                     isWide: isWide,
                     compact: compact,
                     spacing: spacing,
@@ -54,6 +56,7 @@ private struct DashboardGridRow: View {
     let widgets: [DashboardWidget]
     let snapshot: TelemetrySnapshot
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
+    @ObservedObject var accelerationEngine: AccelerationEngine
     let isWide: Bool
     let compact: Bool
     let spacing: CGFloat
@@ -81,6 +84,7 @@ private struct DashboardGridRow: View {
                         widget: widget,
                         snapshot: snapshot,
                         telemetryBuffer: telemetryBuffer,
+                        accelerationEngine: accelerationEngine,
                         isWide: isWide,
                         compact: compact,
                         isEditing: isEditing,
@@ -122,6 +126,7 @@ private struct EditableDashboardWidget: View {
     let widget: DashboardWidget
     let snapshot: TelemetrySnapshot
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
+    @ObservedObject var accelerationEngine: AccelerationEngine
     let isWide: Bool
     let compact: Bool
     let isEditing: Bool
@@ -236,6 +241,7 @@ private struct EditableDashboardWidget: View {
             widget: widget,
             snapshot: snapshot,
             telemetryBuffer: telemetryBuffer,
+            accelerationEngine: accelerationEngine,
             isWide: isWide,
             compact: compact
         )
@@ -316,7 +322,7 @@ enum DashboardGridLayout {
             switch kind {
             case .hero: return 150
             case .group: return 112
-            case .value, .gauge, .chart: return 96
+            case .value, .gauge, .chart, .performance: return 96
             case .compact: return 54
             }
         } else {
@@ -327,6 +333,7 @@ enum DashboardGridLayout {
             case .gauge: return 210
             case .chart: return 220
             case .compact: return 70
+            case .performance: return 188
             }
         }
     }
@@ -336,6 +343,7 @@ private struct DashboardWidgetView: View {
     let widget: DashboardWidget
     let snapshot: TelemetrySnapshot
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
+    @ObservedObject var accelerationEngine: AccelerationEngine
     let isWide: Bool
     let compact: Bool
 
@@ -354,7 +362,53 @@ private struct DashboardWidgetView: View {
             DashboardChartWidget(widget: widget, snapshot: snapshot, telemetryBuffer: telemetryBuffer, compact: compact)
         case .compact:
             DashboardCompactWidget(widget: widget, snapshot: snapshot, compact: compact)
+        case .performance:
+            DashboardPerformanceWidget(widget: widget, engine: accelerationEngine, compact: compact)
         }
+    }
+}
+
+private struct DashboardPerformanceWidget: View {
+    let widget: DashboardWidget
+    @ObservedObject var engine: AccelerationEngine
+    let compact: Bool
+
+    private var selectedTypes: [AccelerationType] {
+        let values = widget.accelerationTypes ?? AccelerationType.allCases
+        return values.isEmpty ? AccelerationType.allCases : values
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 7 : 11) {
+            HStack {
+                Label((widget.title?.isEmpty == false ? widget.title! : localized("Przyspieszenie")).uppercased(), systemImage: "stopwatch.fill")
+                    .font(.system(size: compact ? 8 : 10, weight: .black))
+                    .tracking(1)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                DashboardStatusTag(title: engine.active == nil ? localized("GOTOWY") : localized("POMIAR"), tint: engine.active == nil ? .tougeMint : widget.accent.color)
+            }
+            HStack(spacing: compact ? 5 : 8) {
+                ForEach(selectedTypes) { type in
+                    let active = engine.active.flatMap { $0.type == type ? $0 : nil }
+                    let best = engine.recentResults.filter { $0.type == type }.min { $0.durationMillis < $1.durationMillis }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(type.label).font(.system(size: 8, weight: .black)).foregroundStyle(active == nil ? Color.secondary : widget.accent.color)
+                        Text(active.map { $0.elapsed.formatted(.number.precision(.fractionLength(2))) } ?? best.map { (Double($0.durationMillis) / 1_000).formatted(.number.precision(.fractionLength(2))) } ?? "—")
+                            .font(.system(size: compact ? 17 : 25, weight: .black, design: .rounded))
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                        Text(active.map { "\(Int($0.currentSpeedKPH)) km/h" } ?? (best == nil ? localized("BRAK PRÓBY") : localized("NAJLEPSZY")))
+                            .font(.system(size: 6, weight: .black)).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(compact ? 7 : 10)
+                    .background(Color.black.opacity(0.18), in: CutCornerPanel(cut: 7))
+                }
+            }
+        }
+        .padding(compact ? 10 : 14)
+        .cardSurface(accent: widget.accent.color)
     }
 }
 

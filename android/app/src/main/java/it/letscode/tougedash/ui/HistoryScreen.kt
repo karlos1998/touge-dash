@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,6 +73,7 @@ import it.letscode.tougedash.data.local.DriveSessionEntity
 import it.letscode.tougedash.data.local.IncidentEntity
 import it.letscode.tougedash.data.local.SyncState
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
+import it.letscode.tougedash.data.local.AccelerationAttemptEntity
 import it.letscode.tougedash.di.AppContainer
 import it.letscode.tougedash.history.CapturedTelemetryPoint
 import it.letscode.tougedash.model.TelemetryMetric
@@ -91,6 +93,7 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.UUID
 import kotlin.math.roundToInt
+import it.letscode.tougedash.performance.AccelerationType
 
 @Composable
 fun HistoryScreen(container: AppContainer, selectedId: String?, select: (String) -> Unit, back: () -> Unit) {
@@ -187,6 +190,7 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
     val rawSamples by container.historyRepository.rawSamples(id).collectAsState(initial = emptyList())
     val incidents by container.historyRepository.incidents(id).collectAsState(initial = emptyList())
     val annotations by container.historyRepository.annotations(id).collectAsState(initial = emptyList())
+    val accelerationAttempts by container.historyRepository.accelerationAttempts(id).collectAsState(initial = emptyList())
     var scrubber by remember(id) { mutableFloatStateOf(0f) }
     var noteDialog by remember { mutableStateOf(false) }
     var selectedIncident by remember(id) { mutableStateOf<IncidentEntity?>(null) }
@@ -215,14 +219,17 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
                 scrubber = ((incident.triggeredAt - session!!.startedAt).toFloat() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).coerceIn(0f, 1f)
                 selectedIncident = incident
             } }
+            if (accelerationAttempts.isNotEmpty()) item { AccelerationSection(accelerationAttempts, session!!.startedAt) { attempt ->
+                scrubber = ((attempt.startedAt - session!!.startedAt).toFloat() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).coerceIn(0f, 1f)
+            } }
             item {
                 TelemetryCursor(selected, session!!.startedAt)
                 Slider(scrubber, { scrubber = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
                 Text(appText("Move the time cursor; the page remains vertically scrollable", "Przesuwaj kursor czasu; stronę nadal możesz przewijać pionowo"), color = TougeMuted, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 18.dp))
             }
-            item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), samples, selected, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint)) }
-            item { TelemetryChart(appText("Temperatures", "Temperatury"), samples, selected, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
-            item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), samples, selected, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
+            item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), samples, selected, accelerationAttempts, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint)) }
+            item { TelemetryChart(appText("Temperatures", "Temperatury"), samples, selected, accelerationAttempts, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
+            item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), samples, selected, accelerationAttempts, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
             if (annotations.isNotEmpty()) item { AnnotationSection(annotations, session!!.startedAt) }
             item { DriveVideoSection(container, session!!, rawSamples, scrubber) }
             if (samples.any { it.latitude != null && it.longitude != null }) item { RouteMap(samples) }
@@ -266,7 +273,7 @@ private fun TelemetryCursor(sample: TelemetrySampleEntity?, startedAt: Long) {
 }
 
 @Composable
-private fun TelemetryChart(title: String, samples: List<TelemetrySampleEntity>, selected: TelemetrySampleEntity?, series: List<Pair<TelemetryMetric, Color>>) {
+private fun TelemetryChart(title: String, samples: List<TelemetrySampleEntity>, selected: TelemetrySampleEntity?, attempts: List<AccelerationAttemptEntity>, series: List<Pair<TelemetryMetric, Color>>) {
     val language = Locale.current.language
     TougePanelSurface(series.firstOrNull()?.second ?: TougeCyan, Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp)) {
         Column(Modifier.padding(14.dp)) {
@@ -276,6 +283,13 @@ private fun TelemetryChart(title: String, samples: List<TelemetrySampleEntity>, 
             }
             Canvas(Modifier.fillMaxWidth().height(180.dp).padding(top = 12.dp)) {
                 if (samples.size < 2) return@Canvas
+                val firstAt = samples.first().recordedAt
+                val duration = (samples.last().recordedAt - firstAt).coerceAtLeast(1)
+                attempts.forEach { attempt ->
+                    val startX = ((attempt.startedAt - firstAt).toFloat() / duration).coerceIn(0f, 1f) * size.width
+                    val endX = ((attempt.endedAt - firstAt).toFloat() / duration).coerceIn(0f, 1f) * size.width
+                    drawRect(accelerationColor(attempt.type).copy(alpha = .12f), topLeft = Offset(startX, 0f), size = androidx.compose.ui.geometry.Size((endX - startX).coerceAtLeast(2f), size.height))
+                }
                 series.forEach { (metric, color) ->
                     val values = samples.map { metric.from(it).toFloat() }
                     val min = values.minOrNull() ?: 0f
@@ -296,6 +310,53 @@ private fun TelemetryChart(title: String, samples: List<TelemetrySampleEntity>, 
             }
         }
     }
+}
+
+@Composable
+private fun AccelerationSection(values: List<AccelerationAttemptEntity>, startedAt: Long, select: (AccelerationAttemptEntity) -> Unit) {
+    Column(Modifier.padding(horizontal = 14.dp, vertical = 7.dp)) {
+        Text(appText("ACCELERATION MEASUREMENTS", "POMIARY PRZYSPIESZENIA"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(appText("Tap an attempt to move the telemetry cursor to its start.", "Dotknij próby, aby ustawić kursor telemetrii na jej początku."), color = TougeMuted, fontSize = 10.sp)
+        AccelerationType.entries.forEach { type ->
+            val attempts = values.filter { it.type == type.name }
+            if (attempts.isNotEmpty()) {
+                val best = attempts.minBy { it.durationMillis }
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp).background(accelerationColor(type.name).copy(alpha = .09f), RoundedCornerShape(6.dp)).clickable { select(best) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${type.label} km/h", color = accelerationColor(type.name), fontWeight = FontWeight.Black)
+                        Text("${attempts.size} ${appText("attempts", "prób")} • ${appText("best", "najlepszy")} %.2f s".format(best.durationMillis / 1_000.0), color = TougeMuted, fontSize = 10.sp)
+                    }
+                    Text("${duration(best.startedAt - startedAt)} → ${duration(best.endedAt - startedAt)}", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    attempts.sortedBy { it.startedAt }.forEachIndexed { index, attempt ->
+                        Text(
+                            "#${index + 1}  %.2f s".format(attempt.durationMillis / 1_000.0),
+                            color = if (attempt.id == best.id) Color.Black else Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier
+                                .background(
+                                    if (attempt.id == best.id) accelerationColor(type.name) else accelerationColor(type.name).copy(alpha = .13f),
+                                    RoundedCornerShape(5.dp)
+                                )
+                                .clickable { select(attempt) }
+                                .padding(horizontal = 10.dp, vertical = 7.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun accelerationColor(type: String): Color = when (type) {
+    AccelerationType.ZERO_TO_100.name -> TougeMint
+    AccelerationType.HUNDRED_TO_200.name -> TougeCyan
+    else -> TougeOrange
 }
 
 @Composable

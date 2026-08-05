@@ -221,6 +221,7 @@ class TelemetryService : Service() {
             container.incidentEngine.rules = container.alertRepository.rules(hardwareId).first()
             var lastHistoryAt = 0L
             var lastLiveAt = 0L
+            var lastPerformanceSourceAt = 0L
             try {
                 while (isActive) {
                     val now = System.currentTimeMillis()
@@ -231,9 +232,19 @@ class TelemetryService : Service() {
                         lastHistoryAt = now
                     }
                     val sessionId = container.historyRepository.activeSessionId()
+                    if (snapshot.updatedAt > lastPerformanceSourceAt) {
+                        container.accelerationEngine.sample(snapshot, snapshot.updatedAt, sessionId)?.let {
+                            container.historyRepository.recordAcceleration(it)
+                        }
+                        lastPerformanceSourceAt = snapshot.updatedAt
+                    }
                     container.incidentEngine.record(hardwareId, sessionId, snapshot, location, now)
                     if (sessionId != null && now - lastLiveAt >= 1_000) {
-                        container.cloudSyncRepository.publishLive(hardwareId, snapshot.asUploadSample(sessionId, location, now))
+                        container.cloudSyncRepository.publishLive(
+                            hardwareId,
+                            snapshot.asUploadSample(sessionId, location, now),
+                            container.accelerationEngine.state.value
+                        )
                         lastLiveAt = now
                     }
                     if (now - lastForegroundNotificationAt >= 1_000) {
@@ -247,6 +258,7 @@ class TelemetryService : Service() {
                     val sessionId = container.historyRepository.activeSessionId()
                     container.incidentEngine.finish(hardwareId, sessionId)
                     container.historyRepository.finish()
+                    container.accelerationEngine.reset()
                     container.cloudSyncRepository.schedule()
                 }
             }

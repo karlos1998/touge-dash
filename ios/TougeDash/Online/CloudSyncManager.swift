@@ -353,6 +353,15 @@ final class CloudSyncManager: ObservableObject {
         }
     }
 
+    func noteLocalAccelerationRecorded(sessionID: UUID) {
+        sessionStatuses.removeValue(forKey: sessionID)
+        pendingSessions = max(1, pendingSessions)
+        estimatedPendingBytes += 256
+        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
+            Task { await syncNow() }
+        }
+    }
+
     func noteLocalAnnotationRecorded() {
         pendingAnnotations += 1
         estimatedPendingBytes += 512
@@ -413,7 +422,7 @@ final class CloudSyncManager: ObservableObject {
         await syncNow()
     }
 
-    func publishLive(_ snapshot: TelemetrySnapshot) {
+    func publishLive(_ snapshot: TelemetrySnapshot, performance: AccelerationEngine) {
         guard account.isAuthenticated,
               let vehicleID = activeVehicle?.id,
               isNetworkAvailable,
@@ -441,7 +450,19 @@ final class CloudSyncManager: ObservableObject {
             speedKph: snapshot.speedKPH,
             checkEngineMask: Int(snapshot.checkEngineMask),
             latitude: location?.latitude,
-            longitude: location?.longitude
+            longitude: location?.longitude,
+            activeAcceleration: performance.active.map {
+                CloudActiveAccelerationUpload(
+                    type: $0.type.rawValue,
+                    startedAt: $0.startedAt,
+                    elapsedMillis: Int64(($0.elapsed * 1_000).rounded()),
+                    currentSpeedKph: $0.currentSpeedKPH,
+                    progress: $0.progress
+                )
+            },
+            recentAccelerationResults: performance.recentResults.map {
+                CloudAccelerationResultUpload(type: $0.typeRaw, durationMillis: $0.durationMillis, endedAt: $0.endedAt)
+            }
         )
         Task {
             do {
@@ -468,6 +489,7 @@ final class CloudSyncManager: ObservableObject {
         let uploadedMaxOilTemperatureCelsius = session.maxOilTemperatureCelsius
         let uploadedMinimumOilPressureBar = session.minimumOilPressureBar
         let uploadedContainsLocation = session.containsLocation
+        let accelerationAttempts = accelerationAttempts(sessionID: session.id).map(makeUpload)
         var offset = 0
         var sentEmptySession = false
         var itemTransferredBytes: Int64 = 0
@@ -495,7 +517,8 @@ final class CloudSyncManager: ObservableObject {
                 maxOilTemperatureCelsius: uploadedMaxOilTemperatureCelsius,
                 minimumOilPressureBar: uploadedMinimumOilPressureBar,
                 containsLocation: uploadedContainsLocation,
-                samples: chunk.map(makeUpload)
+                samples: chunk.map(makeUpload),
+                accelerationAttempts: accelerationAttempts
             )
             let encodedSize = try JSONEncoder.tougeDashCloud().encode(request).count
             let result: CloudSyncResult = try await account.send(
@@ -566,6 +589,23 @@ final class CloudSyncManager: ObservableObject {
         descriptor.fetchOffset = offset
         descriptor.fetchLimit = limit
         return try context.fetch(descriptor)
+    }
+
+    private func accelerationAttempts(sessionID: UUID) -> [AccelerationAttempt] {
+        let descriptor = FetchDescriptor<AccelerationAttempt>(
+            predicate: #Predicate { $0.sessionID == sessionID },
+            sortBy: [SortDescriptor(\.startedAt)]
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
+    private func makeUpload(_ attempt: AccelerationAttempt) -> CloudAccelerationAttemptUpload {
+        CloudAccelerationAttemptUpload(
+            id: attempt.id, type: attempt.typeRaw, startedAt: attempt.startedAt, endedAt: attempt.endedAt,
+            durationMillis: attempt.durationMillis, startSpeedKph: attempt.startSpeedKPH,
+            endSpeedKph: attempt.endSpeedKPH, source: attempt.sourceRaw, quality: attempt.qualityRaw,
+            sampleRateHz: attempt.sampleRateHz, shiftCount: attempt.shiftCount, revision: attempt.revision
+        )
     }
 
     private func makeUpload(_ sample: TelemetryHistorySample) -> CloudSampleUpload {

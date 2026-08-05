@@ -66,10 +66,11 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
             val metricLimit = when (widget.kind) {
                 it.letscode.tougedash.model.DashboardWidgetKind.HERO -> 4
                 it.letscode.tougedash.model.DashboardWidgetKind.GROUP -> 3
+                it.letscode.tougedash.model.DashboardWidgetKind.PERFORMANCE -> 0
                 else -> 1
             }
             widget.copy(
-                metrics = widget.metrics.take(metricLimit).ifEmpty { listOf(it.letscode.tougedash.model.TelemetryMetric.BOOST) },
+                metrics = if (metricLimit == 0) emptyList() else widget.metrics.take(metricLimit).ifEmpty { listOf(it.letscode.tougedash.model.TelemetryMetric.BOOST) },
                 portraitSpan = widget.portraitSpan.coerceIn(0, 12),
                 landscapeSpan = widget.landscapeSpan.coerceIn(0, 12),
                 portraitOrder = widget.portraitOrder.takeIf { it >= 0 } ?: index,
@@ -88,7 +89,7 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
 
 internal fun normalizeLegacyDashboardJson(value: String): String {
     val names = mapOf(
-        "HERO" to "hero", "GROUP" to "group", "VALUE" to "value", "GAUGE" to "gauge", "CHART" to "chart", "COMPACT" to "compact",
+        "HERO" to "hero", "GROUP" to "group", "VALUE" to "value", "GAUGE" to "gauge", "CHART" to "chart", "COMPACT" to "compact", "PERFORMANCE" to "performance",
         "CYAN" to "cyan", "MINT" to "mint", "BLUE" to "blue", "ICE" to "ice", "ORANGE" to "orange", "YELLOW" to "yellow", "RED" to "red", "WHITE" to "white",
         "RPM" to "rpm", "BOOST" to "boost", "MAP" to "map", "THROTTLE" to "throttle", "COOLANT" to "coolant", "INTAKE" to "intake",
         "OIL_TEMPERATURE" to "oilTemperature", "OIL_PRESSURE" to "oilPressure", "FUEL_PRESSURE" to "fuelPressure", "AFR" to "afr", "LAMBDA" to "lambda",

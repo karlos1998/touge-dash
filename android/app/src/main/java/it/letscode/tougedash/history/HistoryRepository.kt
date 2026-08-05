@@ -5,6 +5,7 @@ import it.letscode.tougedash.data.local.SyncState
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
 import it.letscode.tougedash.data.local.TougeDashDao
 import it.letscode.tougedash.data.local.VehicleEntity
+import it.letscode.tougedash.data.local.AccelerationAttemptEntity
 import it.letscode.tougedash.model.RecordedLocation
 import it.letscode.tougedash.model.TelemetrySnapshot
 import kotlinx.coroutines.sync.Mutex
@@ -26,6 +27,7 @@ class HistoryRepository(private val dao: TougeDashDao) {
     fun incidents(id: String) = dao.incidentsForSession(id)
     fun annotations(id: String) = dao.annotations(id)
     fun videos(id: String) = dao.videos(id)
+    fun accelerationAttempts(id: String) = dao.accelerationAttempts(id)
 
     suspend fun ensureVehicle(hardwareId: String, name: String): VehicleEntity {
         val current = dao.vehicle(hardwareId)
@@ -86,6 +88,20 @@ class HistoryRepository(private val dao: TougeDashDao) {
     }
 
     suspend fun activeSessionId(): String? = mutex.withLock { active?.id }
+
+    suspend fun recordAcceleration(attempt: AccelerationAttemptEntity) = mutex.withLock {
+        dao.upsertAccelerationAttempt(attempt)
+        val current = active?.takeIf { it.id == attempt.sessionId } ?: dao.sessionOnce(attempt.sessionId)
+        current?.copy(
+            modifiedAt = System.currentTimeMillis(),
+            syncState = SyncState.PENDING_UPLOAD,
+            syncError = null,
+            revision = current.revision + 1
+        )?.let {
+            dao.upsertSession(it)
+            if (active?.id == it.id) active = it
+        }
+    }
 
     private suspend fun flushLocked(session: DriveSessionEntity) {
         if (pending.isNotEmpty()) {

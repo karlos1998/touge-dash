@@ -418,6 +418,7 @@ private struct DashboardWidgetEditorRow: View {
         switch widget.kind {
         case .hero: 4
         case .group: 3
+        case .performance: 0
         default: 1
         }
     }
@@ -432,9 +433,17 @@ private struct DashboardWidgetEditorRow: View {
                 }
             }
 
-            Picker(localized("Główny parametr"), selection: metricBinding(at: 0, fallback: .boost)) {
-                ForEach(DashboardMetric.allCases) { metric in
-                    Label(metric.title, systemImage: metric.icon).tag(metric)
+            if widget.kind == .performance {
+                Section(localized("Widoczne pomiary")) {
+                    ForEach(AccelerationType.allCases) { type in
+                        Toggle("\(type.label) km/h", isOn: accelerationTypeBinding(type))
+                    }
+                }
+            } else {
+                Picker(localized("Główny parametr"), selection: metricBinding(at: 0, fallback: .boost)) {
+                    ForEach(DashboardMetric.allCases) { metric in
+                        Label(metric.title, systemImage: metric.icon).tag(metric)
+                    }
                 }
             }
 
@@ -521,6 +530,18 @@ private struct DashboardWidgetEditorRow: View {
         )
     }
 
+    private func accelerationTypeBinding(_ type: AccelerationType) -> Binding<Bool> {
+        Binding(
+            get: { (widget.accelerationTypes ?? AccelerationType.allCases).contains(type) },
+            set: { enabled in
+                var values = widget.accelerationTypes ?? AccelerationType.allCases
+                if enabled, !values.contains(type) { values.append(type) }
+                if !enabled, values.count > 1 { values.removeAll { $0 == type } }
+                widget.accelerationTypes = values
+            }
+        )
+    }
+
     private func fallbackMetric(at index: Int) -> DashboardMetric {
         let defaults: [DashboardMetric] = [.boost, .rpm, .throttle, .speed]
         return defaults[min(index, defaults.count - 1)]
@@ -548,7 +569,12 @@ private struct DashboardWidgetEditorRow: View {
     }
 
     private func normalizeMetrics(for kind: DashboardWidgetKind) {
-        let count = kind == .hero ? 4 : (kind == .group ? 3 : 1)
+        let count = kind == .hero ? 4 : (kind == .group ? 3 : (kind == .performance ? 0 : 1))
+        if count == 0 {
+            widget.metrics = []
+            widget.wideKind = nil
+            return
+        }
         while widget.metrics.count < count {
             widget.metrics.append(fallbackMetric(at: widget.metrics.count))
         }

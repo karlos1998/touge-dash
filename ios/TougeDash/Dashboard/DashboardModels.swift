@@ -160,6 +160,7 @@ enum DashboardWidgetKind: String, Codable, CaseIterable, Identifiable, Sendable 
     case gauge
     case chart
     case compact
+    case performance
 
     var id: String { rawValue }
 
@@ -171,6 +172,7 @@ enum DashboardWidgetKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .gauge: localized("Wskaźnik zegarowy")
         case .chart: localized("Wykres na żywo")
         case .compact: localized("Mała wartość")
+        case .performance: localized("Pomiar przyspieszenia")
         }
     }
 }
@@ -252,6 +254,7 @@ struct DashboardWidget: Codable, Hashable, Identifiable, Sendable {
     var gaugeMinimum: Double?
     var gaugeMaximum: Double?
     var chartDuration: DashboardChartDuration?
+    var accelerationTypes: [AccelerationType]?
     var accent: DashboardAccent
 
     init(
@@ -267,6 +270,7 @@ struct DashboardWidget: Codable, Hashable, Identifiable, Sendable {
         gaugeMinimum: Double? = nil,
         gaugeMaximum: Double? = nil,
         chartDuration: DashboardChartDuration? = nil,
+        accelerationTypes: [AccelerationType]? = nil,
         accent: DashboardAccent = .cyan
     ) {
         self.id = id
@@ -281,6 +285,7 @@ struct DashboardWidget: Codable, Hashable, Identifiable, Sendable {
         self.gaugeMinimum = gaugeMinimum
         self.gaugeMaximum = gaugeMaximum
         self.chartDuration = chartDuration
+        self.accelerationTypes = accelerationTypes
         self.accent = accent
     }
 

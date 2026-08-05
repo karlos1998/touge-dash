@@ -20,6 +20,8 @@ import it.letscode.tougedash.data.local.SyncState
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
 import it.letscode.tougedash.data.local.TougeDashDao
 import it.letscode.tougedash.data.local.VehicleEntity
+import it.letscode.tougedash.data.local.AccelerationAttemptEntity
+import it.letscode.tougedash.performance.AccelerationRuntimeState
 import it.letscode.tougedash.history.CapturedTelemetryPoint
 import it.letscode.tougedash.model.VehicleAlertRules
 import it.letscode.tougedash.alerts.AlertRepository
@@ -103,12 +105,33 @@ class CloudSyncRepository(
         }.getOrElse { false }
     }
 
-    suspend fun publishLive(hardwareId: String, sample: TelemetrySampleEntity) {
+    suspend fun publishLive(hardwareId: String, sample: TelemetrySampleEntity, performance: AccelerationRuntimeState) {
         if (!api.isAuthenticated) return
         val local = dao.vehicle(hardwareId) ?: return
         val vehicle = discover(local)
         val remote = vehicle.remoteId ?: return
-        runCatching { api.request("/api/v1/vehicles/$remote/live", "POST", sampleJson(sample, includeId = false)) }
+        val body = buildJsonObject {
+            sampleJson(sample, includeId = false).forEach { (key, value) -> put(key, value) }
+            performance.active?.let { active ->
+                put("activeAcceleration", buildJsonObject {
+                    put("type", active.type.name)
+                    put("startedAt", iso(active.startedAt))
+                    put("elapsedMillis", active.elapsedMillis)
+                    put("currentSpeedKph", active.currentSpeedKph)
+                    put("progress", active.progress)
+                })
+            }
+            put("recentAccelerationResults", buildJsonArray {
+                performance.recentResults.forEach { attempt ->
+                    add(buildJsonObject {
+                        put("type", attempt.type)
+                        put("durationMillis", attempt.durationMillis)
+                        put("endedAt", iso(attempt.endedAt))
+                    })
+                }
+            })
+        }
+        runCatching { api.request("/api/v1/vehicles/$remote/live", "POST", body) }
     }
 
     fun schedule() {
@@ -131,13 +154,14 @@ class CloudSyncRepository(
 
     private suspend fun uploadSession(session: DriveSessionEntity, vehicleId: String) {
         val samples = dao.samplesOnce(session.id)
+        val attempts = dao.accelerationAttemptsOnce(session.id)
         val chunks = if (samples.isEmpty()) listOf(emptyList()) else samples.chunked(2_000)
-        val totalBytes = chunks.sumOf { chunk -> sessionPayload(session, chunk).toString().toByteArray().size.toLong() }
+        val totalBytes = chunks.sumOf { chunk -> sessionPayload(session, chunk, attempts).toString().toByteArray().size.toLong() }
         var sent = 0L
         dao.updateSession(session.copy(syncState = SyncState.UPLOADING, syncBytesTotal = totalBytes, syncBytesSent = 0, syncProgress = 0f, syncError = null))
         runCatching {
             chunks.forEachIndexed { index, chunk ->
-                val body = sessionPayload(session, chunk)
+                val body = sessionPayload(session, chunk, attempts)
                 api.request("/api/v1/vehicles/$vehicleId/sessions/sync", "POST", body)
                 sent += body.toString().toByteArray().size
                 dao.updateSession(session.copy(syncState = SyncState.UPLOADING, syncBytesTotal = totalBytes, syncBytesSent = sent, syncProgress = (index + 1f) / chunks.size, syncError = null))
@@ -233,10 +257,27 @@ class CloudSyncRepository(
         )
     }
 
-    private fun sessionPayload(s: DriveSessionEntity, samples: List<TelemetrySampleEntity>) = buildJsonObject {
+    private fun sessionPayload(
+        s: DriveSessionEntity,
+        samples: List<TelemetrySampleEntity>,
+        attempts: List<AccelerationAttemptEntity>
+    ) = buildJsonObject {
         put("id", s.id); put("startedAt", iso(s.startedAt)); put("endedAt", iso(s.endedAt)); put("revision", s.revision); put("sampleCount", s.sampleCount); put("distanceMeters", s.distanceMeters)
         put("maxRpm", s.maxRpm); put("maxSpeedKph", s.maxSpeedKph); put("maxBoostBar", s.maxBoostBar); put("maxCoolantCelsius", s.maxCoolantCelsius); put("maxOilTemperatureCelsius", s.maxOilTemperatureCelsius)
         s.minimumOilPressureBar?.let { put("minimumOilPressureBar", it) }; put("containsLocation", s.containsLocation); put("samples", buildJsonArray { samples.forEach { add(sampleJson(it)) } })
+        put("accelerationAttempts", buildJsonArray {
+            attempts.forEach { attempt ->
+                add(buildJsonObject {
+                    put("id", attempt.id); put("type", attempt.type)
+                    put("startedAt", iso(attempt.startedAt)); put("endedAt", iso(attempt.endedAt))
+                    put("durationMillis", attempt.durationMillis)
+                    put("startSpeedKph", attempt.startSpeedKph); put("endSpeedKph", attempt.endSpeedKph)
+                    put("source", attempt.source); put("quality", attempt.quality)
+                    put("sampleRateHz", attempt.sampleRateHz); put("shiftCount", attempt.shiftCount)
+                    put("revision", attempt.revision)
+                })
+            }
+        })
     }
 
     private fun sampleJson(s: TelemetrySampleEntity, includeId: Boolean = true) = buildJsonObject {

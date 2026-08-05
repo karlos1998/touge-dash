@@ -35,6 +35,7 @@ zasobów z oficjalnego eDash.
 - odczyt ramek z `EMULOGGER` przez GATT `FFE0` / `FFE1`,
 - RPM, boost/MAP, TPS, AFR/lambda, temperatury, ciśnienia i napięcie,
 - konfigurowalny dashboard na Androida, iPhone'a i iPada, w pionie i poziomie,
+- automatyczny pomiar 0–100, 100–200 i 200–250 km/h z kartą czasu na żywo,
 - lokalna historia przejazdów z interaktywnymi wykresami i opcjonalną trasą GPS,
 - lokalne nagrywanie przejazdu z odtwarzaniem zsynchronizowanym z telemetrią,
 - eksport filmu do Zdjęć z konfigurowalną nakładką parametrów,
@@ -76,7 +77,14 @@ na sekundę. Dłuższa niż 90 sekund przerwa rozpoczyna nowy przejazd. W zakła
 - temperaturę oleju i płynu chłodniczego,
 - boost i ciśnienie oleju,
 - prędkość oraz obroty silnika,
+- próby 0–100, 100–200 i 200–250 km/h wraz z najlepszym czasem i zakresem na osi,
 - pozostałe parametry widoczne dla wybranego momentu.
+
+Pomiar startuje tylko po świeżym przekroczeniu dolnego progu. Zwykła jazda
+autostradą nie tworzy więc wielogodzinnej próby 100–200. Zmiana biegu nie
+przerywa czasu, natomiast utrata danych Bluetooth, wyraźne zwolnienie lub brak
+postępu kończą niedokończoną próbę bez zapisywania wyniku. Funkcja wyłącznie
+analizuje odebraną prędkość — nie zapisuje niczego do ECU ani EMULOGGERA.
 
 Przesunięcie palcem po dowolnym wykresie ustawia wspólny kursor dla wszystkich
 parametrów. Jeżeli użytkownik włączy `Zapis trasy` i udzieli zgody na

@@ -233,7 +233,8 @@ final class DashboardTemplateStore: ObservableObject {
     private func normalize(_ record: inout DashboardTemplateRecord) {
         record.definition.widgets = record.definition.widgets.map { widget in
             var value = widget
-            if value.metrics.isEmpty { value.metrics = [.boost] }
+            if value.metrics.isEmpty && value.kind != .performance { value.metrics = [.boost] }
+            if value.kind == .performance { value.metrics = [] }
             if value.kind == .group { value.metrics = Array(value.metrics.prefix(3)) }
             if value.kind != .group && value.kind != .hero { value.metrics = [value.primaryMetric] }
             return value

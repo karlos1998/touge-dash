@@ -9,6 +9,7 @@ struct HistoryView: View {
     @Query(sort: \DriveSession.startedAt, order: .reverse) private var sessions: [DriveSession]
     @Query(sort: \DriveIncident.triggeredAt, order: .reverse) private var incidents: [DriveIncident]
     @Query(sort: \DriveVideoRecording.startedAt, order: .reverse) private var videos: [DriveVideoRecording]
+    @Query(sort: \AccelerationAttempt.startedAt, order: .reverse) private var accelerationAttempts: [AccelerationAttempt]
     @ObservedObject var locationTracker: LocationTrackingService
     @ObservedObject var cloudAccount: CloudAccountService
     @ObservedObject var cloudSync: CloudSyncManager
@@ -133,6 +134,9 @@ struct HistoryView: View {
         }
         for incident in incidents where incident.sessionID == session.id {
             modelContext.delete(incident)
+        }
+        for attempt in accelerationAttempts where attempt.sessionID == session.id {
+            modelContext.delete(attempt)
         }
         let sessionID = session.id
         let annotations = (try? modelContext.fetch(FetchDescriptor<TimelineAnnotation>(
@@ -329,6 +333,7 @@ private struct DriveSessionDetailView: View {
     @Query(sort: \DriveIncident.triggeredAt) private var allIncidents: [DriveIncident]
     @Query(sort: \TimelineAnnotation.timestamp) private var allAnnotations: [TimelineAnnotation]
     @Query(sort: \DriveVideoRecording.startedAt) private var allVideos: [DriveVideoRecording]
+    @Query(sort: \AccelerationAttempt.startedAt) private var allAccelerationAttempts: [AccelerationAttempt]
     @State private var selectedTime: Date?
     @State private var cachedSamples: [TelemetryHistorySample] = []
     @State private var chartSamples: [TelemetryHistorySample] = []
@@ -353,6 +358,10 @@ private struct DriveSessionDetailView: View {
 
     private var recordings: [DriveVideoRecording] {
         allVideos.filter { $0.sessionID == session.id }
+    }
+
+    private var accelerationAttempts: [AccelerationAttempt] {
+        allAccelerationAttempts.filter { $0.sessionID == session.id }
     }
 
     private var selectedCoordinate: CLLocationCoordinate2D? {
@@ -422,12 +431,17 @@ private struct DriveSessionDetailView: View {
                         }
                     }
 
+                    if !accelerationAttempts.isEmpty {
+                        AccelerationAttemptsCard(attempts: accelerationAttempts, selectedTime: $selectedTime)
+                    }
+
                     LazyVGrid(columns: chartColumns, spacing: 14) {
                         HistoryChartCard(
                             title: "TEMPERATURY",
                             subtitle: "Olej i płyn chłodniczy",
                             unit: "°C",
                             samples: chartSamples,
+                            attempts: accelerationAttempts,
                             series: [
                                 HistoryChartSeries(name: "Olej", color: .tougeOrange, value: { $0.oilTemperatureCelsius }),
                                 HistoryChartSeries(name: "Płyn", color: .tougeIce, value: { $0.coolantCelsius })
@@ -440,6 +454,7 @@ private struct DriveSessionDetailView: View {
                             subtitle: "Boost i ciśnienie oleju",
                             unit: "bar",
                             samples: chartSamples,
+                            attempts: accelerationAttempts,
                             series: [
                                 HistoryChartSeries(name: "Boost", color: .tougeCyan, value: { $0.boostBar }),
                                 HistoryChartSeries(name: "Olej", color: .tougeMint, value: { $0.oilPressureBar })
@@ -452,6 +467,7 @@ private struct DriveSessionDetailView: View {
                             subtitle: "Prędkość pojazdu",
                             unit: "km/h",
                             samples: chartSamples,
+                            attempts: accelerationAttempts,
                             series: [HistoryChartSeries(name: "Prędkość", color: .tougeIce, value: { $0.speedKPH })],
                             selectedTime: $selectedTime
                         )
@@ -461,6 +477,7 @@ private struct DriveSessionDetailView: View {
                             subtitle: "RPM w czasie",
                             unit: "rpm",
                             samples: chartSamples,
+                            attempts: accelerationAttempts,
                             series: [HistoryChartSeries(name: "RPM", color: .tougeYellow, value: { $0.rpm })],
                             selectedTime: $selectedTime
                         )
@@ -668,6 +685,7 @@ private struct HistoryChartCard: View {
     let subtitle: String
     let unit: String
     let samples: [TelemetryHistorySample]
+    let attempts: [AccelerationAttempt]
     let series: [HistoryChartSeries]
     @Binding var selectedTime: Date?
 
@@ -704,6 +722,15 @@ private struct HistoryChartCard: View {
             }
 
             Chart {
+                ForEach(attempts) { attempt in
+                    RectangleMark(
+                        xStart: .value(localized("Początek pomiaru"), attempt.startedAt),
+                        xEnd: .value(localized("Koniec pomiaru"), attempt.endedAt),
+                        yStart: .value(localized("Minimum"), yDomain.lowerBound),
+                        yEnd: .value(localized("Maksimum"), yDomain.upperBound)
+                    )
+                    .foregroundStyle(accelerationColor(attempt.type).opacity(0.12))
+                }
                 ForEach(series) { item in
                     ForEach(samples) { sample in
                         LineMark(
@@ -772,6 +799,87 @@ private struct HistoryChartCard: View {
               xPosition <= frame.width,
               let timestamp: Date = proxy.value(atX: xPosition) else { return }
         selectedTime = timestamp
+    }
+}
+
+private struct AccelerationAttemptsCard: View {
+    let attempts: [AccelerationAttempt]
+    @Binding var selectedTime: Date?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(localized("POMIARY PRZYSPIESZENIA"), systemImage: "stopwatch.fill")
+                    .font(.system(size: 11, weight: .black)).tracking(1)
+                Spacer()
+                Text(localized("Dotknij, aby przejść na oś czasu"))
+                    .font(.system(size: 8, weight: .bold)).foregroundStyle(.secondary)
+            }
+            ForEach(AccelerationType.allCases) { type in
+                let values = attempts.filter { $0.type == type }
+                if let best = values.min(by: { $0.durationMillis < $1.durationMillis }) {
+                    attemptRow(type: type, attempts: values, best: best)
+                }
+            }
+        }
+        .padding(16)
+        .cardSurface(accent: .tougeCyan)
+    }
+
+    private func attemptRow(
+        type: AccelerationType,
+        attempts: [AccelerationAttempt],
+        best: AccelerationAttempt
+    ) -> some View {
+        let color = accelerationColor(type)
+        let duration = (Double(best.durationMillis) / 1_000)
+            .formatted(.number.precision(.fractionLength(2))) + " s"
+        let orderedAttempts = attempts.sorted { $0.startedAt < $1.startedAt }
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Button { selectedTime = best.startedAt } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(type.label) km/h")
+                            .font(.headline.weight(.black))
+                            .foregroundStyle(color)
+                        Text("\(attempts.count) \(localized("prób")) · \(localized("najlepszy czas"))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(duration)
+                        .font(.title3.monospacedDigit().weight(.black))
+                    Image(systemName: "arrow.right")
+                }
+            }
+            .buttonStyle(.plain)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(Array(orderedAttempts.enumerated()), id: \.element.id) { index, attempt in
+                        Button { selectedTime = attempt.startedAt } label: {
+                            Text("#\(index + 1)  \((Double(attempt.durationMillis) / 1_000).formatted(.number.precision(.fractionLength(2)))) s")
+                                .font(.caption2.monospacedDigit().weight(.black))
+                                .foregroundStyle(attempt.id == best.id ? Color.black : Color.white)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 6)
+                                .background(attempt.id == best.id ? color : color.opacity(0.13), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(color.opacity(0.08), in: CutCornerPanel(cut: 8))
+    }
+}
+
+private func accelerationColor(_ type: AccelerationType) -> Color {
+    switch type {
+    case .zeroTo100: .tougeMint
+    case .hundredTo200: .tougeCyan
+    case .twoHundredTo250: .tougeOrange
     }
 }
 

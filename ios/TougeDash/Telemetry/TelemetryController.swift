@@ -24,6 +24,7 @@ final class TelemetryController: ObservableObject {
     let locationTracker: LocationTrackingService
     let cloudSync: CloudSyncManager
     let videoRecorder: DriveVideoRecorder
+    let accelerationEngine: AccelerationEngine
     private let watchBridge = WatchTelemetryBridge.shared
     private let engineAlertManager = EngineAlertManager()
 
@@ -45,12 +46,14 @@ final class TelemetryController: ObservableObject {
         historyRecorder: TelemetryHistoryRecorder,
         incidentRecorder: TelemetryIncidentRecorder,
         cloudSync: CloudSyncManager,
-        videoRecorder: DriveVideoRecorder
+        videoRecorder: DriveVideoRecorder,
+        accelerationEngine: AccelerationEngine
     ) {
         self.historyRecorder = historyRecorder
         self.incidentRecorder = incidentRecorder
         self.cloudSync = cloudSync
         self.videoRecorder = videoRecorder
+        self.accelerationEngine = accelerationEngine
         locationTracker = historyRecorder.locationTracker
 
         #if DEBUG
@@ -87,6 +90,7 @@ final class TelemetryController: ObservableObject {
                 self.videoRecorder.connectionDidEnd()
                 self.lastVideoSessionID = nil
                 self.lastVideoHeartbeat = .distantPast
+                self.accelerationEngine.reset()
             }
             if self.activityManager.isRunning {
                 self.activityManager.enqueueUpdate(self.snapshot, connectionLabel: state.label)
@@ -252,6 +256,10 @@ final class TelemetryController: ObservableObject {
             )
         }
         if let sessionID = historyRecorder.activeSessionID {
+            if let attempt = accelerationEngine.sample(value, at: now, sessionID: sessionID) {
+                historyRecorder.recordAcceleration(attempt)
+                cloudSync.noteLocalAccelerationRecorded(sessionID: sessionID)
+            }
             if sessionID != lastVideoSessionID || now.timeIntervalSince(lastVideoHeartbeat) >= 1 {
                 videoRecorder.handleTelemetry(sessionID: sessionID)
                 lastVideoSessionID = sessionID
@@ -259,7 +267,7 @@ final class TelemetryController: ObservableObject {
             }
             incidentRecorder.record(value, sessionID: sessionID)
         }
-        cloudSync.publishLive(value)
+        cloudSync.publishLive(value, performance: accelerationEngine)
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)
             lastSharedWrite = now

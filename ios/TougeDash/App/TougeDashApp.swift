@@ -20,13 +20,15 @@ struct TougeDashApp: App {
                 TelemetryHistorySample.self,
                 DriveVideoRecording.self,
                 DriveIncident.self,
-                TimelineAnnotation.self
+                TimelineAnnotation.self,
+                AccelerationAttempt.self
             )
             let locationTracker = LocationTrackingService()
             let historyRecorder = TelemetryHistoryRecorder(
                 container: container,
                 locationTracker: locationTracker
             )
+            let accelerationEngine = AccelerationEngine()
             let account = CloudAccountService()
             let alertRules = VehicleAlertRuleStore()
             let templates = DashboardTemplateStore()
@@ -65,7 +67,8 @@ struct TougeDashApp: App {
                 historyRecorder: historyRecorder,
                 incidentRecorder: incidentRecorder,
                 cloudSync: sync,
-                videoRecorder: videoRecorder
+                videoRecorder: videoRecorder,
+                accelerationEngine: accelerationEngine
             ))
         } catch {
             fatalError("Unable to create telemetry history store: \(error)")

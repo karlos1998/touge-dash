@@ -3,6 +3,7 @@ package it.letscode.tougedash.model
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import java.util.UUID
+import it.letscode.tougedash.performance.AccelerationType
 
 @Serializable
 enum class DashboardWidgetKind {
@@ -11,7 +12,8 @@ enum class DashboardWidgetKind {
     @SerialName("value") VALUE,
     @SerialName("gauge") GAUGE,
     @SerialName("chart") CHART,
-    @SerialName("compact") COMPACT
+    @SerialName("compact") COMPACT,
+    @SerialName("performance") PERFORMANCE
 }
 
 @Serializable
@@ -40,6 +42,7 @@ data class DashboardWidget(
     val gaugeMinimum: Double? = null,
     val gaugeMaximum: Double? = null,
     @SerialName("chartDuration") val chartDurationSeconds: Int? = null,
+    val accelerationTypes: List<AccelerationType> = AccelerationType.entries,
     val accent: DashboardAccent = DashboardAccent.CYAN
 )
 

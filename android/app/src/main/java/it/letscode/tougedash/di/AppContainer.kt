@@ -4,6 +4,8 @@ package it.letscode.tougedash.di
 
 import android.app.Application
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import it.letscode.tougedash.data.local.DashboardTemplateEntity
 import it.letscode.tougedash.data.local.TougeDashDatabase
 import it.letscode.tougedash.alerts.EngineAlertNotifier
@@ -19,6 +21,7 @@ import it.letscode.tougedash.cloud.CloudAuthRepository
 import it.letscode.tougedash.cloud.CloudSyncRepository
 import it.letscode.tougedash.model.DashboardTemplate
 import it.letscode.tougedash.telemetry.TelemetryRuntime
+import it.letscode.tougedash.performance.AccelerationEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,11 +36,35 @@ class AppContainer(val application: Application) {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
     val database = Room.databaseBuilder(application, TougeDashDatabase::class.java, "touge-dash.db")
-        .fallbackToDestructiveMigration()
+        .addMigrations(object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS acceleration_attempts (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        sessionId TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        startedAt INTEGER NOT NULL,
+                        endedAt INTEGER NOT NULL,
+                        durationMillis INTEGER NOT NULL,
+                        startSpeedKph REAL NOT NULL,
+                        endSpeedKph REAL NOT NULL,
+                        source TEXT NOT NULL,
+                        quality TEXT NOT NULL,
+                        sampleRateHz REAL NOT NULL,
+                        shiftCount INTEGER NOT NULL,
+                        revision INTEGER NOT NULL,
+                        FOREIGN KEY(sessionId) REFERENCES drive_sessions(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_acceleration_attempts_sessionId ON acceleration_attempts(sessionId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_acceleration_attempts_sessionId_type_durationMillis ON acceleration_attempts(sessionId, type, durationMillis)")
+            }
+        })
         .build()
     val dao = database.dao()
     val runtime = TelemetryRuntime
     val historyRepository = HistoryRepository(dao)
+    val accelerationEngine = AccelerationEngine()
     val alertNotifier = EngineAlertNotifier(application)
     val alertRepository = AlertRepository(dao, json)
     val incidentEngine = IncidentCaptureEngine(dao, json, alertNotifier::show)

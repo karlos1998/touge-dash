@@ -4,6 +4,7 @@ enum SimulationScenario: String, CaseIterable, Identifiable, Sendable {
     case idle
     case cruise
     case pull
+    case performanceRun
     case warmup
     case overboost
     case highTemperature
@@ -18,6 +19,7 @@ enum SimulationScenario: String, CaseIterable, Identifiable, Sendable {
         case .idle: "Wolne obroty"
         case .cruise: "Spokojna jazda"
         case .pull: "Przyspieszenie"
+        case .performanceRun: "Pomiar 0–100 / 100–200 / 200–250"
         case .warmup: "Rozgrzewanie"
         case .overboost: "Overboost"
         case .highTemperature: "Przegrzanie"
@@ -32,6 +34,7 @@ enum SimulationScenario: String, CaseIterable, Identifiable, Sendable {
         case .idle: "gauge.with.dots.needle.0percent"
         case .cruise: "car.fill"
         case .pull: "bolt.fill"
+        case .performanceRun: "stopwatch.fill"
         case .warmup: "thermometer.medium"
         case .overboost: "gauge.with.dots.needle.100percent"
         case .highTemperature: "thermometer.high"
@@ -78,6 +81,35 @@ enum SimulationScenario: String, CaseIterable, Identifiable, Sendable {
             value.oilPressureBar = 2.0 + value.rpm / 1_650
             value.injectorDutyPercent = min(92, 18 + acceleration * 70)
             value.ignitionDegrees = 16 - max(0, value.boostBar) * 6
+            return value
+
+        case .performanceRun:
+            let phase = elapsed.truncatingRemainder(dividingBy: 19)
+            let run = max(0, phase - 1.2)
+            let speed: Double
+            let shifting: Bool
+            if run <= 4.0 {
+                speed = mix(0, 100, run / 4.0); shifting = false
+            } else if run <= 4.7 {
+                speed = 100; shifting = true
+            } else if run <= 9.7 {
+                speed = mix(100, 200, (run - 4.7) / 5.0); shifting = false
+            } else if run <= 10.4 {
+                speed = 200; shifting = true
+            } else if run <= 14.4 {
+                speed = mix(200, 255, (run - 10.4) / 4.0); shifting = false
+            } else {
+                speed = max(0, 255 - (run - 14.4) * 85); shifting = false
+            }
+            var value = SimulatorTelemetry()
+            value.speedKPH = speed
+            value.throttlePercent = shifting || run > 14.4 ? 4 : run > 0 ? 96 : 0
+            value.rpm = shifting ? 4_400 : 2_200 + speed * 24
+            value.boostBar = value.throttlePercent > 50 ? min(1.35, speed / 120) : -0.45
+            value.afr = value.throttlePercent > 50 ? 11.8 : 14.7
+            value.lambda = value.afr / 14.7
+            value.oilPressureBar = 1.7 + value.rpm / 1_800
+            value.injectorDutyPercent = min(92, 14 + speed * 0.29)
             return value
 
         case .warmup:

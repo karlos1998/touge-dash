@@ -24,11 +24,13 @@ interface TougeDashDao {
     @Query("DELETE FROM incidents WHERE sessionId = :sessionId") suspend fun deleteIncidentsForSession(sessionId: String)
     @Query("DELETE FROM annotations WHERE sessionId = :sessionId") suspend fun deleteAnnotationsForSession(sessionId: String)
     @Query("DELETE FROM video_projects WHERE sessionId = :sessionId") suspend fun deleteVideosForSession(sessionId: String)
+    @Query("DELETE FROM acceleration_attempts WHERE sessionId = :sessionId") suspend fun deleteAccelerationAttemptsForSession(sessionId: String)
     @Query("DELETE FROM drive_sessions WHERE id = :sessionId") suspend fun deleteSession(sessionId: String)
     @Transaction suspend fun deleteSessionCascade(sessionId: String) {
         deleteIncidentsForSession(sessionId)
         deleteAnnotationsForSession(sessionId)
         deleteVideosForSession(sessionId)
+        deleteAccelerationAttemptsForSession(sessionId)
         deleteSession(sessionId)
     }
 
@@ -36,6 +38,10 @@ interface TougeDashDao {
     @Query("SELECT * FROM telemetry_samples WHERE sessionId = :sessionId ORDER BY recordedAt") fun samples(sessionId: String): Flow<List<TelemetrySampleEntity>>
     @Query("SELECT * FROM telemetry_samples WHERE sessionId = :sessionId ORDER BY recordedAt") suspend fun samplesOnce(sessionId: String): List<TelemetrySampleEntity>
     @Query("SELECT * FROM telemetry_samples WHERE sessionId = :sessionId AND chartEligible = 1 ORDER BY recordedAt") fun chartSamples(sessionId: String): Flow<List<TelemetrySampleEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAccelerationAttempt(value: AccelerationAttemptEntity)
+    @Query("SELECT * FROM acceleration_attempts WHERE sessionId = :sessionId ORDER BY startedAt") fun accelerationAttempts(sessionId: String): Flow<List<AccelerationAttemptEntity>>
+    @Query("SELECT * FROM acceleration_attempts WHERE sessionId = :sessionId ORDER BY startedAt") suspend fun accelerationAttemptsOnce(sessionId: String): List<AccelerationAttemptEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertIncident(value: IncidentEntity)
     @Query("SELECT * FROM incidents ORDER BY triggeredAt DESC") fun incidents(): Flow<List<IncidentEntity>>

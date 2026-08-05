@@ -78,6 +78,16 @@ final class TelemetryHistoryRecorder: ObservableObject {
         lastSavedAt = .now
     }
 
+    func recordAcceleration(_ attempt: AccelerationAttempt) {
+        context.insert(attempt)
+        if let session = activeSession, session.id == attempt.sessionID {
+            session.modifiedAt = .now
+            session.syncState = session.remoteID == nil ? .local : .changedAfterSync
+            session.revision += 1
+        }
+        saveNow()
+    }
+
     #if DEBUG
     func seedPreviewDataIfNeeded() {
         var descriptor = FetchDescriptor<DriveSession>()

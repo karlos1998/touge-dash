@@ -7,9 +7,10 @@ import androidx.room.RoomDatabase
     entities = [
         VehicleEntity::class, DriveSessionEntity::class, TelemetrySampleEntity::class,
         IncidentEntity::class, AnnotationEntity::class, DashboardTemplateEntity::class,
-        AlertConfigurationEntity::class, VideoProjectEntity::class, OverlayTemplateEntity::class
+        AlertConfigurationEntity::class, VideoProjectEntity::class, OverlayTemplateEntity::class,
+        AccelerationAttemptEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class TougeDashDatabase : RoomDatabase() {
