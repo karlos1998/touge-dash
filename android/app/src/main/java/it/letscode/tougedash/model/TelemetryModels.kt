@@ -1,6 +1,7 @@
 package it.letscode.tougedash.model
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class TelemetrySnapshot(
@@ -55,21 +56,21 @@ enum class TelemetryMetric(
     val defaultMax: Double,
     val precision: Int
 ) {
-    RPM("RPM", "rpm", 0.0, 10_000.0, 0),
-    BOOST("BOOST", "bar", -1.0, 2.0, 2),
-    MAP("MAP", "kPa", 0.0, 300.0, 0),
-    THROTTLE("TPS", "%", 0.0, 100.0, 0),
-    COOLANT("COOLANT", "°C", 0.0, 130.0, 0),
-    INTAKE("IAT", "°C", -20.0, 100.0, 0),
-    OIL_TEMPERATURE("OIL TEMP", "°C", 0.0, 150.0, 0),
-    OIL_PRESSURE("OIL P", "bar", 0.0, 10.0, 1),
-    FUEL_PRESSURE("FUEL", "bar", 0.0, 10.0, 1),
-    AFR("AFR", "AFR", 8.0, 20.0, 1),
-    LAMBDA("LAMBDA", "λ", 0.5, 1.5, 2),
-    BATTERY_VOLTAGE("BATTERY", "V", 8.0, 16.0, 1),
-    IGNITION("IGN", "°", -20.0, 60.0, 1),
-    INJECTOR_DUTY("INJ", "%", 0.0, 100.0, 0),
-    SPEED("SPEED", "km/h", 0.0, 300.0, 0);
+    @SerialName("rpm") RPM("RPM", "rpm", 0.0, 10_000.0, 0),
+    @SerialName("boost") BOOST("BOOST", "bar", -1.0, 2.0, 2),
+    @SerialName("map") MAP("MAP", "kPa", 0.0, 300.0, 0),
+    @SerialName("throttle") THROTTLE("TPS", "%", 0.0, 100.0, 0),
+    @SerialName("coolant") COOLANT("COOLANT", "°C", 0.0, 130.0, 0),
+    @SerialName("intake") INTAKE("IAT", "°C", -20.0, 100.0, 0),
+    @SerialName("oilTemperature") OIL_TEMPERATURE("OIL TEMP", "°C", 0.0, 150.0, 0),
+    @SerialName("oilPressure") OIL_PRESSURE("OIL P", "bar", 0.0, 10.0, 1),
+    @SerialName("fuelPressure") FUEL_PRESSURE("FUEL", "bar", 0.0, 10.0, 1),
+    @SerialName("afr") AFR("AFR", "AFR", 8.0, 20.0, 1),
+    @SerialName("lambda") LAMBDA("LAMBDA", "λ", 0.5, 1.5, 2),
+    @SerialName("batteryVoltage") BATTERY_VOLTAGE("BATTERY", "V", 8.0, 16.0, 1),
+    @SerialName("ignition") IGNITION("IGN", "°", -20.0, 60.0, 1),
+    @SerialName("injectorDuty") INJECTOR_DUTY("INJ", "%", 0.0, 100.0, 0),
+    @SerialName("speed") SPEED("SPEED", "km/h", 0.0, 300.0, 0);
 
     fun value(snapshot: TelemetrySnapshot): Double = when (this) {
         RPM -> snapshot.rpm

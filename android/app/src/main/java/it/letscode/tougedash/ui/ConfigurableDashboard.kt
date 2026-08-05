@@ -36,10 +36,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -76,6 +79,7 @@ import it.letscode.tougedash.model.DashboardWidget
 import it.letscode.tougedash.model.DashboardWidgetKind
 import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.TelemetrySnapshot
+import it.letscode.tougedash.model.VehicleAlertRules
 import it.letscode.tougedash.telemetry.TimedTelemetry
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
@@ -87,7 +91,8 @@ import kotlin.math.abs
 @Composable
 fun ConfigurableDashboardScreen(
     container: AppContainer,
-    snapshot: TelemetrySnapshot
+    snapshot: TelemetrySnapshot,
+    hardwareId: String?
 ) {
     val template by container.dashboardRepository.selected.collectAsState(initial = DashboardTemplate.factory())
     val templates by container.dashboardRepository.templates.collectAsState(initial = listOf(DashboardTemplate.factory()))
@@ -96,7 +101,11 @@ fun ConfigurableDashboardScreen(
     var editing by remember { mutableStateOf(false) }
     var editorWidget by remember { mutableStateOf<DashboardWidget?>(null) }
     var templateMenu by remember { mutableStateOf(false) }
+    var renameTemplate by remember { mutableStateOf<DashboardTemplate?>(null) }
+    var deleteTemplate by remember { mutableStateOf<DashboardTemplate?>(null) }
+    var restoreFactory by remember { mutableStateOf(false) }
     val authSession by container.authRepository.session.collectAsState()
+    val alertRules by container.alertRepository.rules(hardwareId ?: "local-default").collectAsState(initial = VehicleAlertRules())
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val gridState = rememberLazyGridState()
     LaunchedEffect(landscape) { gridState.scrollToItem(0) }
@@ -122,6 +131,13 @@ fun ConfigurableDashboardScreen(
                     templates.forEach { item -> DropdownMenuItem(text = { Text(item.localizedName()) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.select(item.id) } }) }
                     DropdownMenuItem(text = { Text(appText("New dashboard", "Nowy dashboard")) }, leadingIcon = { Icon(Icons.Default.Add, null) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.create() } })
                     DropdownMenuItem(text = { Text(appText("Duplicate", "Duplikuj")) }, leadingIcon = { Icon(Icons.Default.ContentCopy, null) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.duplicate(template) } })
+                    DropdownMenuItem(text = { Text(appText("Rename", "Zmień nazwę")) }, leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, null) }, onClick = { templateMenu = false; renameTemplate = template })
+                    if (template.id != DashboardTemplate.FACTORY_ID) DropdownMenuItem(
+                        text = { Text(appText("Delete dashboard", "Usuń dashboard"), color = TougeRed) },
+                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = TougeRed) },
+                        onClick = { templateMenu = false; deleteTemplate = template }
+                    )
+                    DropdownMenuItem(text = { Text(appText("Restore factory dashboard", "Przywróć fabryczny dashboard")) }, leadingIcon = { Icon(Icons.Default.Restore, null) }, onClick = { templateMenu = false; restoreFactory = true })
                 }
                 Row(
                     Modifier.background(TougeCyan, CutCornerShape(8.dp)).clickable { editing = true }.padding(horizontal = if (landscape) 11.dp else 13.dp, vertical = if (landscape) 5.dp else 13.dp),
@@ -155,7 +171,7 @@ fun ConfigurableDashboardScreen(
         ) {
             items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) { widget ->
                 EditableDashboardCard(
-                    widget, snapshot, chartPoints, landscape, editing,
+                    widget, snapshot, chartPoints, alertRules, landscape, editing,
                     edit = { editorWidget = widget },
                     remove = { scope.launch { saveWidgets(container, template, template.definition.widgets.filterNot { it.id == widget.id }) } },
                     move = { direction -> scope.launch { saveWidgets(container, template, moveWidget(template.definition.widgets, widget.id, direction, landscape)) } }
@@ -177,6 +193,41 @@ fun ConfigurableDashboardScreen(
             editorWidget = null
         }
     }
+    renameTemplate?.let { current ->
+        RenameDashboardDialog(current, dismiss = { renameTemplate = null }) { name ->
+            scope.launch { container.dashboardRepository.rename(current, name) }
+            renameTemplate = null
+        }
+    }
+    deleteTemplate?.let { current ->
+        AlertDialog(
+            onDismissRequest = { deleteTemplate = null },
+            title = { Text(appText("Delete this dashboard?", "Usunąć ten dashboard?")) },
+            text = { Text(appText("The dashboard layout will be removed from this device and from cloud synchronization.", "Układ dashboardu zostanie usunięty z tego urządzenia i synchronizacji online."), color = TougeMuted) },
+            confirmButton = { Button(onClick = { scope.launch { container.dashboardRepository.delete(current) }; deleteTemplate = null }) { Text(appText("Delete", "Usuń")) } },
+            dismissButton = { TextButton(onClick = { deleteTemplate = null }) { Text(appText("Cancel", "Anuluj")) } }
+        )
+    }
+    if (restoreFactory) AlertDialog(
+        onDismissRequest = { restoreFactory = false },
+        title = { Text(appText("Restore factory layout?", "Przywrócić układ fabryczny?")) },
+        text = { Text(appText("The built-in dashboard will return to the same layout as on iPhone. Your other dashboards will stay untouched.", "Wbudowany dashboard wróci do takiego samego układu jak na iPhonie. Pozostałe dashboardy pozostaną bez zmian."), color = TougeMuted) },
+        confirmButton = { Button(onClick = { scope.launch { container.dashboardRepository.restoreFactory() }; restoreFactory = false }) { Text(appText("Restore", "Przywróć")) } },
+        dismissButton = { TextButton(onClick = { restoreFactory = false }) { Text(appText("Cancel", "Anuluj")) } }
+    )
+}
+
+@Composable
+private fun RenameDashboardDialog(template: DashboardTemplate, dismiss: () -> Unit, save: (String) -> Unit) {
+    val initialName = template.localizedName()
+    var name by remember(template.id) { mutableStateOf(initialName) }
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text(appText("Dashboard name", "Nazwa dashboardu")) },
+        text = { OutlinedTextField(name, { name = it.take(80) }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+        confirmButton = { Button(enabled = name.isNotBlank(), onClick = { save(name) }) { Text(appText("Save", "Zapisz")) } },
+        dismissButton = { TextButton(onClick = dismiss) { Text(appText("Cancel", "Anuluj")) } }
+    )
 }
 
 @Composable
@@ -184,6 +235,7 @@ private fun EditableDashboardCard(
     widget: DashboardWidget,
     snapshot: TelemetrySnapshot,
     chartPoints: List<TimedTelemetry>,
+    alertRules: VehicleAlertRules,
     landscape: Boolean,
     editing: Boolean,
     edit: () -> Unit,
@@ -202,8 +254,9 @@ private fun EditableDashboardCard(
             )
         }
     ) {
-        if (widget.kind == DashboardWidgetKind.CHART) ChartCard(widget, snapshot, chartPoints, landscape)
-        else DashboardCard(widget, snapshot, landscape)
+        val effectiveKind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
+        if (effectiveKind == DashboardWidgetKind.CHART) ChartCard(widget, snapshot, chartPoints, landscape)
+        else DashboardCard(widget, snapshot, landscape, alertRules)
         if (editing) {
             Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(7.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(30.dp).background(TougeRed.copy(alpha = .88f), CircleShape).border(1.dp, Color.White.copy(alpha = .18f), CircleShape).clickable(onClick = remove), contentAlignment = Alignment.Center) { Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(15.dp)) }
@@ -278,38 +331,96 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
             ) {
                 Text(appText("TYPE", "TYP"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp), maxItemsInEachRow = 2) {
-                    listOf(DashboardWidgetKind.VALUE, DashboardWidgetKind.GAUGE, DashboardWidgetKind.CHART, DashboardWidgetKind.COMPACT).forEach { kind ->
+                    DashboardWidgetKind.entries.forEach { kind ->
                         FilterChip(
                             selected = value.kind == kind,
-                            onClick = { value = value.copy(kind = kind, wideKind = null) },
+                            onClick = { value = value.copy(kind = kind, metrics = normalizeMetrics(value.metrics, kind)) },
                             modifier = Modifier.widthIn(min = 104.dp),
                             label = { Text(kind.localizedName(), maxLines = 1) }
                         )
                     }
                 }
                 OutlinedTextField(title, { title = it }, label = { Text(appText("Custom title", "Własny tytuł")) }, singleLine = true)
-                Text(appText("PARAMETER", "PARAMETR"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                MetricDropdown(value.metrics.firstOrNull() ?: TelemetryMetric.RPM) { value = value.copy(metrics = listOf(it)) }
+                Text(if (maximumMetricCount(value.kind) > 1) appText("PARAMETERS", "PARAMETRY") else appText("PARAMETER", "PARAMETR"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                repeat(maximumMetricCount(value.kind)) { index ->
+                    val fallback = TelemetryMetric.entries.getOrElse(index) { TelemetryMetric.RPM }
+                    val selected = value.metrics.getOrNull(index) ?: fallback
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Text("${index + 1}.", color = TougeMuted, fontWeight = FontWeight.Black)
+                        MetricDropdown(selected) { metric ->
+                            val metrics = value.metrics.toMutableList()
+                            while (metrics.size <= index) metrics += fallback
+                            metrics[index] = metric
+                            value = value.copy(metrics = metrics)
+                        }
+                    }
+                }
                 Text(appText("COLOR", "KOLOR"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     DashboardAccent.entries.forEach { accent ->
-                        Box(Modifier.size(if (value.accent == accent) 30.dp else 24.dp).background(accent.color(), CircleShape).clickable { value = value.copy(accent = accent) })
+                        Box(
+                            Modifier.size(if (value.accent == accent) 30.dp else 24.dp)
+                                .background(accent.color(), CircleShape)
+                                .border(if (value.accent == accent) 2.dp else 0.dp, Color.White, CircleShape)
+                                .clickable { value = value.copy(accent = accent) }
+                        )
                     }
                 }
-                Text("${appText("Width", "Szerokość")}: ${value.portraitSpan}/12")
-                Slider(value.portraitSpan.toFloat(), { value = value.copy(portraitSpan = it.toInt().coerceIn(3, 12)) }, valueRange = 3f..12f, steps = 8)
-                if (value.kind == DashboardWidgetKind.GAUGE || value.kind == DashboardWidgetKind.CHART) {
-                    Text("${appText("Scale max", "Maksimum skali")}: ${value.gaugeMaximum ?: value.metrics.first().defaultMax}")
-                    Slider((value.gaugeMaximum ?: value.metrics.first().defaultMax).toFloat(), { value = value.copy(gaugeMaximum = it.toDouble()) }, valueRange = 1f..value.metrics.first().defaultMax.toFloat().coerceAtLeast(2f))
+                Text(appText("PORTRAIT WIDTH", "SZEROKOŚĆ W PIONIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                SpanSelector(value.portraitSpan) { value = value.copy(portraitSpan = it) }
+                Text(appText("LANDSCAPE WIDTH", "SZEROKOŚĆ W POZIOMIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                SpanSelector(value.landscapeSpan) { value = value.copy(landscapeSpan = it) }
+                Text(appText("LANDSCAPE PRESENTATION", "WIDOK W POZIOMIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    FilterChip(selected = value.wideKind == null, onClick = { value = value.copy(wideKind = null) }, label = { Text(appText("Same", "Taki sam")) })
+                    DashboardWidgetKind.entries.forEach { kind ->
+                        FilterChip(selected = value.wideKind == kind, onClick = { value = value.copy(wideKind = kind) }, label = { Text(kind.localizedName()) })
+                    }
+                }
+                if (value.kind == DashboardWidgetKind.HERO || value.kind == DashboardWidgetKind.GAUGE || value.kind == DashboardWidgetKind.CHART) {
+                    val metric = value.metrics.firstOrNull() ?: TelemetryMetric.RPM
+                    val lowerBound = metric.defaultMin.toFloat()
+                    val upperBound = metric.defaultMax.toFloat().coerceAtLeast(lowerBound + 1f)
+                    val minimum = (value.gaugeMinimum ?: metric.defaultMin).toFloat().coerceIn(lowerBound, upperBound - .01f)
+                    val maximum = (value.gaugeMaximum ?: metric.defaultMax).toFloat().coerceIn(minimum + .01f, upperBound)
+                    Text("${appText("Scale minimum", "Minimum skali")}: ${metric.format(minimum.toDouble())} ${metric.unit}")
+                    Slider(minimum, { value = value.copy(gaugeMinimum = it.coerceAtMost(maximum - .01f).toDouble()) }, valueRange = lowerBound..upperBound)
+                    Text("${appText("Scale maximum", "Maksimum skali")}: ${metric.format(maximum.toDouble())} ${metric.unit}")
+                    Slider(maximum, { value = value.copy(gaugeMaximum = it.coerceAtLeast(minimum + .01f).toDouble()) }, valueRange = lowerBound..upperBound)
                 }
                 if (value.kind == DashboardWidgetKind.CHART) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(30, 180, 600).forEach { seconds -> FilterChip(selected = value.chartDurationSeconds == seconds, onClick = { value = value.copy(chartDurationSeconds = seconds) }, label = { Text(if (seconds < 60) "30 s" else "${seconds / 60} min") }) }
+                    listOf(30, 180, 600).forEach { seconds -> FilterChip(selected = (value.chartDurationSeconds ?: 30) == seconds, onClick = { value = value.copy(chartDurationSeconds = seconds) }, label = { Text(if (seconds < 60) "30 s" else "${seconds / 60} min") }) }
                 }
             }
         },
         confirmButton = { Button(onClick = { save(value.copy(title = title.ifBlank { null })) }, shape = CutCornerShape(8.dp)) { Text(appText("Save", "Zapisz"), fontWeight = FontWeight.Black) } },
         dismissButton = { TextButton(onClick = dismiss) { Text(appText("Cancel", "Anuluj")) } }
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SpanSelector(selected: Int, changed: (Int) -> Unit) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        listOf(0, 2, 3, 4, 6, 12).forEach { span ->
+            FilterChip(
+                selected = selected == span,
+                onClick = { changed(span) },
+                label = { Text(if (span == 0) appText("Hidden", "Ukryty") else if (span == 12) appText("Full", "Pełna") else "$span/12") }
+            )
+        }
+    }
+}
+
+private fun maximumMetricCount(kind: DashboardWidgetKind): Int = when (kind) {
+    DashboardWidgetKind.HERO -> 4
+    DashboardWidgetKind.GROUP -> 3
+    else -> 1
+}
+
+private fun normalizeMetrics(metrics: List<TelemetryMetric>, kind: DashboardWidgetKind): List<TelemetryMetric> {
+    val defaults = listOf(TelemetryMetric.BOOST, TelemetryMetric.MAP, TelemetryMetric.THROTTLE, TelemetryMetric.RPM)
+    return List(maximumMetricCount(kind)) { index -> metrics.getOrNull(index) ?: defaults[index] }
 }
 
 @Composable

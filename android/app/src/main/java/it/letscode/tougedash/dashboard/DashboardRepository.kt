@@ -18,8 +18,13 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
     suspend fun select(id: String) = dao.selectTemplate(id)
 
     suspend fun save(template: DashboardTemplate, select: Boolean = false) {
-        dao.upsertTemplate(template.entity(selected = select))
+        dao.upsertTemplate(template.normalized().entity(selected = select))
         if (select) dao.selectTemplate(template.id)
+    }
+
+    suspend fun rename(template: DashboardTemplate, name: String) {
+        val normalizedName = name.trim().take(80)
+        if (normalizedName.isNotEmpty()) save(template.copy(name = normalizedName, modifiedAt = System.currentTimeMillis()), select = true)
     }
 
     suspend fun duplicate(template: DashboardTemplate): DashboardTemplate {
@@ -35,13 +40,19 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
     }
 
     suspend fun delete(template: DashboardTemplate) {
+        if (template.id == DashboardTemplate.FACTORY_ID) return
         save(template.copy(deletedAt = System.currentTimeMillis(), modifiedAt = System.currentTimeMillis()))
         dao.selectTemplate(DashboardTemplate.FACTORY_ID)
     }
 
+    suspend fun restoreFactory() {
+        save(DashboardTemplate.factory().copy(modifiedAt = System.currentTimeMillis()), select = true)
+    }
+
     private fun decode(entity: DashboardTemplateEntity?): DashboardTemplate? = entity?.let {
         runCatching {
-            DashboardTemplate(it.id, it.schemaVersion, it.name, json.decodeFromString<DashboardDefinition>(it.definitionJson), it.modifiedAt, it.deletedAt)
+            val definition = json.decodeFromString<DashboardDefinition>(normalizeLegacyDashboardJson(it.definitionJson))
+            DashboardTemplate(it.id, it.schemaVersion, it.name, definition, it.modifiedAt, it.deletedAt)
         }.getOrNull()
     }
 
@@ -49,4 +60,39 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
         id = id, name = name, definitionJson = json.encodeToString(definition), schemaVersion = schemaVersion,
         modifiedAt = modifiedAt, deletedAt = deletedAt, selected = selected, dirty = true
     )
+
+    private fun DashboardTemplate.normalized(): DashboardTemplate {
+        val normalizedWidgets = definition.widgets.mapIndexed { index, widget ->
+            val metricLimit = when (widget.kind) {
+                it.letscode.tougedash.model.DashboardWidgetKind.HERO -> 4
+                it.letscode.tougedash.model.DashboardWidgetKind.GROUP -> 3
+                else -> 1
+            }
+            widget.copy(
+                metrics = widget.metrics.take(metricLimit).ifEmpty { listOf(it.letscode.tougedash.model.TelemetryMetric.BOOST) },
+                portraitSpan = widget.portraitSpan.coerceIn(0, 12),
+                landscapeSpan = widget.landscapeSpan.coerceIn(0, 12),
+                portraitOrder = widget.portraitOrder.takeIf { it >= 0 } ?: index,
+                landscapeOrder = widget.landscapeOrder.takeIf { it >= 0 } ?: index,
+                gaugeMinimum = widget.gaugeMinimum?.takeIf { minimum -> widget.gaugeMaximum == null || minimum < widget.gaugeMaximum },
+                chartDurationSeconds = widget.chartDurationSeconds?.takeIf { it in setOf(30, 180, 600) }
+            )
+        }
+        return copy(
+            name = name.trim().take(80).ifEmpty { "Dashboard" },
+            definition = DashboardDefinition(normalizedWidgets),
+            modifiedAt = System.currentTimeMillis()
+        )
+    }
+}
+
+internal fun normalizeLegacyDashboardJson(value: String): String {
+    val names = mapOf(
+        "HERO" to "hero", "GROUP" to "group", "VALUE" to "value", "GAUGE" to "gauge", "CHART" to "chart", "COMPACT" to "compact",
+        "CYAN" to "cyan", "MINT" to "mint", "BLUE" to "blue", "ICE" to "ice", "ORANGE" to "orange", "YELLOW" to "yellow", "RED" to "red", "WHITE" to "white",
+        "RPM" to "rpm", "BOOST" to "boost", "MAP" to "map", "THROTTLE" to "throttle", "COOLANT" to "coolant", "INTAKE" to "intake",
+        "OIL_TEMPERATURE" to "oilTemperature", "OIL_PRESSURE" to "oilPressure", "FUEL_PRESSURE" to "fuelPressure", "AFR" to "afr", "LAMBDA" to "lambda",
+        "BATTERY_VOLTAGE" to "batteryVoltage", "IGNITION" to "ignition", "INJECTOR_DUTY" to "injectorDuty", "SPEED" to "speed"
+    )
+    return names.entries.fold(value.replace("\"chartDurationSeconds\"", "\"chartDuration\"")) { result, (old, new) -> result.replace("\"$old\"", "\"$new\"") }
 }

@@ -92,9 +92,9 @@ sesji są przechowywane w Keychain na iOS i szyfrowanej pamięci na Androidzie.
 ### Nagrania przejazdów
 
 Nagrywanie wideo jest opcjonalne i domyślnie wyłączone. Można wybrać obiektyw,
-jakość oraz zapis dźwięku. Na iOS nagranie może rozpoczynać się razem z sesją
-telemetrii; na Androidzie użytkownik uruchamia je z ekranu kamery po rozpoczęciu
-przejazdu. W obu wersjach film pozostaje przypisany do konkretnego przejazdu.
+jakość oraz zapis dźwięku. Na iOS i Androidzie nagranie może rozpoczynać się
+automatycznie razem z sesją telemetrii po zaakceptowaniu ostrzeżenia o obciążeniu
+telefonu. W obu wersjach film pozostaje przypisany do konkretnego przejazdu.
 Odtwarzacz i wykresy korzystają ze wspólnej osi czasu: przesunięcie filmu ustawia
 kursor telemetrii, a wskazanie momentu na wykresie przewija nagranie.
 
@@ -152,6 +152,10 @@ cd android
 Android automatycznie wyszukuje wyłącznie pasujące interfejsy ECUMaster, zapamiętuje
 ostatni EMULOGGER i utrzymuje zapis w usłudze pierwszoplanowej po wygaszeniu ekranu.
 Połączenie z FFE1 pozostaje tylko do odczytu. Zapis GPS jest domyślnie wyłączony.
+Dashboardy mają osobne układy pionowe i poziome, można je duplikować, zmieniać,
+przywracać oraz synchronizować z kontem. Centrum alertów i szablony HUD używają
+tych samych modeli danych co iOS, dzięki czemu konfiguracja nie zmienia znaczenia
+po przejściu między platformami.
 
 ### Android Auto — developer preview
 

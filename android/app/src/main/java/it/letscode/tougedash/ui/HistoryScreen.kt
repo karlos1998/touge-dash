@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Remove
@@ -99,6 +100,7 @@ fun HistoryScreen(container: AppContainer, selectedId: String?, select: (String)
 @Composable
 private fun SessionList(container: AppContainer, select: (String) -> Unit) {
     val sessions by container.historyRepository.sessions.collectAsState(initial = emptyList())
+    var deleteSession by remember { mutableStateOf<DriveSessionEntity?>(null) }
     Column(Modifier.fillMaxSize()) {
         Text(appText("DRIVE ARCHIVE", "ARCHIWUM PRZEJAZDÓW"), color = TougeCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 18.dp, top = 18.dp))
         Text(appText("History", "Historia"), fontSize = 34.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 18.dp))
@@ -108,13 +110,28 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
                 Text(appText("No recorded drives yet", "Nie ma jeszcze zapisanych przejazdów"), color = TougeMuted, modifier = Modifier.padding(top = 14.dp))
             }
         } else LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(sessions, key = { it.id }) { SessionRow(it, select) }
+            items(sessions, key = { it.id }) { SessionRow(it, select) { deleteSession = it } }
         }
+    }
+    deleteSession?.let { session ->
+        AlertDialog(
+            onDismissRequest = { deleteSession = null },
+            title = { Text(appText("Delete this drive?", "Usunąć ten przejazd?")) },
+            text = { Text(appText("Telemetry, incident reports, notes and local source videos assigned to this drive will be removed from this device.", "Telemetria, raporty incydentów, notatki i lokalne filmy źródłowe przypisane do przejazdu zostaną usunięte z urządzenia."), color = TougeMuted) },
+            confirmButton = { Button(onClick = {
+                container.applicationScope.launch {
+                    container.videoRepository.deleteForSession(session.id)
+                    container.dao.deleteSessionCascade(session.id)
+                }
+                deleteSession = null
+            }) { Text(appText("Delete", "Usuń")) } },
+            dismissButton = { TextButton(onClick = { deleteSession = null }) { Text(appText("Cancel", "Anuluj")) } }
+        )
     }
 }
 
 @Composable
-private fun SessionRow(session: DriveSessionEntity, select: (String) -> Unit) {
+private fun SessionRow(session: DriveSessionEntity, select: (String) -> Unit, delete: (DriveSessionEntity) -> Unit) {
     val accent = when (session.syncState) {
         SyncState.SYNCED -> TougeMint
         SyncState.FAILED -> TougeRed
@@ -128,7 +145,10 @@ private fun SessionRow(session: DriveSessionEntity, select: (String) -> Unit) {
                     Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(session.startedAt)), fontWeight = FontWeight.Bold)
                     Text("${duration(session.endedAt - session.startedAt)}  •  ${session.sampleCount} ${appText("samples", "próbek")}", color = TougeMuted, fontSize = 12.sp)
                 }
-                SyncBadge(session)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    SyncBadge(session)
+                    IconButton(onClick = { delete(session) }) { Icon(Icons.Default.Delete, appText("Delete drive", "Usuń przejazd"), tint = TougeRed) }
+                }
             }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 MiniValue(appText("MAX BOOST", "MAX DOŁADOWANIE"), "${"%.2f".format(session.maxBoostBar)} bar", TougeCyan)
@@ -164,6 +184,7 @@ private fun MiniValue(title: String, value: String, color: Color) {
 private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit) {
     val session by container.historyRepository.session(id).collectAsState(initial = null)
     val samples by container.historyRepository.samples(id).collectAsState(initial = emptyList())
+    val rawSamples by container.historyRepository.rawSamples(id).collectAsState(initial = emptyList())
     val incidents by container.historyRepository.incidents(id).collectAsState(initial = emptyList())
     val annotations by container.historyRepository.annotations(id).collectAsState(initial = emptyList())
     var scrubber by remember(id) { mutableFloatStateOf(0f) }
@@ -184,6 +205,12 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
         if (session == null) item { Box(Modifier.fillMaxWidth().height(300.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         else {
             item { SessionSummary(session!!) }
+            if (session!!.syncState == SyncState.FAILED) item {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+                    Text(session!!.syncError ?: appText("Synchronization failed", "Synchronizacja nie powiodła się"), color = TougeRed, fontSize = 11.sp)
+                    Button(onClick = { container.cloudSyncRepository.schedule() }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp)) { Text(appText("Retry synchronization", "Ponów synchronizację")) }
+                }
+            }
             if (incidents.isNotEmpty()) item { IncidentSection(incidents, session!!.startedAt) { incident ->
                 scrubber = ((incident.triggeredAt - session!!.startedAt).toFloat() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).coerceIn(0f, 1f)
                 selectedIncident = incident
@@ -197,7 +224,7 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
             item { TelemetryChart(appText("Temperatures", "Temperatury"), samples, selected, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
             item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), samples, selected, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
             if (annotations.isNotEmpty()) item { AnnotationSection(annotations, session!!.startedAt) }
-            item { DriveVideoSection(container, session!!, samples, scrubber) }
+            item { DriveVideoSection(container, session!!, rawSamples, scrubber) }
             if (samples.any { it.latitude != null && it.longitude != null }) item { RouteMap(samples) }
         }
     }
@@ -278,8 +305,16 @@ private fun IncidentSection(values: List<IncidentEntity>, startedAt: Long, selec
         values.forEach { incident ->
             Row(Modifier.fillMaxWidth().padding(vertical = 5.dp).background(TougeRed.copy(alpha = .08f), RoundedCornerShape(4.dp)).clickable { select(incident) }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Flag, null, tint = TougeRed)
-                Column(Modifier.padding(start = 10.dp).weight(1f)) { Text(localizedIncidentKind(incident.kind), fontWeight = FontWeight.Bold); Text("${duration(incident.triggeredAt - startedAt)} • ${incident.triggerValue} ${incident.triggerUnit}", color = TougeMuted, fontSize = 11.sp) }
-                Text(if (incident.severity == "CRITICAL") appText("CRITICAL", "KRYTYCZNY") else appText("WARNING", "OSTRZEŻENIE"), color = TougeRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Column(Modifier.padding(start = 10.dp).weight(1f)) {
+                    Text(localizedIncidentKind(incident.kind), fontWeight = FontWeight.Bold)
+                    Text("${duration(incident.triggeredAt - startedAt)} • ${incident.triggerValue} ${incident.triggerUnit}", color = TougeMuted, fontSize = 11.sp)
+                    if (incident.syncState == SyncState.UPLOADING) LinearProgressIndicator(progress = { incident.syncProgress }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                    incident.syncError?.let { Text(it, color = TougeRed, fontSize = 9.sp) }
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(if (incident.severity == "CRITICAL") appText("CRITICAL", "KRYTYCZNY") else appText("WARNING", "OSTRZEŻENIE"), color = TougeRed, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text(if (incident.syncState == SyncState.SYNCED) appText("CLOUD", "CHMURA") else appText("LOCAL", "LOKALNIE"), color = if (incident.syncState == SyncState.SYNCED) TougeMint else TougeOrange, fontSize = 8.sp, fontWeight = FontWeight.Black)
+                }
             }
         }
     }

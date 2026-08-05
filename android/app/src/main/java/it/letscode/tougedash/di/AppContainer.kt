@@ -14,6 +14,7 @@ import it.letscode.tougedash.dashboard.DashboardRepository
 import it.letscode.tougedash.location.LocationTracker
 import it.letscode.tougedash.video.VideoRepository
 import it.letscode.tougedash.video.CameraRecordingController
+import it.letscode.tougedash.video.VideoRecordingSettings
 import it.letscode.tougedash.cloud.CloudAuthRepository
 import it.letscode.tougedash.cloud.CloudSyncRepository
 import it.letscode.tougedash.model.DashboardTemplate
@@ -43,9 +44,10 @@ class AppContainer(val application: Application) {
     val dashboardRepository = DashboardRepository(dao, json)
     val locationTracker = LocationTracker(application)
     val videoRepository = VideoRepository(application, dao, applicationScope)
-    val cameraRecordingController = CameraRecordingController(application, videoRepository)
+    val videoRecordingSettings = VideoRecordingSettings(application)
+    val cameraRecordingController = CameraRecordingController(application, videoRepository, videoRecordingSettings)
     val authRepository = CloudAuthRepository(application, json)
-    val cloudSyncRepository = CloudSyncRepository(application, dao, authRepository, json)
+    val cloudSyncRepository = CloudSyncRepository(application, dao, authRepository, json, alertRepository)
 
     fun initialize() {
         cloudSyncRepository.schedulePeriodic()

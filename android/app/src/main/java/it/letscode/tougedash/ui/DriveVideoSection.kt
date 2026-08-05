@@ -6,16 +6,24 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -24,6 +32,8 @@ import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -33,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,6 +75,8 @@ import it.letscode.tougedash.data.local.DriveSessionEntity
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
 import it.letscode.tougedash.data.local.VideoProjectEntity
 import it.letscode.tougedash.di.AppContainer
+import it.letscode.tougedash.model.DashboardAccent
+import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
 import it.letscode.tougedash.ui.theme.TougeMuted
@@ -71,9 +84,13 @@ import it.letscode.tougedash.ui.theme.TougeOrange
 import it.letscode.tougedash.ui.theme.TougePanel
 import it.letscode.tougedash.ui.theme.TougeRed
 import it.letscode.tougedash.video.OverlayStyle
+import it.letscode.tougedash.video.OverlayElementKind
+import it.letscode.tougedash.video.OverlayElementScale
+import it.letscode.tougedash.video.OverlayPosition
+import it.letscode.tougedash.video.VideoOverlayElement
+import it.letscode.tougedash.video.VideoOverlayTemplate
 import it.letscode.tougedash.video.VideoOverlayTemplateDefinition
 import kotlinx.coroutines.delay
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
@@ -98,6 +115,7 @@ fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samp
                     Text("${(task.progress * 100).roundToInt()}%${if (task.totalBytes > 0) "  •  ${videoBytes(task.transferredBytes)} / ${videoBytes(task.totalBytes)}" else ""}", color = TougeMuted, fontSize = 10.sp)
                     task.error?.let { Text(it, color = TougeRed) }
                     if (task.completed || task.error != null) TextButton(onClick = container.videoRepository::clearTask) { Text(appText("Close", "Zamknij")) }
+                    else if (task.operation == "Rendering telemetry HUD") TextButton(onClick = container.videoRepository::cancelExport) { Text(appText("Cancel export", "Anuluj eksport"), color = TougeRed) }
                 }
             }
         }
@@ -126,6 +144,7 @@ private fun VideoGroup(title: String, videos: List<VideoProjectEntity>, editing:
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun VideoAlignmentEditor(
     initial: VideoProjectEntity,
@@ -140,10 +159,15 @@ private fun VideoAlignmentEditor(
     val templates by container.videoRepository.overlayTemplates.collectAsState(initial = emptyList())
     var templateId by remember(initial.id) { mutableStateOf(initial.overlayTemplateId ?: "RACE") }
     var overlayDefinition by remember(initial.id) { mutableStateOf(VideoOverlayTemplateDefinition(runCatching { OverlayStyle.valueOf(initial.overlayTemplateId ?: "RACE") }.getOrDefault(OverlayStyle.RACE))) }
+    var editingTemplate by remember { mutableStateOf<VideoOverlayTemplate?>(null) }
+    var selectedElementId by remember { mutableStateOf<String?>(null) }
     val portraitVideo = initial.pixelHeight > initial.pixelWidth
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(templates, templateId) {
-        templates.firstOrNull { it.entity.id == templateId }?.let { overlayDefinition = it.definition }
+        templates.firstOrNull { it.entity.id == templateId }?.let {
+            overlayDefinition = it.definition.copy(elements = it.definition.resolvedElements())
+            selectedElementId = overlayDefinition.elements.firstOrNull()?.id
+        }
     }
     val player = remember(initial.id) { ExoPlayer.Builder(context).build().apply { setMediaItem(MediaItem.fromUri(initial.localUri)); prepare(); seekTo((initial.videoTrimStartSeconds * 1000).toLong()) } }
     var position by remember { mutableLongStateOf((initial.videoTrimStartSeconds * 1000).toLong()) }
@@ -151,7 +175,7 @@ private fun VideoAlignmentEditor(
     LaunchedEffect(player) { while (true) { position = player.currentPosition; if (position / 1000.0 >= value.videoTrimStartSeconds + value.exportDurationSeconds) { player.pause(); player.seekTo((value.videoTrimStartSeconds * 1000).toLong()) }; delay(50) } }
     val telemetrySecond = value.telemetryTrimStartSeconds + (position / 1000.0 - value.videoTrimStartSeconds).coerceAtLeast(0.0)
     val first = samples.firstOrNull()?.recordedAt ?: 0
-    val sample = samples.minByOrNull { abs(it.recordedAt - (first + telemetrySecond * 1000).toLong()) }
+    val sample = samples.nearestTo((first + telemetrySecond * 1000).toLong())
     AlertDialog(
         onDismissRequest = dismiss,
         title = { Text(appText("Align video with telemetry", "Dopasuj film do telemetrii")) },
@@ -159,33 +183,23 @@ private fun VideoAlignmentEditor(
             Column {
                 Box(Modifier.fillMaxWidth().height(220.dp).background(Color.Black).onSizeChanged { previewSize = it }) {
                     AndroidView(factory = { PlayerView(it).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxWidth().height(220.dp))
-                    sample?.let {
-                        val x = overlayDefinition.x(portraitVideo)
-                        val y = overlayDefinition.y(portraitVideo)
-                        HudPreview(
-                            it,
-                            overlayDefinition.style,
-                            Modifier
-                                .align(Alignment.Center)
-                                .fillMaxWidth(.86f)
-                                .graphicsLayer {
-                                    translationX = x * previewSize.width * .42f
-                                    translationY = y * previewSize.height * .42f
-                                    scaleX = overlayDefinition.scale
-                                    scaleY = overlayDefinition.scale
-                                }
-                                .pointerInput(previewSize, portraitVideo, x, y) {
-                                    detectDragGestures { change, drag ->
-                                        change.consume()
-                                        if (previewSize.width > 0 && previewSize.height > 0) {
-                                            overlayDefinition = overlayDefinition.positioned(
-                                                portraitVideo,
-                                                (x + drag.x / (previewSize.width * .42f)).coerceIn(-1f, 1f),
-                                                (y + drag.y / (previewSize.height * .42f)).coerceIn(-1f, 1f)
-                                            )
-                                        }
+                    sample?.let { current ->
+                        EditableHudPreview(
+                            sample = current,
+                            definition = overlayDefinition,
+                            portrait = portraitVideo,
+                            canvasSize = previewSize,
+                            selectedElementId = selectedElementId,
+                            select = { selectedElementId = it },
+                            move = { id, dx, dy ->
+                                overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements.map { element ->
+                                    if (element.id != id || previewSize.width == 0 || previewSize.height == 0) element
+                                    else {
+                                        val old = element.position(portraitVideo)
+                                        element.positioned(portraitVideo, OverlayPosition(old.x + dx / previewSize.width, old.y + dy / previewSize.height))
                                     }
-                                }
+                                })
+                            }
                         )
                     }
                     IconButton(onClick = { if (player.isPlaying) player.pause() else { if (position / 1000.0 !in value.videoTrimStartSeconds..(value.videoTrimStartSeconds + value.exportDurationSeconds)) player.seekTo((value.videoTrimStartSeconds * 1000).toLong()); player.play() } }, modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .45f), RoundedCornerShape(30.dp))) {
@@ -200,7 +214,7 @@ private fun VideoAlignmentEditor(
                 Text("${appText("EXPORT LENGTH", "DŁUGOŚĆ EKSPORTU")}  ${videoDuration(value.exportDurationSeconds)}", color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Slider(value.exportDurationSeconds.coerceAtMost(maxDuration).toFloat(), { value = value.copy(exportDurationSeconds = it.toDouble()) }, valueRange = .1f..maxDuration.coerceAtLeast(.11).toFloat())
                 Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     templates.forEach { item ->
                         FilterChip(
                             selected = templateId == item.entity.id,
@@ -209,17 +223,15 @@ private fun VideoAlignmentEditor(
                         )
                     }
                 }
-                Text(appText("Drag the HUD on the preview or fine-tune its position below.", "Przeciągnij HUD palcem na podglądzie albo dopasuj pozycję poniżej."), color = TougeMuted, fontSize = 10.sp)
-                Text("${appText("Horizontal position", "Pozycja pozioma")}: ${"%.2f".format(overlayDefinition.x(portraitVideo))}", fontSize = 10.sp)
-                Slider(overlayDefinition.x(portraitVideo), { overlayDefinition = overlayDefinition.positioned(portraitVideo, it, overlayDefinition.y(portraitVideo)) }, valueRange = -1f..1f)
-                Text("${appText("Vertical position", "Pozycja pionowa")}: ${"%.2f".format(overlayDefinition.y(portraitVideo))}", fontSize = 10.sp)
-                Slider(overlayDefinition.y(portraitVideo), { overlayDefinition = overlayDefinition.positioned(portraitVideo, overlayDefinition.x(portraitVideo), it) }, valueRange = -1f..1f)
-                Text("${appText("HUD size", "Rozmiar HUD")}: ${"%.0f".format(overlayDefinition.scale * 100)}%", fontSize = 10.sp)
-                Slider(overlayDefinition.scale, { overlayDefinition = overlayDefinition.positioned(portraitVideo, overlayDefinition.x(portraitVideo), overlayDefinition.y(portraitVideo), it) }, valueRange = .55f..1.2f)
+                Text(appText("Tap and drag individual HUD elements on the preview. Portrait and landscape positions are stored separately.", "Dotknij i przeciągaj pojedyncze elementy HUD na podglądzie. Pozycje pionowe i poziome zapisują się osobno."), color = TougeMuted, fontSize = 10.sp)
                 OutlinedButton(
                     onClick = { templates.firstOrNull { it.entity.id == templateId }?.let { container.videoRepository.updateOverlayTemplate(it.copy(definition = overlayDefinition)) } },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(appText("Save layout in this template", "Zapisz układ w tym szablonie")) }
+                OutlinedButton(
+                    onClick = { editingTemplate = templates.firstOrNull { it.entity.id == templateId }?.copy(definition = overlayDefinition) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Icon(Icons.Default.Tune, null); Text(appText(" Edit HUD parameters", " Edytuj parametry HUD")) }
                 Text(appText("The upper timeline is the selected video. The lower one chooses the matching fragment of the recorded drive.", "Górna oś to wybrany film. Dolna wybiera pasujący fragment zapisanego przejazdu."), color = TougeMuted, fontSize = 10.sp)
             }
         },
@@ -228,15 +240,210 @@ private fun VideoAlignmentEditor(
         },
         dismissButton = { TextButton(onClick = { save(value.copy(overlayTemplateId = templateId)); dismiss() }) { Text(appText("Save project", "Zapisz projekt")) } }
     )
+    editingTemplate?.let { current ->
+        HudTemplateEditor(
+            initial = current,
+            dismiss = { editingTemplate = null },
+            save = { changed ->
+                container.videoRepository.updateOverlayTemplate(changed)
+                overlayDefinition = changed.definition
+                templateId = changed.entity.id
+                editingTemplate = null
+            },
+            duplicate = { container.videoRepository.duplicateOverlayTemplate(current); editingTemplate = null },
+            delete = { container.videoRepository.deleteOverlayTemplate(current); editingTemplate = null }
+        )
+    }
 }
 
 @Composable
-private fun HudPreview(sample: TelemetrySampleEntity, style: OverlayStyle, modifier: Modifier = Modifier) {
-    val background = when (style) { OverlayStyle.UNDERGROUND -> Color.Black.copy(alpha = .75f); else -> Color(0xDD071014) }
-    Row(modifier.background(background).padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Column { Text("${sample.speedKph.toInt()}", fontSize = 30.sp, fontWeight = FontWeight.Black); Text("KM/H", color = TougeCyan, fontSize = 8.sp) }
-        Column { Text("RPM ${sample.rpm.toInt()}", fontWeight = FontWeight.Black); Text("BOOST %.2f bar".format(sample.boostBar), color = TougeMint, fontSize = 11.sp) }
-        Column { Text("OIL %.1f bar".format(sample.oilPressureBar), color = TougeOrange, fontSize = 11.sp); Text("%.0f°C / WATER %.0f°C".format(sample.oilTemperatureCelsius, sample.coolantCelsius), fontSize = 10.sp) }
+private fun BoxScope.EditableHudPreview(
+    sample: TelemetrySampleEntity,
+    definition: VideoOverlayTemplateDefinition,
+    portrait: Boolean,
+    canvasSize: IntSize,
+    selectedElementId: String?,
+    select: (String) -> Unit,
+    move: (String, Float, Float) -> Unit
+) {
+    definition.elements.forEach { element ->
+        val position = element.position(portrait)
+        HudElementPreview(
+            sample = sample,
+            element = element,
+            style = definition.style,
+            selected = selectedElementId == element.id,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .graphicsLayer {
+                    translationX = position.x * canvasSize.width - 55.dp.toPx()
+                    translationY = position.y * canvasSize.height - 33.dp.toPx()
+                    val previewScale = .45f + element.scale.multiplier * .32f
+                    scaleX = previewScale
+                    scaleY = previewScale
+                }
+                .pointerInput(element.id, canvasSize, portrait) {
+                    detectDragGestures(
+                        onDragStart = { select(element.id) },
+                        onDrag = { change, drag -> change.consume(); move(element.id, drag.x, drag.y) }
+                    )
+                }
+                .clickable { select(element.id) }
+        )
+    }
+}
+
+@Composable
+private fun HudElementPreview(
+    sample: TelemetrySampleEntity,
+    element: VideoOverlayElement,
+    style: OverlayStyle,
+    selected: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val accent = element.accent.color()
+    val background = if (style == OverlayStyle.UNDERGROUND) Color.Black.copy(alpha = .82f) else Color(0xE6071014)
+    val value = element.metric.sampleValue(sample)
+    val shell = modifier
+        .background(background, RoundedCornerShape(12.dp))
+        .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else accent.copy(alpha = .45f), RoundedCornerShape(12.dp))
+        .padding(horizontal = 12.dp, vertical = 8.dp)
+    when (element.kind) {
+        OverlayElementKind.DIGITAL -> Column(shell, horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(element.metric.localizedName(), color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            Text(element.metric.format(value), color = accent, fontSize = 25.sp, fontWeight = FontWeight.Black)
+            Text(element.metric.unit, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        }
+        OverlayElementKind.GAUGE -> Box(shell.size(112.dp), contentAlignment = Alignment.Center) {
+            val progress = ((value - element.metric.defaultMin) / (element.metric.defaultMax - element.metric.defaultMin)).coerceIn(0.0, 1.0).toFloat()
+            Canvas(Modifier.fillMaxSize()) {
+                drawArc(Color.White.copy(alpha = .12f), 150f, 240f, false, style = androidx.compose.ui.graphics.drawscope.Stroke(8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                drawArc(accent, 150f, 240f * progress, false, style = androidx.compose.ui.graphics.drawscope.Stroke(8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(element.metric.format(value), fontSize = 21.sp, fontWeight = FontWeight.Black)
+                Text(element.metric.shortName, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            }
+        }
+        OverlayElementKind.BAR -> Column(shell.fillMaxWidth(.62f)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(element.metric.shortName, color = TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                Text("${element.metric.format(value)} ${element.metric.unit}", fontWeight = FontWeight.Black)
+            }
+            val progress = ((value - element.metric.defaultMin) / (element.metric.defaultMax - element.metric.defaultMin)).coerceIn(0.0, 1.0).toFloat()
+            Box(Modifier.fillMaxWidth().height(7.dp).background(Color.White.copy(alpha = .10f), RoundedCornerShape(4.dp))) {
+                Box(Modifier.fillMaxWidth(progress.coerceAtLeast(.01f)).height(7.dp).background(accent, RoundedCornerShape(4.dp)))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HudTemplateEditor(
+    initial: VideoOverlayTemplate,
+    dismiss: () -> Unit,
+    save: (VideoOverlayTemplate) -> Unit,
+    duplicate: () -> Unit,
+    delete: () -> Unit
+) {
+    var value by remember(initial.entity.id) {
+        mutableStateOf(initial.copy(definition = initial.definition.copy(elements = initial.definition.resolvedElements())))
+    }
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Text(appText("Edit video HUD", "Edytuj HUD filmu"), fontWeight = FontWeight.Black) },
+        text = {
+            Column(Modifier.height(540.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value.entity.name, { name -> value = value.copy(entity = value.entity.copy(name = name.take(80))) }, label = { Text(appText("Template name", "Nazwa szablonu")) }, singleLine = true)
+                Text(appText("STYLE", "STYL"), color = TougeCyan, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OverlayStyle.entries.forEach { style -> FilterChip(value.definition.style == style, { value = value.copy(definition = value.definition.copy(style = style)) }, label = { Text(style.name.lowercase().replaceFirstChar(Char::uppercase)) }) }
+                }
+                value.definition.elements.forEachIndexed { index, element ->
+                    Card(colors = CardDefaults.cardColors(containerColor = TougePanel)) {
+                        Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("${index + 1}.", color = element.accent.color(), fontWeight = FontWeight.Black)
+                                VideoMetricMenu(element.metric) { metric -> value = value.withElement(element.copy(metric = metric)) }
+                                IconButton(onClick = { value = value.copy(definition = value.definition.copy(elements = value.definition.elements.filterNot { it.id == element.id })) }) { Icon(Icons.Default.Delete, null, tint = TougeRed) }
+                            }
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                OverlayElementKind.entries.forEach { kind -> FilterChip(element.kind == kind, { value = value.withElement(element.copy(kind = kind)) }, label = { Text(kind.name.lowercase()) }) }
+                            }
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                OverlayElementScale.entries.forEach { scale -> FilterChip(element.scale == scale, { value = value.withElement(element.copy(scale = scale)) }, label = { Text(scale.name.lowercase().replace('_', ' ')) }) }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                DashboardAccent.entries.forEach { accent ->
+                                    Box(Modifier.size(if (element.accent == accent) 27.dp else 22.dp).background(accent.color(), androidx.compose.foundation.shape.CircleShape).border(if (element.accent == accent) 2.dp else 0.dp, Color.White, androidx.compose.foundation.shape.CircleShape).clickable { value = value.withElement(element.copy(accent = accent)) })
+                                }
+                            }
+                        }
+                    }
+                }
+                Button(onClick = {
+                    val used = value.definition.elements.map { it.metric }.toSet()
+                    val metric = TelemetryMetric.entries.firstOrNull { it !in used } ?: TelemetryMetric.SPEED
+                    val newElement = VideoOverlayElement(metric = metric, landscapePosition = OverlayPosition(.5f, .5f), portraitPosition = OverlayPosition(.5f, .5f))
+                    value = value.copy(definition = value.definition.copy(elements = value.definition.elements + newElement))
+                }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Add, null); Text(appText(" Add parameter", " Dodaj parametr")) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = duplicate, modifier = Modifier.weight(1f)) { Text(appText("Duplicate", "Duplikuj")) }
+                    OutlinedButton(onClick = delete, modifier = Modifier.weight(1f)) { Text(appText("Delete", "Usuń"), color = TougeRed) }
+                }
+            }
+        },
+        confirmButton = { Button(enabled = value.entity.name.isNotBlank() && value.definition.elements.isNotEmpty(), onClick = { save(value) }) { Text(appText("Save HUD", "Zapisz HUD")) } },
+        dismissButton = { TextButton(onClick = dismiss) { Text(appText("Cancel", "Anuluj")) } }
+    )
+}
+
+@Composable
+private fun RowScope.VideoMetricMenu(selected: TelemetryMetric, changed: (TelemetryMetric) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box(Modifier.padding(start = 8.dp).weight(1f)) {
+        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) { Text(selected.localizedName()) }
+        androidx.compose.material3.DropdownMenu(open, { open = false }) {
+            TelemetryMetric.entries.forEach { metric -> androidx.compose.material3.DropdownMenuItem(text = { Text("${metric.localizedName()} · ${metric.unit}") }, onClick = { open = false; changed(metric) }) }
+        }
+    }
+}
+
+private fun VideoOverlayTemplate.withElement(element: VideoOverlayElement) = copy(
+    definition = definition.copy(elements = definition.elements.map { if (it.id == element.id) element else it })
+)
+
+private fun TelemetryMetric.sampleValue(value: TelemetrySampleEntity): Double = when (this) {
+    TelemetryMetric.RPM -> value.rpm
+    TelemetryMetric.BOOST -> value.boostBar
+    TelemetryMetric.MAP -> value.mapKpa
+    TelemetryMetric.THROTTLE -> value.throttlePercent
+    TelemetryMetric.COOLANT -> value.coolantCelsius
+    TelemetryMetric.INTAKE -> value.intakeCelsius
+    TelemetryMetric.OIL_TEMPERATURE -> value.oilTemperatureCelsius
+    TelemetryMetric.OIL_PRESSURE -> value.oilPressureBar
+    TelemetryMetric.FUEL_PRESSURE -> value.fuelPressureBar
+    TelemetryMetric.AFR -> value.afr
+    TelemetryMetric.LAMBDA -> value.lambda
+    TelemetryMetric.BATTERY_VOLTAGE -> value.batteryVoltage
+    TelemetryMetric.IGNITION -> value.ignitionDegrees
+    TelemetryMetric.INJECTOR_DUTY -> value.injectorDutyPercent
+    TelemetryMetric.SPEED -> value.speedKph
+}
+
+private fun List<TelemetrySampleEntity>.nearestTo(target: Long): TelemetrySampleEntity? {
+    if (isEmpty()) return null
+    val found = binarySearchBy(target) { it.recordedAt }
+    if (found >= 0) return this[found]
+    val insertion = -found - 1
+    val before = getOrNull(insertion - 1)
+    val after = getOrNull(insertion)
+    return when {
+        before == null -> after
+        after == null -> before
+        target - before.recordedAt <= after.recordedAt - target -> before
+        else -> after
     }
 }
 

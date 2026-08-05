@@ -62,10 +62,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.letscode.tougedash.BuildConfig
+import it.letscode.tougedash.data.local.SyncState
 import it.letscode.tougedash.di.AppContainer
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
 import it.letscode.tougedash.ui.theme.TougeMuted
+import it.letscode.tougedash.ui.theme.TougeOrange
 import it.letscode.tougedash.ui.theme.TougePanelLight
 import it.letscode.tougedash.ui.theme.TougeRed
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -78,6 +80,10 @@ fun CloudAccountCard(container: AppContainer) {
     val account by container.authRepository.session.collectAsState()
     val working by container.authRepository.working.collectAsState()
     val error by container.authRepository.error.collectAsState()
+    val sessions by container.dao.sessions().collectAsState(initial = emptyList())
+    val incidents by container.dao.incidents().collectAsState(initial = emptyList())
+    val pendingAnnotations by container.dao.pendingAnnotationCount().collectAsState(initial = 0)
+    val pendingSamples by container.dao.pendingSampleCount().collectAsState(initial = 0)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
@@ -119,6 +125,30 @@ fun CloudAccountCard(container: AppContainer) {
                         Text(appText(" Sign out", " Wyloguj"), fontWeight = FontWeight.Bold)
                     }
                 }
+                val pendingSessions = sessions.count { it.syncState != SyncState.SYNCED }
+                val pendingIncidents = incidents.count { it.syncState != SyncState.SYNCED }
+                val uploading = sessions.filter { it.syncState == SyncState.UPLOADING }
+                val sentBytes = uploading.sumOf { it.syncBytesSent }
+                val totalBytes = uploading.sumOf { it.syncBytesTotal }
+                Column(
+                    Modifier.fillMaxWidth().background(Color.White.copy(alpha = .035f), CutCornerShape(8.dp)).padding(11.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (totalBytes > 0) {
+                        LinearProgressIndicator(progress = { (sentBytes.toFloat() / totalBytes).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+                        Text("${cloudBytes(sentBytes)} / ${cloudBytes(totalBytes)} · $pendingSamples ${appText("samples", "próbek")}", color = TougeMuted, fontSize = 10.sp)
+                    } else if (pendingSessions + pendingIncidents + pendingAnnotations > 0) {
+                        Text(
+                            "$pendingSessions ${appText("drives", "przejazdów")} · $pendingIncidents ${appText("incidents", "incydentów")} · $pendingAnnotations ${appText("notes", "notatek")} · $pendingSamples ${appText("samples", "próbek")}",
+                            color = TougeOrange,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(appText("Waiting for upload. Synchronization resumes automatically when the network returns.", "Czekają na wysłanie. Synchronizacja wznowi się automatycznie po powrocie sieci."), color = TougeMuted, fontSize = 10.sp)
+                    } else {
+                        Text(appText("Cloud data is up to date", "Dane w chmurze są aktualne"), color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
+                }
                 OutlinedButton(
                     onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_BASE_URL + "/profile"))) },
                     modifier = Modifier.fillMaxWidth(),
@@ -143,6 +173,10 @@ fun CloudAccountCard(container: AppContainer) {
                     modifier = Modifier.fillMaxWidth().background(TougeRed.copy(alpha = .07f), CutCornerShape(7.dp)).padding(11.dp)
                 )
             }
+            TextButton(
+                onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_BASE_URL + "/privacy"))) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(appText("Privacy policy", "Polityka prywatności"), color = TougeCyan) }
         }
     }
 
@@ -417,4 +451,11 @@ private fun passwordStrength(value: String): Float {
     if (value.any(Char::isDigit)) score += .18f
     if (value.any { !it.isLetterOrDigit() }) score += .19f
     return score.coerceIn(0f, 1f)
+}
+
+private fun cloudBytes(value: Long): String = when {
+    value >= 1_073_741_824 -> "%.1f GB".format(value / 1_073_741_824.0)
+    value >= 1_048_576 -> "%.1f MB".format(value / 1_048_576.0)
+    value >= 1_024 -> "%.0f kB".format(value / 1_024.0)
+    else -> "$value B"
 }

@@ -22,6 +22,7 @@ class HistoryRepository(private val dao: TougeDashDao) {
     val sessions = dao.sessions()
     fun session(id: String) = dao.session(id)
     fun samples(id: String) = dao.chartSamples(id)
+    fun rawSamples(id: String) = dao.samples(id)
     fun incidents(id: String) = dao.incidentsForSession(id)
     fun annotations(id: String) = dao.annotations(id)
     fun videos(id: String) = dao.videos(id)

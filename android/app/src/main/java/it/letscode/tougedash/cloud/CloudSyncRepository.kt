@@ -22,6 +22,7 @@ import it.letscode.tougedash.data.local.TougeDashDao
 import it.letscode.tougedash.data.local.VehicleEntity
 import it.letscode.tougedash.history.CapturedTelemetryPoint
 import it.letscode.tougedash.model.VehicleAlertRules
+import it.letscode.tougedash.alerts.AlertRepository
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -37,7 +38,13 @@ import kotlinx.serialization.json.put
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 
-class CloudSyncRepository(private val context: Context, private val dao: TougeDashDao, private val api: CloudAuthRepository, private val json: Json) {
+class CloudSyncRepository(
+    private val context: Context,
+    private val dao: TougeDashDao,
+    private val api: CloudAuthRepository,
+    private val json: Json,
+    private val alerts: AlertRepository
+) {
     suspend fun createIncidentShare(incidentId: String, unit: String, amount: Int?): String {
         check(api.isAuthenticated) { "Sign in before sharing a report." }
         check(sync()) { "Synchronize the report before sharing it." }
@@ -193,8 +200,22 @@ class CloudSyncRepository(private val context: Context, private val dao: TougeDa
                 rules.forEach { (key, value) -> put(key, value) }
             }
             runCatching { api.request("/api/v1/vehicles/$remoteId/alert-configuration", "PUT", body) }
-                // A mechanic or another device may already have changed this revision.
-                .getOrElse { api.request("/api/v1/vehicles/$remoteId/alert-configuration") }
+                .getOrElse {
+                    // A mechanic or another device may already have changed this
+                    // revision. Preserve the offline draft until the driver chooses.
+                    val remote = api.request("/api/v1/vehicles/$remoteId/alert-configuration")
+                    val root = remote.jsonObject
+                    alerts.setConflict(
+                        vehicle.localHardwareId,
+                        AlertRepository.Conflict(
+                            rules = json.decodeFromString(remote.toString()),
+                            revision = root["revision"]?.jsonPrimitive?.content?.toIntOrNull() ?: local.revision,
+                            updatedAt = root["updatedAt"]?.jsonPrimitive?.content?.let { value -> Instant.parse(value).toEpochMilli() } ?: System.currentTimeMillis(),
+                            updatedByDisplayName = root["updatedByDisplayName"]?.takeUnless { value -> value is JsonNull }?.jsonPrimitive?.content
+                        )
+                    )
+                    return
+                }
         } else {
             api.request("/api/v1/vehicles/$remoteId/alert-configuration")
         }

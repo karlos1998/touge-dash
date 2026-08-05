@@ -36,6 +36,7 @@ import java.util.UUID
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import it.letscode.tougedash.dashboard.normalizeLegacyDashboardJson
 
 data class VideoTaskState(
     val operation: String? = null,
@@ -69,6 +70,33 @@ class VideoRepository(
     fun updateOverlayTemplate(template: VideoOverlayTemplate) {
         scope.launch(Dispatchers.IO) {
             dao.upsertOverlayTemplate(template.entity.copy(definitionJson = json.encodeToString(template.definition), modifiedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun duplicateOverlayTemplate(template: VideoOverlayTemplate) {
+        scope.launch(Dispatchers.IO) {
+            val id = UUID.randomUUID().toString()
+            val entity = OverlayTemplateEntity(
+                id = id,
+                name = "${template.entity.name} copy",
+                definitionJson = json.encodeToString(template.definition),
+                modifiedAt = System.currentTimeMillis(),
+                selected = false
+            )
+            dao.upsertOverlayTemplate(entity)
+        }
+    }
+
+    fun deleteOverlayTemplate(template: VideoOverlayTemplate) {
+        scope.launch(Dispatchers.IO) {
+            if (dao.overlayTemplatesOnce().size > 1) dao.deleteOverlayTemplate(template.entity.id)
+        }
+    }
+
+    fun restoreOverlayTemplates() {
+        scope.launch(Dispatchers.IO) {
+            dao.overlayTemplatesOnce().forEach { dao.deleteOverlayTemplate(it.id) }
+            defaultTemplates().forEach { dao.upsertOverlayTemplate(it.entity) }
         }
     }
 
@@ -142,6 +170,12 @@ class VideoRepository(
         }
     }
 
+    suspend fun deleteForSession(sessionId: String) = withContext(Dispatchers.IO) {
+        dao.videosOnce(sessionId).forEach { project ->
+            Uri.parse(project.localUri).path?.let(::File)?.takeIf(File::exists)?.delete()
+        }
+    }
+
     fun clearTask() { mutableTask.value = VideoTaskState() }
 
     fun export(project: VideoProjectEntity, samples: List<TelemetrySampleEntity>, definition: VideoOverlayTemplateDefinition) {
@@ -153,11 +187,18 @@ class VideoRepository(
                 .setEndPositionMs(((project.videoTrimStartSeconds + project.exportDurationSeconds) * 1000).toLong())
                 .build()
             val item = MediaItem.Builder().setUri(project.localUri).setClippingConfiguration(clipping).build()
-            val overlay = TelemetryBitmapOverlay(samples, project.telemetryTrimStartSeconds, definition, project.pixelHeight > project.pixelWidth)
+            val overlay = TelemetryBitmapOverlay(
+                samples,
+                project.telemetryTrimStartSeconds,
+                definition,
+                project.pixelWidth,
+                project.pixelHeight
+            )
             val edited = EditedMediaItem.Builder(item).setEffects(Effects(emptyList(), listOf(OverlayEffect(listOf(overlay))))).build()
             mutableTask.value = VideoTaskState("Rendering telemetry HUD", projectId = project.id)
             transformer = Transformer.Builder(context).addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: androidx.media3.transformer.Composition, exportResult: ExportResult) {
+                    transformer = null
                     scope.launch(Dispatchers.IO) {
                         runCatching { saveToGallery(output) }
                             .onSuccess { mutableTask.value = mutableTask.value.copy(progress = 1f, completed = true, transferredBytes = output.length(), totalBytes = output.length()) }
@@ -167,6 +208,7 @@ class VideoRepository(
                 }
 
                 override fun onError(composition: androidx.media3.transformer.Composition, exportResult: ExportResult, exportException: ExportException) {
+                    transformer = null
                     mutableTask.value = mutableTask.value.copy(error = exportException.message ?: "Video export failed")
                     output.delete()
                 }
@@ -202,13 +244,15 @@ class VideoRepository(
     }
 
     private fun decodeTemplate(entity: OverlayTemplateEntity): VideoOverlayTemplate? = runCatching {
-        VideoOverlayTemplate(entity, json.decodeFromString(entity.definitionJson))
+        val definition = json.decodeFromString<VideoOverlayTemplateDefinition>(normalizeLegacyDashboardJson(entity.definitionJson))
+        VideoOverlayTemplate(entity, definition)
     }.getOrNull()
 
     private fun defaultTemplates(): List<VideoOverlayTemplate> = listOf(
-        template("MINIMAL", "Minimal", VideoOverlayTemplateDefinition(OverlayStyle.MINIMAL, portraitY = -.68f, landscapeY = -.72f, scale = .78f)),
-        template("RACE", "Race HUD", VideoOverlayTemplateDefinition(OverlayStyle.RACE, portraitY = -.70f, landscapeY = -.72f, scale = .90f)),
-        template("UNDERGROUND", "Underground", VideoOverlayTemplateDefinition(OverlayStyle.UNDERGROUND, portraitY = -.66f, landscapeY = -.70f, scale = .86f))
+        template("RACE", "Touge Pro", VideoOverlayTemplateDefinition.tougePro()),
+        template("UNDERGROUND", "Night Run", VideoOverlayTemplateDefinition.nightRun()),
+        template("MINIMAL", "Clean Drive", VideoOverlayTemplateDefinition.cleanDrive()),
+        template("PORTRAIT_RALLY", "Portrait Rally", VideoOverlayTemplateDefinition.portraitRally())
     )
 
     private fun template(id: String, name: String, definition: VideoOverlayTemplateDefinition): VideoOverlayTemplate {
@@ -220,10 +264,14 @@ class VideoRepository(
     private fun metadata(uri: Uri): Metadata = MediaMetadataRetriever().run {
         setDataSource(context, uri)
         try {
+            val rawWidth = extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+            val rawHeight = extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            val rotation = extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+            val rotated = rotation % 180 != 0
             Metadata(
                 (extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toDoubleOrNull() ?: 0.0) / 1000,
-                extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0,
-                extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0,
+                if (rotated) rawHeight else rawWidth,
+                if (rotated) rawWidth else rawHeight,
                 extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toDoubleOrNull() ?: 30.0,
                 extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO) == "yes"
             )

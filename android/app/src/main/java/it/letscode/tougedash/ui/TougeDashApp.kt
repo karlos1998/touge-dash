@@ -39,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
@@ -61,6 +62,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -77,18 +79,23 @@ import it.letscode.tougedash.model.DashboardWidgetKind
 import it.letscode.tougedash.model.TelemetryConnection
 import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.TelemetrySnapshot
+import it.letscode.tougedash.model.VehicleAlertRules
 import it.letscode.tougedash.ui.theme.TougeBlue
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
 import it.letscode.tougedash.ui.theme.TougeMuted
 import it.letscode.tougedash.ui.theme.TougeOrange
 import it.letscode.tougedash.ui.theme.TougeRed
+import it.letscode.tougedash.video.DriveVideoQuality
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 
 @Composable
 fun TougeDashApp(
@@ -105,11 +112,33 @@ fun TougeDashApp(
     var vehicleToName by remember { mutableStateOf<VehicleEntity?>(null) }
     val vehicles by container.dao.vehicles().collectAsState(initial = emptyList())
     val context = LocalContext.current
+    val rootView = LocalView.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val videoSettings by container.videoRecordingSettings.settings.collectAsState()
     val namePrompts = remember { context.getSharedPreferences("vehicle-name-prompts", android.content.Context.MODE_PRIVATE) }
+    androidx.compose.runtime.DisposableEffect(rootView, connection.state, videoSettings.automaticRecording) {
+        rootView.keepScreenOn = connection.state == ConnectionState.Connected || videoSettings.automaticRecording
+        onDispose { rootView.keepScreenOn = false }
+    }
     LaunchedEffect(connection.hardwareId, vehicles) {
         val hardwareId = connection.hardwareId ?: return@LaunchedEffect
         val vehicle = vehicles.firstOrNull { it.localHardwareId == hardwareId } ?: return@LaunchedEffect
         if (!namePrompts.getBoolean(hardwareId, false)) vehicleToName = vehicle
+    }
+    LaunchedEffect(videoSettings.automaticRecording, connection.state, lifecycleOwner) {
+        if (!videoSettings.automaticRecording) {
+            container.cameraRecordingController.stopWhenSessionEnds(null)
+            return@LaunchedEffect
+        }
+        while (videoSettings.automaticRecording) {
+            val sessionId = container.historyRepository.activeSessionId()
+            val activeVideoSessionId = sessionId.takeIf { connection.state == ConnectionState.Connected }
+            container.cameraRecordingController.stopWhenSessionEnds(activeVideoSessionId)
+            if (activeVideoSessionId != null) {
+                container.cameraRecordingController.ensureAutomaticRecording(lifecycleOwner, activeVideoSessionId)
+            }
+            delay(500)
+        }
     }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     Scaffold(
@@ -149,9 +178,9 @@ fun TougeDashApp(
                 if (landscape) CompactAppHeader(connection, { showConnection = true }, { showCamera = true })
                 else AppHeader(connection, { showConnection = true }, { showCamera = true })
                 when (tab) {
-                    0 -> ConfigurableDashboardScreen(container, snapshot)
+                    0 -> ConfigurableDashboardScreen(container, snapshot, connection.hardwareId)
                     1 -> HistoryScreen(container, selectedSessionId, { selectedSessionId = it }, { selectedSessionId = null })
-                    2 -> AlertsScreen(container, connection.hardwareId ?: "local-default")
+                    2 -> AlertsScreen(container, connection.hardwareId)
                     else -> MoreScreen(container)
                 }
             }
@@ -220,7 +249,7 @@ private fun DashboardLogoMark(modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, landscape: Boolean) {
+internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, landscape: Boolean, rules: VehicleAlertRules = VehicleAlertRules()) {
     val accent = widget.accent.color()
     val kind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
     val compactLandscape = landscape && LocalConfiguration.current.screenHeightDp < 600
@@ -242,12 +271,12 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
             else -> 145.dp
         }
     }
-    val warning = widget.metrics.any { it.isWarning(snapshot) }
+    val warning = widget.metrics.any { it.isWarning(snapshot, rules) }
     TougePanelSurface(accent = accent, warning = warning, modifier = Modifier.fillMaxWidth().height(height)) {
         Box(Modifier.fillMaxSize().padding(if (compactLandscape) 13.dp else 17.dp)) {
             when (kind) {
                 DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
-                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
+                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, warning)
                 DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
                 else -> ValueWidget(widget.metrics.first(), snapshot, if (warning) TougeRed else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape)
             }
@@ -302,8 +331,7 @@ private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, a
 }
 
 @Composable
-private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
-    val warning = widget.metrics.any { it.isWarning(snapshot) }
+private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, warning: Boolean) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -393,11 +421,14 @@ private fun ScaleText(value: String) {
     Text(value, color = TougeMuted.copy(alpha = .58f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
 }
 
-private fun TelemetryMetric.isWarning(snapshot: TelemetrySnapshot): Boolean = when (this) {
-    TelemetryMetric.COOLANT -> snapshot.coolantCelsius >= 110
-    TelemetryMetric.OIL_TEMPERATURE -> snapshot.oilTemperatureCelsius >= 120
-    TelemetryMetric.OIL_PRESSURE -> snapshot.rpm >= 3_000 && snapshot.oilPressureBar in .01..1.49
-    TelemetryMetric.BATTERY_VOLTAGE -> snapshot.rpm > 500 && snapshot.batteryVoltage in .01..11.49
+private fun TelemetryMetric.isWarning(snapshot: TelemetrySnapshot, rules: VehicleAlertRules): Boolean = when (this) {
+    TelemetryMetric.BOOST -> rules.overboostEnabled && snapshot.boostBar > rules.maximumBoostBar
+    TelemetryMetric.COOLANT -> rules.highCoolantTemperatureEnabled && snapshot.coolantCelsius >= rules.maximumCoolantCelsius
+    TelemetryMetric.OIL_TEMPERATURE -> rules.highOilTemperatureEnabled && snapshot.oilTemperatureCelsius >= rules.maximumOilTemperatureCelsius
+    TelemetryMetric.OIL_PRESSURE -> rules.lowOilPressureEnabled && snapshot.rpm >= rules.lowOilMinimumRpm && snapshot.oilPressureBar > 0 && snapshot.oilPressureBar < rules.minimumOilPressureBar
+    TelemetryMetric.AFR -> rules.leanUnderBoostEnabled && snapshot.boostBar >= rules.leanMinimumBoostBar && snapshot.afr > rules.maximumAfr
+    TelemetryMetric.FUEL_PRESSURE -> rules.lowFuelPressureEnabled && snapshot.rpm >= rules.lowFuelPressureMinimumRpm && snapshot.fuelPressureBar > 0 && snapshot.fuelPressureBar < rules.minimumFuelPressureBar
+    TelemetryMetric.BATTERY_VOLTAGE -> rules.lowBatteryVoltageEnabled && snapshot.rpm >= rules.lowBatteryMinimumRpm && snapshot.batteryVoltage > 0 && snapshot.batteryVoltage < rules.minimumBatteryVoltage
     else -> false
 }
 
@@ -429,9 +460,22 @@ private fun MoreScreen(container: AppContainer) {
     val vehicles by container.dao.vehicles().collectAsState(initial = emptyList())
     var rename by remember { mutableStateOf<VehicleEntity?>(null) }
     var routeEnabled by remember { mutableStateOf(container.locationTracker.isEnabled) }
+    val videoSettings by container.videoRecordingSettings.settings.collectAsState()
+    var showVideoWarning by remember { mutableStateOf(false) }
+    var warningCountdown by remember { mutableIntStateOf(5) }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         routeEnabled = granted
         container.locationTracker.setEnabled(granted)
+    }
+    val videoPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        val cameraGranted = result[Manifest.permission.CAMERA] == true || ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (cameraGranted) container.videoRecordingSettings.update(videoSettings.copy(automaticRecording = true))
+    }
+    LaunchedEffect(showVideoWarning) {
+        if (showVideoWarning) {
+            warningCountdown = 5
+            while (warningCountdown > 0) { delay(1_000); warningCountdown-- }
+        }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Column(Modifier.fillMaxWidth()) {
@@ -446,6 +490,41 @@ private fun MoreScreen(container: AppContainer) {
                         if (enabled) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         else { routeEnabled = false; container.locationTracker.setEnabled(false) }
                     })
+                }
+            }
+            TougePanelSurface(TougeOrange, Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(appText("Automatic drive recording", "Automatyczne nagrywanie przejazdu"), fontWeight = FontWeight.Bold)
+                            Text(appText("Starts the phone camera together with telemetry", "Uruchamia kamerę telefonu razem z telemetrią"), color = TougeMuted, fontSize = 11.sp)
+                        }
+                        Switch(videoSettings.automaticRecording, { enabled ->
+                            if (!enabled) container.videoRecordingSettings.update(videoSettings.copy(automaticRecording = false))
+                            else if (!container.videoRecordingSettings.warningAccepted) showVideoWarning = true
+                            else videoPermission.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+                        })
+                    }
+                    if (videoSettings.automaticRecording) {
+                        Text(appText("QUALITY", "JAKOŚĆ"), color = TougeOrange, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            DriveVideoQuality.entries.forEach { quality ->
+                                FilterChip(
+                                    selected = videoSettings.quality == quality,
+                                    onClick = { container.videoRecordingSettings.update(videoSettings.copy(quality = quality)) },
+                                    label = { Text(when (quality) { DriveVideoQuality.STORAGE_SAVER -> "720p"; DriveVideoQuality.FULL_HD -> "1080p"; DriveVideoQuality.ULTRA_HD -> "4K" }) }
+                                )
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(appText("Front camera", "Przednia kamera"), Modifier.weight(1f), fontSize = 12.sp)
+                            Switch(videoSettings.frontCamera, { container.videoRecordingSettings.update(videoSettings.copy(frontCamera = it)) })
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(appText("Record audio", "Nagrywaj dźwięk"), Modifier.weight(1f), fontSize = 12.sp)
+                            Switch(videoSettings.recordAudio, { container.videoRecordingSettings.update(videoSettings.copy(recordAudio = it)) })
+                        }
+                    }
                 }
             }
             if (vehicles.isNotEmpty()) {
@@ -476,6 +555,22 @@ private fun MoreScreen(container: AppContainer) {
         }
     }
     rename?.let { vehicle -> VehicleNameDialog(container, vehicle) { rename = null } }
+    if (showVideoWarning) AlertDialog(
+        onDismissRequest = { showVideoWarning = false },
+        title = { Text(appText("Experimental drive recording", "Eksperymentalne nagrywanie przejazdu")) },
+        text = { Text(appText(
+            "Touge Dash will record the road with the selected phone camera while it saves engine telemetry. Later you can align the recording, preview it and export a copy with a configurable HUD. Video encoding can heat the phone, increase battery use and reduce responsiveness. Mount the phone securely and never operate it while driving.",
+            "Touge Dash będzie nagrywać drogę wybraną kamerą telefonu równolegle z telemetrią silnika. Później dopasujesz nagranie, obejrzysz podgląd i wyeksportujesz kopię z konfigurowalnym HUD-em. Kodowanie wideo może nagrzewać telefon, zwiększać zużycie baterii i obniżać płynność. Zamocuj telefon stabilnie i nigdy nie obsługuj go podczas jazdy."
+        )) },
+        confirmButton = {
+            Button(enabled = warningCountdown == 0, onClick = {
+                container.videoRecordingSettings.acceptWarning()
+                showVideoWarning = false
+                videoPermission.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+            }) { Text(if (warningCountdown > 0) appText("I understand (${warningCountdown}s)", "Rozumiem (${warningCountdown}s)") else appText("I understand — enable", "Rozumiem — włącz")) }
+        },
+        dismissButton = { TextButton(onClick = { showVideoWarning = false }) { Text(appText("Not now", "Nie teraz")) } }
+    )
 }
 
 @Composable

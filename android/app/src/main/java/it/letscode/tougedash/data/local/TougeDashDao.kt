@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -20,6 +21,16 @@ interface TougeDashDao {
     @Query("SELECT * FROM drive_sessions WHERE id = :id") fun session(id: String): Flow<DriveSessionEntity?>
     @Query("SELECT * FROM drive_sessions WHERE id = :id") suspend fun sessionOnce(id: String): DriveSessionEntity?
     @Query("SELECT * FROM drive_sessions WHERE syncState IN ('LOCAL','PENDING_UPLOAD','CHANGED_AFTER_SYNC','FAILED') ORDER BY startedAt LIMIT :limit") suspend fun pendingSessions(limit: Int = 5): List<DriveSessionEntity>
+    @Query("DELETE FROM incidents WHERE sessionId = :sessionId") suspend fun deleteIncidentsForSession(sessionId: String)
+    @Query("DELETE FROM annotations WHERE sessionId = :sessionId") suspend fun deleteAnnotationsForSession(sessionId: String)
+    @Query("DELETE FROM video_projects WHERE sessionId = :sessionId") suspend fun deleteVideosForSession(sessionId: String)
+    @Query("DELETE FROM drive_sessions WHERE id = :sessionId") suspend fun deleteSession(sessionId: String)
+    @Transaction suspend fun deleteSessionCascade(sessionId: String) {
+        deleteIncidentsForSession(sessionId)
+        deleteAnnotationsForSession(sessionId)
+        deleteVideosForSession(sessionId)
+        deleteSession(sessionId)
+    }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertSamples(values: List<TelemetrySampleEntity>)
     @Query("SELECT * FROM telemetry_samples WHERE sessionId = :sessionId ORDER BY recordedAt") fun samples(sessionId: String): Flow<List<TelemetrySampleEntity>>
@@ -36,6 +47,8 @@ interface TougeDashDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAnnotation(value: AnnotationEntity)
     @Query("SELECT * FROM annotations WHERE sessionId = :sessionId ORDER BY recordedAt") fun annotations(sessionId: String): Flow<List<AnnotationEntity>>
     @Query("SELECT * FROM annotations WHERE syncState IN ('LOCAL','PENDING_UPLOAD','FAILED') ORDER BY recordedAt LIMIT :limit") suspend fun pendingAnnotations(limit: Int = 50): List<AnnotationEntity>
+    @Query("SELECT COUNT(*) FROM annotations WHERE syncState IN ('LOCAL','PENDING_UPLOAD','FAILED')") fun pendingAnnotationCount(): Flow<Int>
+    @Query("SELECT COUNT(*) FROM telemetry_samples WHERE sessionId IN (SELECT id FROM drive_sessions WHERE syncState IN ('LOCAL','PENDING_UPLOAD','CHANGED_AFTER_SYNC','FAILED','UPLOADING'))") fun pendingSampleCount(): Flow<Int>
     @Update suspend fun updateAnnotation(value: AnnotationEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertTemplate(value: DashboardTemplateEntity)
@@ -51,10 +64,12 @@ interface TougeDashDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertVideo(value: VideoProjectEntity)
     @Query("SELECT * FROM video_projects WHERE sessionId = :sessionId ORDER BY createdAt DESC") fun videos(sessionId: String): Flow<List<VideoProjectEntity>>
+    @Query("SELECT * FROM video_projects WHERE sessionId = :sessionId ORDER BY createdAt DESC") suspend fun videosOnce(sessionId: String): List<VideoProjectEntity>
     @Query("DELETE FROM video_projects WHERE id = :id") suspend fun deleteVideo(id: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertOverlayTemplate(value: OverlayTemplateEntity)
     @Query("SELECT * FROM overlay_templates ORDER BY modifiedAt DESC") fun overlayTemplates(): Flow<List<OverlayTemplateEntity>>
     @Query("SELECT * FROM overlay_templates ORDER BY modifiedAt DESC") suspend fun overlayTemplatesOnce(): List<OverlayTemplateEntity>
     @Query("SELECT * FROM overlay_templates WHERE id = :id") suspend fun overlayTemplate(id: String): OverlayTemplateEntity?
+    @Query("DELETE FROM overlay_templates WHERE id = :id") suspend fun deleteOverlayTemplate(id: String)
 }
