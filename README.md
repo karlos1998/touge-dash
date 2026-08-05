@@ -90,9 +90,10 @@ sesji są przechowywane w Keychain na iOS i szyfrowanej pamięci na Androidzie.
 
 ### Nagrania przejazdów
 
-Nagrywanie wideo jest opcjonalne i domyślnie wyłączone. Po jego włączeniu można
-wybrać obiektyw, jakość oraz zapis dźwięku. Film rozpoczyna się i kończy razem z
-sesją telemetrii, a w historii pozostaje przypisany do konkretnego przejazdu.
+Nagrywanie wideo jest opcjonalne i domyślnie wyłączone. Można wybrać obiektyw,
+jakość oraz zapis dźwięku. Na iOS nagranie może rozpoczynać się razem z sesją
+telemetrii; na Androidzie użytkownik uruchamia je z ekranu kamery po rozpoczęciu
+przejazdu. W obu wersjach film pozostaje przypisany do konkretnego przejazdu.
 Odtwarzacz i wykresy korzystają ze wspólnej osi czasu: przesunięcie filmu ustawia
 kursor telemetrii, a wskazanie momentu na wykresie przewija nagranie.
 
