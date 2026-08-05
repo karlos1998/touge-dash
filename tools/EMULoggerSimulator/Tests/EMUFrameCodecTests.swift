@@ -33,6 +33,29 @@ final class EMUFrameCodecTests: XCTestCase {
         XCTAssertEqual(stride(from: 0, to: loopback.count, by: 5).map { loopback[$0] }, [254, 253, 252])
     }
 
+    func testEverySwitchAndRotaryValueSurvivesStatusDecodeAndLoopback() throws {
+        let switches = [true, false, true, true, false, false, true, false]
+        let rotaryValues: [UInt8] = [0, 1, 2, 3, 7, 11, 14, 15]
+        let switchByte = switches.enumerated().reduce(UInt8(0)) { result, entry in
+            entry.element ? result | UInt8(1 << (7 - entry.offset)) : result
+        }
+        let packed = stride(from: 0, to: rotaryValues.count, by: 2).map {
+            (rotaryValues[$0] << 4) | rotaryValues[$0 + 1]
+        }
+        var bytes: [UInt8] = [0x08, 0x55, switchByte] + packed
+        bytes.append(UInt8(truncatingIfNeeded: bytes.reduce(0) { $0 + Int($1) }))
+
+        let decoded = try XCTUnwrap(EMUFrameCodec.decodeControlStatus(Data(bytes)))
+        XCTAssertEqual(decoded.switches, switches)
+        XCTAssertEqual(decoded.rotaryValues, rotaryValues)
+
+        let loopback = EMUFrameCodec.encodeControlLoopback(decoded)
+        XCTAssertEqual(loopback.count, 15)
+        XCTAssertEqual(loopback[2...3], Data([0x00, switchByte]))
+        XCTAssertEqual(loopback[7...8], Data([0x01, 0x23]))
+        XCTAssertEqual(loopback[12...13], Data([0x7B, 0xEF]))
+    }
+
     func testWarningScenariosCrossExpectedLimits() {
         XCTAssertGreaterThan(SimulationScenario.overboost.telemetry(elapsed: 2).boostBar, 1.5)
         XCTAssertGreaterThan(SimulationScenario.highTemperature.telemetry(elapsed: 2).coolantCelsius, 110)

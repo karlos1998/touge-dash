@@ -19,6 +19,8 @@ final class EMUSimulatorViewModel: ObservableObject {
     private var timer: Timer?
     private var scenarioStartedAt = Date.now
     private var lastSentAt = Date.distantPast
+    private var lastUIRefreshAt = Date.distantPast
+    private var actualGeneratedFrameSets = 0
 
     var statusTint: Color {
         if peripheral.lastError != nil { return .orange }
@@ -31,10 +33,12 @@ final class EMUSimulatorViewModel: ObservableObject {
         isRunning = true
         scenarioStartedAt = .now
         lastSentAt = .distantPast
+        lastUIRefreshAt = .distantPast
         peripheral.start()
         timer = Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.tick() }
         }
+        timer?.tolerance = 0.004
     }
 
     func stop() {
@@ -53,6 +57,7 @@ final class EMUSimulatorViewModel: ObservableObject {
     }
 
     func resetCounters() {
+        actualGeneratedFrameSets = 0
         generatedFrameSets = 0
         peripheral.resetCounters()
     }
@@ -73,11 +78,24 @@ final class EMUSimulatorViewModel: ObservableObject {
         guard isRunning else { return }
         let now = Date.now
         guard now.timeIntervalSince(lastSentAt) >= 1 / Double(sampleRate) else { return }
+        let currentTelemetry: SimulatorTelemetry
         if scenario != .manual {
-            telemetry = scenario.telemetry(elapsed: now.timeIntervalSince(scenarioStartedAt))
+            currentTelemetry = scenario.telemetry(elapsed: now.timeIntervalSince(scenarioStartedAt))
+        } else {
+            currentTelemetry = telemetry
         }
-        peripheral.send(EMUFrameCodec.encode(telemetry))
-        generatedFrameSets += 1
+        peripheral.send(EMUFrameCodec.encode(currentTelemetry))
+        actualGeneratedFrameSets += 1
         lastSentAt = now
+
+        // Rendering the complete SwiftUI dashboard at logger frequency made
+        // the simulator consume an entire CPU core. Radio traffic stays at
+        // 10/25 Hz, while human-facing values and diagnostics refresh at 2.5 Hz.
+        if now.timeIntervalSince(lastUIRefreshAt) >= 0.4 {
+            if scenario != .manual, telemetry != currentTelemetry { telemetry = currentTelemetry }
+            if generatedFrameSets != actualGeneratedFrameSets { generatedFrameSets = actualGeneratedFrameSets }
+            peripheral.publishDiagnostics()
+            lastUIRefreshAt = now
+        }
     }
 }

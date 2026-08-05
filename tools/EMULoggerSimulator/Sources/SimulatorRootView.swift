@@ -19,6 +19,7 @@ struct SimulatorRootView: View {
                         VStack(spacing: 16) {
                             connectionPanel
                             scenarioPanel
+                            ecuControlsPanel
                             diagnosticsPanel
                         }
                         .frame(width: 330)
@@ -152,18 +153,62 @@ struct SimulatorRootView: View {
                         .font(.caption.weight(.bold))
                 }
                 diagnosticRow("Zestawy ramek", model.generatedFrameSets.formatted())
-                diagnosticRow("Notyfikacje BLE", model.peripheral.notificationCount.formatted())
-                diagnosticRow("Wysłane dane", ByteCountFormatter.string(fromByteCount: Int64(model.peripheral.byteCount), countStyle: .file))
+                diagnosticRow("Notyfikacje BLE", model.peripheral.diagnostics.notificationCount.formatted())
+                diagnosticRow("Wysłane dane", ByteCountFormatter.string(fromByteCount: Int64(model.peripheral.diagnostics.byteCount), countStyle: .file))
                 VStack(alignment: .leading, spacing: 4) {
                     Text("OSTATNI PAKIET")
                         .font(.system(size: 8, weight: .black))
                         .tracking(1)
                         .foregroundStyle(.secondary)
-                    Text(model.peripheral.lastPacketHex)
+                    Text(model.peripheral.diagnostics.lastPacketHex)
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundStyle(.cyan)
                         .lineLimit(2)
                 }
+            }
+        }
+    }
+
+    private var ecuControlsPanel: some View {
+        panel(accent: .purple) {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle("BT SWITCH / ROTARY", symbol: "switch.2")
+                Text("Stan zwracany aplikacji w kanałach loopback 254–252. Zmiana w Touge Dash powinna od razu pojawić się poniżej.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    ForEach(0..<8, id: \.self) { index in
+                        Toggle("SW \(index + 1)", isOn: Binding(
+                            get: { model.peripheral.controlState.switches[index] },
+                            set: { model.peripheral.setSwitch(index: index, isOn: $0) }
+                        ))
+                        .toggleStyle(.switch)
+                        .font(.caption.weight(.bold))
+                    }
+                }
+
+                Divider().opacity(0.35)
+
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                    ForEach(0..<8, id: \.self) { index in
+                        Stepper(
+                            "ROT \(index + 1): \(model.peripheral.controlState.rotaryValues[index])",
+                            value: Binding(
+                                get: { Int(model.peripheral.controlState.rotaryValues[index]) },
+                                set: { model.peripheral.setRotary(index: index, value: $0) }
+                            ),
+                            in: 0...15
+                        )
+                        .font(.caption.monospacedDigit().weight(.bold))
+                    }
+                }
+
+                Text(model.peripheral.lastControlChange)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.purple)
+                    .lineLimit(2)
             }
         }
     }

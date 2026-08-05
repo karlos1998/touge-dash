@@ -1,19 +1,28 @@
 @preconcurrency import CoreBluetooth
 import Foundation
 
+struct SimulatorBLEDiagnostics: Equatable, Sendable {
+    var notificationCount = 0
+    var byteCount = 0
+    var lastPacketHex = "—"
+}
+
 @MainActor
 final class BLEPeripheralSimulator: NSObject, ObservableObject {
     static let serviceUUID = CBUUID(string: "FFE0")
     static let characteristicUUID = CBUUID(string: "FFE1")
-    static let advertisedName = "EMULOGGER SIM"
+    /// eDash applies an exact-name allow list before connecting. Keep this
+    /// identical to the real logger; CoreBluetooth still assigns the Mac a
+    /// distinct peripheral identifier, so Touge Dash stores it as a separate
+    /// vehicle instead of merging it with the logger in the car.
+    static let advertisedName = "EMULOGGER"
 
     @Published private(set) var bluetoothState = CBManagerState.unknown
     @Published private(set) var isAdvertising = false
     @Published private(set) var subscriberCount = 0
-    @Published private(set) var notificationCount = 0
-    @Published private(set) var byteCount = 0
-    @Published private(set) var lastPacketHex = "—"
+    @Published private(set) var diagnostics = SimulatorBLEDiagnostics()
     @Published private(set) var controlState = SimulatorControlState()
+    @Published private(set) var lastControlChange = "Brak zmian"
     @Published private(set) var lastError: String?
 
     private var manager: CBPeripheralManager!
@@ -23,6 +32,9 @@ final class BLEPeripheralSimulator: NSObject, ObservableObject {
     private var pendingChunks: [Data] = []
     private var latestTelemetryPayload = Data()
     private var latestPayload = Data()
+    private var notificationCount = 0
+    private var byteCount = 0
+    private var lastPacketHex = "—"
 
     override init() {
         super.init()
@@ -33,8 +45,8 @@ final class BLEPeripheralSimulator: NSObject, ObservableObject {
         if let lastError { return lastError }
         switch bluetoothState {
         case .poweredOn:
-            if subscriberCount > 0 { return "iPhone połączony · wysyłanie telemetrii" }
-            return isAdvertising ? "Czekam na iPhone’a" : "Logger zatrzymany"
+            if subscriberCount > 0 { return "Telefon połączony · wysyłanie telemetrii" }
+            return isAdvertising ? "Czekam na telefon" : "Logger zatrzymany"
         case .poweredOff: return "Bluetooth jest wyłączony"
         case .unauthorized: return "Brak zgody na Bluetooth"
         case .unsupported: return "Ten Mac nie obsługuje BLE peripheral"
@@ -78,6 +90,40 @@ final class BLEPeripheralSimulator: NSObject, ObservableObject {
         notificationCount = 0
         byteCount = 0
         lastPacketHex = "—"
+        publishDiagnostics()
+    }
+
+    /// The BLE hot path updates plain counters. SwiftUI receives one compact
+    /// snapshot from the slower UI timer instead of several invalidations for
+    /// every telemetry frame.
+    func publishDiagnostics() {
+        let snapshot = SimulatorBLEDiagnostics(
+            notificationCount: notificationCount,
+            byteCount: byteCount,
+            lastPacketHex: lastPacketHex
+        )
+        if diagnostics != snapshot { diagnostics = snapshot }
+    }
+
+    func setSwitch(index: Int, isOn: Bool) {
+        guard controlState.switches.indices.contains(index) else { return }
+        var state = controlState
+        state.switches[index] = isOn
+        applyControlState(state, source: "Symulator · BT Switch \(index + 1) = \(isOn ? "ON" : "OFF")")
+    }
+
+    func setRotary(index: Int, value: Int) {
+        guard controlState.rotaryValues.indices.contains(index), (0...15).contains(value) else { return }
+        var state = controlState
+        state.rotaryValues[index] = UInt8(value)
+        applyControlState(state, source: "Symulator · BT Rotary \(index + 1) = \(value)")
+    }
+
+    private func applyControlState(_ state: SimulatorControlState, source: String) {
+        guard state != controlState else { return }
+        controlState = state
+        lastControlChange = source
+        publishLatestPayload()
     }
 
     private func publishService() {
@@ -200,9 +246,8 @@ extension BLEPeripheralSimulator: @preconcurrency CBPeripheralManagerDelegate {
                 peripheral.respond(to: request, withResult: .unlikelyError)
                 continue
             }
-            controlState = decoded
+            applyControlState(decoded, source: "Touge Dash · potwierdzona ramka sterowania")
             peripheral.respond(to: request, withResult: .success)
-            publishLatestPayload()
         }
     }
 }
