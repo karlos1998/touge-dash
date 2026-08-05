@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Touge Dash</string>
+    <string name="telemetry_channel_name">Telemetria silnika na żywo</string>
+    <string name="alert_channel_name">Alerty silnika</string>
+    <string name="sync_channel_name">Synchronizacja Touge Dash Cloud</string>
+    <string name="stop">Zatrzymaj</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="history">Historia</string>
+    <string name="alerts">Alerty</string>
+    <string name="more">Więcej</string>
+    <string name="connect">Połącz</string>
+    <string name="rescan">Skanuj ponownie</string>
+    <string name="close">Zamknij</string>
+    <string name="connection_details">Połączenie ECUMaster</string>
+    <string name="live_data">Dane na żywo</string>
+    <string name="engine_health">Kondycja silnika</string>
+    <string name="no_drives">Nie ma jeszcze zapisanych przejazdów</string>
+    <string name="permissions_explanation">Bluetooth jest wymagany do odczytu telemetrii z EMULOGGERA. Lokalizacja jest opcjonalna i służy wyłącznie do zapisania trasy w historii przejazdu.</string>
+    <string name="allow_permissions">Zezwól na dostęp</string>
+    <string name="made_by">Stworzono z</string>
+    <string name="by_lets_code_it">przez Let’s Code It — Karol Sójka</string>
+    <string name="edit_dashboard">Edytuj dashboard</string>
+    <string name="demo_data">Dane podglądowe</string>
+    <string name="connected">Połączono</string>
+    <string name="disconnected">Rozłączono</string>
+</resources>

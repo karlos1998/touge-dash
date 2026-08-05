@@ -4,3 +4,15 @@ ios/*.xcworkspace/xcuserdata/
 ios/*.xcodeproj/xcuserdata/
 ios/*.xcodeproj/project.xcworkspace/xcuserdata/
 ios/*.xcodeproj/xcshareddata/WorkspaceSettings.xcsettings
+# Android
+android/.gradle/
+android/local.properties
+android/**/build/
+android/.idea/
+android/*.iml
+android/**/*.iml
+android/captures/
+android/.kotlin/
+android/keystore.properties
+android/*.jks
+android/*.keystore

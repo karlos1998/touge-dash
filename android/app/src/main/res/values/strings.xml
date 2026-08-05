@@ -1,0 +1,26 @@
+<resources>
+    <string name="app_name">Touge Dash</string>
+    <string name="telemetry_channel_name">Live engine telemetry</string>
+    <string name="alert_channel_name">Engine alerts</string>
+    <string name="sync_channel_name">Touge Dash Cloud synchronization</string>
+    <string name="stop">Stop</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="history">History</string>
+    <string name="alerts">Alerts</string>
+    <string name="more">More</string>
+    <string name="connect">Connect</string>
+    <string name="rescan">Scan again</string>
+    <string name="close">Close</string>
+    <string name="connection_details">ECUMaster connection</string>
+    <string name="live_data">Live data</string>
+    <string name="engine_health">Engine health</string>
+    <string name="no_drives">No recorded drives yet</string>
+    <string name="permissions_explanation">Bluetooth permission is required to read telemetry from EMULOGGER. Location is optional and is used only to add a route to your drive history.</string>
+    <string name="allow_permissions">Allow access</string>
+    <string name="made_by">Made with</string>
+    <string name="by_lets_code_it">by Let’s Code It — Karol Sójka</string>
+    <string name="edit_dashboard">Edit dashboard</string>
+    <string name="demo_data">Preview data</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+</resources>
