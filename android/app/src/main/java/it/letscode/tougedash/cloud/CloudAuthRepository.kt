@@ -47,6 +47,10 @@ class CloudAuthRepository(private val context: Context, private val json: Json) 
 
     suspend fun login(email: String, password: String) = authenticate("/api/v1/auth/login", buildJsonObject { put("email", email.trim()); put("password", password) })
     suspend fun register(email: String, password: String, displayName: String) = authenticate("/api/v1/auth/register", buildJsonObject { put("email", email.trim()); put("password", password); put("displayName", displayName.trim()) })
+    suspend fun social(provider: String, token: String) = authenticate("/api/v1/auth/social", buildJsonObject {
+        put("provider", provider)
+        put("token", token)
+    })
     suspend fun exchangeHandoff(code: String) = authenticate("/api/v1/auth/mobile-handoff/exchange", buildJsonObject { put("code", code) })
 
     fun handleUri(uri: Uri?) {
@@ -88,6 +92,7 @@ class CloudAuthRepository(private val context: Context, private val json: Json) 
     }
 
     fun clearError() { mutableError.value = null }
+    fun reportError(message: String) { mutableError.value = message }
 
     private suspend fun authenticate(path: String, body: JsonElement): Boolean {
         mutableWorking.value = true; mutableError.value = null

@@ -25,12 +25,13 @@ android {
         applicationId = "it.letscode.tougedash"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.1.0"
+        versionCode = 5
+        versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "API_BASE_URL", "\"https://touge-dash-engine.letscode.it\"")
         buildConfigField("String", "WEB_BASE_URL", "\"https://touge-dash.letscode.it\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"782348562564-vjs90jpmhp0jusdra883t28go40bndep.apps.googleusercontent.com\"")
     }
 
     signingConfigs {
@@ -100,6 +101,9 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

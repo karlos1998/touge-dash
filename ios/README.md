@@ -101,7 +101,7 @@ do EMU/EMULOGGERA.
 ## Synchronizacja online
 
 Zakładka `Historia` zawiera kartę Touge Dash Cloud. Dostępne są konto
-e-mail/hasło, natywne Sign in with Apple oraz logowanie Google/Facebook przez
+e-mail/hasło, natywne Sign in with Apple oraz logowanie Google przez
 panel WWW. Wariant webowy przekazuje aplikacji jednorazowy kod ważny trzy
 minuty; tokeny nie są umieszczane w adresie callbacku. Sesja i refresh token są
 przechowywane w Keychain.

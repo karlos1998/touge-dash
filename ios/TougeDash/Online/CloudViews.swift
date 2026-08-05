@@ -318,13 +318,8 @@ private struct CloudAuthenticationView: View {
                     .frame(height: 48)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                    HStack(spacing: 10) {
-                        ProviderButton(title: "Google", icon: "G") {
-                            Task { await handleWebAuthentication(provider: "google") }
-                        }
-                        ProviderButton(title: "Facebook", icon: "f") {
-                            Task { await handleWebAuthentication(provider: "facebook") }
-                        }
+                    ProviderButton(title: "Kontynuuj przez Google", icon: "G") {
+                        Task { await handleWebAuthentication(provider: "google") }
                     }
 
                     if let error = account.lastError {

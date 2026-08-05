@@ -496,3 +496,4 @@
 "Połącz się z tym loggerem. Touge Dash poprosi o nazwę nowego auta i automatycznie wyśle jego oczekującą historię." = "Connect to this logger. Touge Dash will ask for a new vehicle name and automatically upload its pending history.";
 "Raport i jego przejazd mają różne przypisanie auta. Przypisz przejazd ponownie, aby naprawić komplet danych." = "The report and its drive are assigned to different vehicles. Reassign the drive to repair the complete data set.";
 "Spróbuj ponownie" = "Try again";
+"Kontynuuj przez Google" = "Continue with Google";

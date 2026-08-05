@@ -43,7 +43,7 @@ zasobów z oficjalnego eDash.
 - bezpieczne linki do raportów incydentów wysyłane mechanikowi bez dostępu do całego auta,
 - Centrum alertów z progami per auto, pracą offline i synchronizacją zmian mechanika,
 - opcjonalne konto i synchronizacja historii z Touge Dash Cloud,
-- logowanie e-mail/hasło, Sign in with Apple oraz bezpieczny handoff Google/Facebook z panelu WWW,
+- logowanie e-mail/hasło, Sign in with Apple oraz bezpieczny handoff Google z panelu WWW,
 - Live Activity uruchamiana automatycznie razem z aplikacją,
 - mały widok Live Activity przygotowany pod CarPlay,
 - dashboard Apple Watch z danymi przesyłanymi na żywo z iPhone'a,
