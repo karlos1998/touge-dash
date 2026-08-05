@@ -29,6 +29,7 @@
 		4423D8E79B07BC7DC7227C27 /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		44EC962E52388A57767D2763 /* DriveVideoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFB9F44D2E057B4F68D3983 /* DriveVideoModels.swift */; };
 		461565700F8C1458526589B9 /* DashboardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8920142F4ACD5BE349220C77 /* DashboardModels.swift */; };
+		4E66D0765BC8FDBEB4BA1694 /* CloudSyncStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECDB1BC135BDFB5F1E764EBA /* CloudSyncStatusViews.swift */; };
 		571D08AD010FE11015D25FE5 /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		60AAEF7A1ECA24D0B7DB69EF /* TelemetryActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1F550E6FB4C529DD8B8D70 /* TelemetryActivityManager.swift */; };
 		6CD0077D0BC4E21C942B21FD /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = CE786C0F9400317AE609A8E4 /* InfoPlist.strings */; };
@@ -183,6 +184,7 @@
 		E697F34CB3FBBBECDE56B5FB /* TougeDashWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TougeDashWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E877436DFF1CF205296B9649 /* IncidentReportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentReportView.swift; sourceTree = "<group>"; };
 		EC8734024210C5690446D7CB /* LocationTrackingService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationTrackingService.swift; sourceTree = "<group>"; };
+		ECDB1BC135BDFB5F1E764EBA /* CloudSyncStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncStatusViews.swift; sourceTree = "<group>"; };
 		EEC2FC81C9B018C283812A62 /* IncidentCaptureEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncidentCaptureEngineTests.swift; sourceTree = "<group>"; };
 		F1D4BDC1640C2CC10C5B971C /* CloudCredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudCredentialStore.swift; sourceTree = "<group>"; };
 		F289D7AADCD698F390E191DE /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -366,6 +368,7 @@
 				26707E250162A5983CD8DFA1 /* CloudModels.swift */,
 				767D9110B65429B111BC8471 /* CloudPasswordPolicy.swift */,
 				D642E0E53B986134A1AD69DA /* CloudSyncManager.swift */,
+				ECDB1BC135BDFB5F1E764EBA /* CloudSyncStatusViews.swift */,
 				D8B13510CE4FA317F340E83B /* CloudViews.swift */,
 				F31DF319B7913DE4E073912F /* CloudWebAuthenticationSession.swift */,
 			);
@@ -628,6 +631,7 @@
 				1B5AB2DCE6CC29A74145E2AD /* CloudModels.swift in Sources */,
 				A3D885FB266C889302457D68 /* CloudPasswordPolicy.swift in Sources */,
 				C6506C3F08C2E3E901D53FDE /* CloudSyncManager.swift in Sources */,
+				4E66D0765BC8FDBEB4BA1694 /* CloudSyncStatusViews.swift in Sources */,
 				9F0A9C87668727632F2E2367 /* CloudViews.swift in Sources */,
 				0EBCD9A1BB5ED65085F937EC /* CloudWebAuthenticationSession.swift in Sources */,
 				F469901AF43C776D3A20B4D3 /* ConfigurableDashboardView.swift in Sources */,

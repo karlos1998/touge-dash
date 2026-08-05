@@ -248,9 +248,10 @@ final class TelemetryController: ObservableObject {
             watchBridge.sendAlertEvents(alertEvaluation.triggered, snapshot: value)
         }
         if let change = historyRecorder.record(value) {
-            if !bluetooth.connectedIsSimulator {
-                cloudSync.noteLocalSampleRecorded(sessionBecamePending: change.sessionBecamePending)
-            }
+            cloudSync.noteLocalSampleRecorded(
+                sessionID: change.sessionID,
+                sessionBecamePending: change.sessionBecamePending
+            )
         }
         if let sessionID = historyRecorder.activeSessionID {
             if sessionID != lastVideoSessionID || now.timeIntervalSince(lastVideoHeartbeat) >= 1 {

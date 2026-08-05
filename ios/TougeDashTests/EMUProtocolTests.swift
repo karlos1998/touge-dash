@@ -175,6 +175,37 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertNotEqual(firstChange?.sessionID, nextSessionChange?.sessionID)
     }
 
+    @MainActor
+    func testHistoryRecorderNeverResumesAnotherLoggersRecentSession() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: DriveSession.self,
+            TelemetryHistorySample.self,
+            DriveIncident.self,
+            TimelineAnnotation.self,
+            configurations: configuration
+        )
+        UserDefaults.standard.set(false, forKey: LocationTrackingService.enabledDefaultsKey)
+        let recorder = TelemetryHistoryRecorder(
+            container: container,
+            locationTracker: LocationTrackingService()
+        )
+        let simulatorID = LocalVehicleIdentity.simulatorID
+        let realLoggerID = UUID()
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+
+        recorder.activateVehicle(simulatorID)
+        let simulatorChange = recorder.record(.preview, at: start)
+        recorder.activateVehicle(realLoggerID)
+        let realLoggerChange = recorder.record(.preview, at: start.addingTimeInterval(1))
+        recorder.saveNow()
+
+        let sessions = try container.mainContext.fetch(FetchDescriptor<DriveSession>())
+        XCTAssertEqual(sessions.count, 2)
+        XCTAssertEqual(Set(sessions.map(\.vehicleID)), [simulatorID, realLoggerID])
+        XCTAssertNotEqual(simulatorChange?.sessionID, realLoggerChange?.sessionID)
+    }
+
     func testBluetoothPolicyNeverAllowsLoggerWrites() {
         let allProperties: CBCharacteristicProperties = [.read, .notify, .write, .writeWithoutResponse]
 
@@ -209,5 +240,23 @@ final class EMUProtocolTests: XCTestCase {
 
         XCTAssertEqual(samples.fraction, 0.25, accuracy: 0.001)
         XCTAssertEqual(emptySession.fraction, 0.5, accuracy: 0.001)
+    }
+
+    func testPerItemCloudProgressTracksOnlyItsOwnSamples() {
+        let uploading = CloudSyncItemStatus.uploading(
+            completedSamples: 2_500,
+            totalSamples: 10_000,
+            transferredBytes: 820_000
+        )
+        let empty = CloudSyncItemStatus.uploading(
+            completedSamples: 0,
+            totalSamples: 0,
+            transferredBytes: 128
+        )
+
+        XCTAssertEqual(try XCTUnwrap(uploading.fraction), 0.25, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(empty.fraction), 1, accuracy: 0.001)
+        XCTAssertNil(CloudSyncItemStatus.blocked(.simulatorData).fraction)
+        XCTAssertNil(CloudSyncItemStatus.failed("network").fraction)
     }
 }

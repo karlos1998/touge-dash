@@ -52,7 +52,7 @@ struct HistoryView: View {
                                         cloudSync: cloudSync
                                     )
                                 } label: {
-                                    IncidentListRow(incident: incident)
+                                    IncidentListRow(incident: incident, cloudSync: cloudSync)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -88,7 +88,8 @@ struct HistoryView: View {
                                 } label: {
                                     DriveSessionRow(
                                         session: session,
-                                        recordings: videos.filter { $0.sessionID == session.id }
+                                        recordings: videos.filter { $0.sessionID == session.id },
+                                        cloudSync: cloudSync
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -218,6 +219,7 @@ private struct HistoryEmptyState: View {
 private struct DriveSessionRow: View {
     let session: DriveSession
     let recordings: [DriveVideoRecording]
+    @ObservedObject var cloudSync: CloudSyncManager
 
     private var videoBytes: Int64 { recordings.reduce(0) { $0 + $1.fileSizeBytes } }
 
@@ -247,9 +249,7 @@ private struct DriveSessionRow: View {
                         .padding(.vertical, 5)
                         .background(Color.tougeBlue.opacity(0.12), in: Capsule())
                 }
-                Image(systemName: session.syncState == .synced ? "icloud.fill" : "icloud.and.arrow.up")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(session.syncState == .synced ? Color.tougeMint : Color.tougeOrange)
+                CloudSyncItemBadge(status: cloudSync.sessionStatus(for: session))
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.tertiary)
@@ -371,6 +371,17 @@ private struct DriveSessionDetailView: View {
                 LazyVStack(spacing: 14) {
                     SessionDetailHeader(session: session)
 
+                    CloudSyncItemCard(
+                        itemName: "PRZEJAZD",
+                        sampleCount: session.sampleCount,
+                        status: cloudSync.sessionStatus(for: session),
+                        activeVehicleName: cloudSync.activeVehicle?.displayName,
+                        onRetry: { Task { await cloudSync.retrySynchronization() } },
+                        onAssignTestData: session.vehicleID == LocalVehicleIdentity.simulatorID
+                            ? { Task { await cloudSync.assignTestSessionToActiveVehicle(sessionID: session.id) } }
+                            : nil
+                    )
+
                     DriveVideoHistorySection(
                         session: session,
                         recordings: recordings,
@@ -408,7 +419,7 @@ private struct DriveSessionDetailView: View {
                                         cloudSync: cloudSync
                                     )
                                 } label: {
-                                    IncidentListRow(incident: incident)
+                                    IncidentListRow(incident: incident, cloudSync: cloudSync)
                                 }
                                 .buttonStyle(.plain)
                             }

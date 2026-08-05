@@ -139,7 +139,9 @@ final class TelemetryHistoryRecorder: ObservableObject {
     }
 
     private func restoreRecentSession() {
+        let activeVehicleID = vehicleID
         var descriptor = FetchDescriptor<DriveSession>(
+            predicate: #Predicate { $0.vehicleID == activeVehicleID },
             sortBy: [SortDescriptor(\DriveSession.endedAt, order: .reverse)]
         )
         descriptor.fetchLimit = 1

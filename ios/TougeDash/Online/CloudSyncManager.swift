@@ -25,6 +25,26 @@ struct CloudSyncProgress: Equatable, Sendable {
     }
 }
 
+enum CloudSyncBlockReason: Equatable, Sendable {
+    case simulatorData
+    case vehicleNotLinked
+    case parentVehicleMismatch
+}
+
+enum CloudSyncItemStatus: Equatable, Sendable {
+    case queued
+    case uploading(completedSamples: Int, totalSamples: Int, transferredBytes: Int64)
+    case synced
+    case blocked(CloudSyncBlockReason)
+    case failed(String)
+
+    var fraction: Double? {
+        guard case let .uploading(completedSamples, totalSamples, _) = self else { return nil }
+        guard totalSamples > 0 else { return 1 }
+        return min(1, Double(completedSamples) / Double(totalSamples))
+    }
+}
+
 @MainActor
 final class CloudSyncManager: ObservableObject {
     enum State: Equatable {
@@ -47,6 +67,11 @@ final class CloudSyncManager: ObservableObject {
     @Published private(set) var progress: CloudSyncProgress?
     @Published private(set) var lastTransferBytes: Int64 = 0
     @Published private(set) var lastSynchronizedAt: Date?
+    @Published private(set) var blockedTestSessions = 0
+    @Published private(set) var blockedTestIncidents = 0
+    @Published private(set) var uploadablePendingItems = 0
+    @Published private(set) var sessionStatuses: [UUID: CloudSyncItemStatus] = [:]
+    @Published private(set) var incidentStatuses: [UUID: CloudSyncItemStatus] = [:]
 
     private let account: CloudAccountService
     private let locationTracker: LocationTrackingService
@@ -155,6 +180,8 @@ final class CloudSyncManager: ObservableObject {
             activeVehicle = nil
             pendingHardwareIdentifier = nil
             progress = nil
+            sessionStatuses.removeAll()
+            incidentStatuses.removeAll()
             state = .signedOut
             dashboardTemplates.markSignedOut()
             return
@@ -210,14 +237,25 @@ final class CloudSyncManager: ObservableObject {
         isSynchronizing = true
         defer { isSynchronizing = false }
         state = .syncing
+        var synchronizationErrors: [Error] = []
         do {
             try await synchronizeDashboardTemplates()
-            let associations = currentAccountAssociations()
-            guard !associations.isEmpty else {
-                lastSynchronizedAt = .now
-                state = pendingHardwareIdentifier == nil ? .ready : .waitingForVehicleName
-                return
-            }
+        } catch {
+            // Dashboard layouts are independent from telemetry. A template error
+            // must never strand drives or incident reports behind it.
+            synchronizationErrors.append(error)
+        }
+
+        let associations = currentAccountAssociations()
+        guard !associations.isEmpty else {
+            lastSynchronizedAt = .now
+            state = synchronizationErrors.first.map { .failed($0.localizedDescription) }
+                ?? (pendingHardwareIdentifier == nil ? .ready : .waitingForVehicleName)
+            updatePendingCount()
+            return
+        }
+
+        do {
             let queued = try pendingSessionEntries(for: associations)
             let queuedIncidents = try pendingIncidentEntries(for: associations)
             let queuedAnnotations = try pendingAnnotationEntries(for: associations)
@@ -236,25 +274,45 @@ final class CloudSyncManager: ObservableObject {
             )
 
             for entry in queued {
-                try await upload(session: entry.session, vehicleID: entry.remoteVehicleID)
+                sessionStatuses[entry.session.id] = .queued
+                do {
+                    try await upload(session: entry.session, vehicleID: entry.remoteVehicleID)
+                } catch {
+                    sessionStatuses[entry.session.id] = .failed(error.localizedDescription)
+                    synchronizationErrors.append(error)
+                }
             }
             for entry in queuedIncidents {
-                try await upload(incident: entry.incident, vehicleID: entry.remoteVehicleID)
+                incidentStatuses[entry.incident.id] = .queued
+                do {
+                    try await upload(incident: entry.incident, vehicleID: entry.remoteVehicleID)
+                } catch {
+                    incidentStatuses[entry.incident.id] = .failed(error.localizedDescription)
+                    synchronizationErrors.append(error)
+                }
             }
             for entry in queuedAnnotations {
-                try await upload(annotation: entry.annotation, vehicleID: entry.remoteVehicleID)
+                do {
+                    try await upload(annotation: entry.annotation, vehicleID: entry.remoteVehicleID)
+                } catch {
+                    synchronizationErrors.append(error)
+                }
             }
             try context.save()
 
             // Alert configuration is synchronized after telemetry so a rules-only
             // failure can never prevent a recorded drive from reaching the server.
             for association in associations {
-                try await synchronizeAlertRules(for: association)
+                do {
+                    try await synchronizeAlertRules(for: association)
+                } catch {
+                    synchronizationErrors.append(error)
+                }
             }
 
             lastTransferBytes = progress?.transferredBytes ?? 0
             lastSynchronizedAt = .now
-            state = .ready
+            state = synchronizationErrors.first.map { .failed($0.localizedDescription) } ?? .ready
             updatePendingCount()
         } catch {
             state = .failed(error.localizedDescription)
@@ -279,7 +337,8 @@ final class CloudSyncManager: ObservableObject {
         }
     }
 
-    func noteLocalSampleRecorded(sessionBecamePending: Bool) {
+    func noteLocalSampleRecorded(sessionID: UUID, sessionBecamePending: Bool) {
+        sessionStatuses.removeValue(forKey: sessionID)
         pendingSamples += 1
         estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample
         if sessionBecamePending {
@@ -327,6 +386,95 @@ final class CloudSyncManager: ObservableObject {
         currentAccountAssociations()
             .first(where: { $0.hardwareIdentifier == localHardwareIdentifier })?
             .vehicle.id
+    }
+
+    func sessionStatus(for session: DriveSession) -> CloudSyncItemStatus {
+        if let transient = sessionStatuses[session.id] { return transient }
+        if session.syncState == .synced { return .synced }
+        if session.vehicleID == LocalVehicleIdentity.simulatorID { return .blocked(.simulatorData) }
+        if remoteVehicleID(for: session.vehicleID) == nil { return .blocked(.vehicleNotLinked) }
+        return .queued
+    }
+
+    func incidentStatus(for incident: DriveIncident) -> CloudSyncItemStatus {
+        if let transient = incidentStatuses[incident.id] { return transient }
+        if incident.syncState == .synced { return .synced }
+
+        let sessionID = incident.sessionID
+        var descriptor = FetchDescriptor<DriveSession>(predicate: #Predicate { $0.id == sessionID })
+        descriptor.fetchLimit = 1
+        if let parent = try? context.fetch(descriptor).first {
+            if parent.vehicleID == LocalVehicleIdentity.simulatorID {
+                return .blocked(.simulatorData)
+            }
+            if parent.vehicleID != incident.vehicleID {
+                return .blocked(.parentVehicleMismatch)
+            }
+        }
+        if incident.vehicleID == LocalVehicleIdentity.simulatorID { return .blocked(.simulatorData) }
+        guard remoteVehicleID(for: incident.vehicleID) != nil else { return .blocked(.vehicleNotLinked) }
+        return .queued
+    }
+
+    func retrySynchronization() async {
+        await syncNow()
+    }
+
+    func assignTestSessionToActiveVehicle(sessionID: UUID) async {
+        await assignTestSessionsToActiveVehicle(sessionIDs: [sessionID])
+    }
+
+    func assignAllTestSessionsToActiveVehicle() async {
+        let testSessions = ((try? context.fetch(FetchDescriptor<DriveSession>())) ?? [])
+            .filter { $0.vehicleID == LocalVehicleIdentity.simulatorID && $0.syncState != .synced }
+        await assignTestSessionsToActiveVehicle(sessionIDs: Set(testSessions.map(\.id)))
+    }
+
+    private func assignTestSessionsToActiveVehicle(sessionIDs: Set<UUID>) async {
+        guard !sessionIDs.isEmpty else { return }
+        guard account.isAuthenticated,
+              let activeVehicle,
+              let association = currentAccountAssociations().first(where: { $0.vehicle.id == activeVehicle.id }) else {
+            state = .failed(localized("Najpierw zaloguj się i wybierz auto."))
+            return
+        }
+
+        do {
+            let sessions = try context.fetch(FetchDescriptor<DriveSession>())
+                .filter { sessionIDs.contains($0.id) && $0.vehicleID == LocalVehicleIdentity.simulatorID }
+            guard !sessions.isEmpty else { return }
+
+            let incidents = try context.fetch(FetchDescriptor<DriveIncident>())
+            let annotations = try context.fetch(FetchDescriptor<TimelineAnnotation>())
+            for session in sessions {
+                session.vehicleID = association.hardwareIdentifier
+                session.remoteID = nil
+                session.syncState = .local
+                sessionStatuses.removeValue(forKey: session.id)
+
+                for incident in incidents where incident.sessionID == session.id {
+                    incident.vehicleID = association.hardwareIdentifier
+                    incident.remoteID = nil
+                    incident.syncState = .local
+                    incidentStatuses.removeValue(forKey: incident.id)
+                }
+
+                for annotation in annotations where annotation.sessionID == session.id {
+                    annotation.vehicleID = association.hardwareIdentifier
+                    annotation.syncState = .local
+                }
+            }
+
+            try context.save()
+            updatePendingCount()
+            await syncNow()
+        } catch {
+            for sessionID in sessionIDs {
+                sessionStatuses[sessionID] = .failed(error.localizedDescription)
+            }
+            state = .failed(error.localizedDescription)
+            updatePendingCount()
+        }
     }
 
     func publishLive(_ snapshot: TelemetrySnapshot) {
@@ -386,6 +534,12 @@ final class CloudSyncManager: ObservableObject {
         let uploadedContainsLocation = session.containsLocation
         var offset = 0
         var sentEmptySession = false
+        var itemTransferredBytes: Int64 = 0
+        sessionStatuses[session.id] = .uploading(
+            completedSamples: 0,
+            totalSamples: uploadedSampleCount,
+            transferredBytes: 0
+        )
         while offset < uploadedSampleCount || (uploadedSampleCount == 0 && !sentEmptySession) {
             let chunk = try sessionSamples(sessionID: session.id, offset: offset, limit: 2_000)
             if uploadedSampleCount > 0 && chunk.isEmpty {
@@ -413,6 +567,12 @@ final class CloudSyncManager: ObservableObject {
                 body: request
             )
             session.remoteID = result.sessionId.uuidString
+            itemTransferredBytes += Int64(encodedSize)
+            sessionStatuses[session.id] = .uploading(
+                completedSamples: offset + chunk.count,
+                totalSamples: uploadedSampleCount,
+                transferredBytes: itemTransferredBytes
+            )
             if var progress {
                 progress.completedSamples += chunk.count
                 progress.transferredBytes += Int64(encodedSize)
@@ -427,6 +587,8 @@ final class CloudSyncManager: ObservableObject {
             sentEmptySession = true
         }
         session.syncState = session.revision == uploadedRevision ? .synced : .changedAfterSync
+        try context.save()
+        sessionStatuses[session.id] = session.syncState == .synced ? .synced : .queued
         if var progress {
             progress.completedSessions += 1
             self.progress = progress
@@ -503,6 +665,13 @@ final class CloudSyncManager: ObservableObject {
         let chunks = samples.isEmpty ? [[]] : stride(from: 0, to: samples.count, by: 2_000).map {
             Array(samples[$0..<min($0 + 2_000, samples.count)])
         }
+        var completedSamples = 0
+        var itemTransferredBytes: Int64 = 0
+        incidentStatuses[incident.id] = .uploading(
+            completedSamples: 0,
+            totalSamples: samples.count,
+            transferredBytes: 0
+        )
         for chunk in chunks {
             let request = CloudIncidentUpload(
                 id: incident.id,
@@ -532,6 +701,13 @@ final class CloudSyncManager: ObservableObject {
                 body: request
             )
             incident.remoteID = result.incidentId.uuidString
+            completedSamples += chunk.count
+            itemTransferredBytes += Int64(encodedSize)
+            incidentStatuses[incident.id] = .uploading(
+                completedSamples: completedSamples,
+                totalSamples: samples.count,
+                transferredBytes: itemTransferredBytes
+            )
             if var progress {
                 progress.completedSamples += chunk.count
                 progress.transferredBytes += Int64(encodedSize)
@@ -539,6 +715,8 @@ final class CloudSyncManager: ObservableObject {
             }
         }
         incident.syncState = .synced
+        try context.save()
+        incidentStatuses[incident.id] = .synced
         if var progress {
             progress.completedIncidents += 1
             self.progress = progress
@@ -587,6 +765,7 @@ final class CloudSyncManager: ObservableObject {
         )
         annotation.modifiedAt = response.updatedAt
         annotation.syncState = .synced
+        try context.save()
         if var progress {
             progress.completedAnnotations += 1
             progress.transferredBytes += Int64(encodedSize)
@@ -600,26 +779,33 @@ final class CloudSyncManager: ObservableObject {
     }
 
     private func updatePendingCount() {
-        let associations = currentAccountAssociations()
-        let sessions: [DriveSession]
-        if associations.isEmpty {
-            let descriptor = FetchDescriptor<DriveSession>(predicate: #Predicate { $0.syncStateRaw != "synced" })
-            sessions = (try? context.fetch(descriptor)) ?? []
-        } else {
-            sessions = (try? pendingSessionEntries(for: associations).map(\.session)) ?? []
-        }
-        let incidents: [DriveIncident]
-        let annotations: [TimelineAnnotation]
-        if associations.isEmpty {
-            incidents = (try? context.fetch(FetchDescriptor<DriveIncident>(predicate: #Predicate { $0.syncStateRaw != "synced" }))) ?? []
-            annotations = (try? context.fetch(FetchDescriptor<TimelineAnnotation>(predicate: #Predicate { $0.syncStateRaw != "synced" }))) ?? []
-        } else {
-            incidents = (try? pendingIncidentEntries(for: associations).map(\.incident)) ?? []
-            annotations = (try? pendingAnnotationEntries(for: associations).map(\.annotation)) ?? []
-        }
+        let descriptor = FetchDescriptor<DriveSession>(predicate: #Predicate { $0.syncStateRaw != "synced" })
+        let sessions = (try? context.fetch(descriptor)) ?? []
+        let incidents = (try? context.fetch(FetchDescriptor<DriveIncident>(
+            predicate: #Predicate { $0.syncStateRaw != "synced" }
+        ))) ?? []
+        let annotations = (try? context.fetch(FetchDescriptor<TimelineAnnotation>(
+            predicate: #Predicate { $0.syncStateRaw != "synced" }
+        ))) ?? []
         pendingSessions = sessions.count
         pendingIncidents = incidents.count
         pendingAnnotations = annotations.count
+        let linkedHardwareIDs = Set(currentAccountAssociations().map(\.hardwareIdentifier))
+        let uploadableSessions = sessions.filter { linkedHardwareIDs.contains($0.vehicleID) }
+        let allSessions = (try? context.fetch(FetchDescriptor<DriveSession>())) ?? []
+        let sessionVehicles = Dictionary(uniqueKeysWithValues: allSessions.map { ($0.id, $0.vehicleID) })
+        blockedTestSessions = sessions.filter { $0.vehicleID == LocalVehicleIdentity.simulatorID }.count
+        blockedTestIncidents = incidents.filter {
+            $0.vehicleID == LocalVehicleIdentity.simulatorID ||
+                sessionVehicles[$0.sessionID] == LocalVehicleIdentity.simulatorID
+        }.count
+        let uploadableIncidents = incidents.filter {
+            linkedHardwareIDs.contains($0.vehicleID) && sessionVehicles[$0.sessionID] == $0.vehicleID
+        }
+        let uploadableAnnotations = annotations.filter {
+            linkedHardwareIDs.contains($0.vehicleID) && sessionVehicles[$0.sessionID] == $0.vehicleID
+        }
+        uploadablePendingItems = uploadableSessions.count + uploadableIncidents.count + uploadableAnnotations.count
         pendingSamples = sessions.reduce(0) { $0 + $1.sampleCount } + incidents.reduce(0) { $0 + $1.sampleCount }
         estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample + Int64(annotations.count * 512)
     }
@@ -661,6 +847,9 @@ final class CloudSyncManager: ObservableObject {
         for associations: [VehicleAssociation]
     ) throws -> [(incident: DriveIncident, remoteVehicleID: UUID)] {
         var result: [(DriveIncident, UUID)] = []
+        let sessionVehicles = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<DriveSession>()).map {
+            ($0.id, $0.vehicleID)
+        })
         for association in associations {
             let hardwareIdentifier = association.hardwareIdentifier
             let descriptor = FetchDescriptor<DriveIncident>(
@@ -668,7 +857,9 @@ final class CloudSyncManager: ObservableObject {
                     incident.vehicleID == hardwareIdentifier && incident.syncStateRaw != "synced"
                 }
             )
-            result.append(contentsOf: try context.fetch(descriptor).map { ($0, association.vehicle.id) })
+            result.append(contentsOf: try context.fetch(descriptor)
+                .filter { sessionVehicles[$0.sessionID] == $0.vehicleID }
+                .map { ($0, association.vehicle.id) })
         }
         return result.sorted { $0.0.triggeredAt < $1.0.triggeredAt }
     }
@@ -677,6 +868,9 @@ final class CloudSyncManager: ObservableObject {
         for associations: [VehicleAssociation]
     ) throws -> [(annotation: TimelineAnnotation, remoteVehicleID: UUID)] {
         var result: [(TimelineAnnotation, UUID)] = []
+        let sessionVehicles = Dictionary(uniqueKeysWithValues: try context.fetch(FetchDescriptor<DriveSession>()).map {
+            ($0.id, $0.vehicleID)
+        })
         for association in associations {
             let hardwareIdentifier = association.hardwareIdentifier
             let descriptor = FetchDescriptor<TimelineAnnotation>(
@@ -684,7 +878,9 @@ final class CloudSyncManager: ObservableObject {
                     annotation.vehicleID == hardwareIdentifier && annotation.syncStateRaw != "synced"
                 }
             )
-            result.append(contentsOf: try context.fetch(descriptor).map { ($0, association.vehicle.id) })
+            result.append(contentsOf: try context.fetch(descriptor)
+                .filter { sessionVehicles[$0.sessionID] == $0.vehicleID }
+                .map { ($0, association.vehicle.id) })
         }
         return result.sorted { $0.0.timestamp < $1.0.timestamp }
     }
