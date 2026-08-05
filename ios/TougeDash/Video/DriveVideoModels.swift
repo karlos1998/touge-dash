@@ -135,17 +135,28 @@ struct PreparedDriveVideoImport: Sendable {
     let metadata: DriveVideoAssetMetadata
 }
 
+enum DriveVideoPreparationStage: Sendable {
+    case inspecting
+    case copying(Double)
+}
+
 enum DriveVideoImportService {
-    nonisolated static func prepare(from transfer: DriveVideoTransfer) async throws -> PreparedDriveVideoImport {
+    nonisolated static func prepare(
+        from transfer: DriveVideoTransfer,
+        onProgress: (@MainActor @Sendable (DriveVideoPreparationStage) -> Void)? = nil
+    ) async throws -> PreparedDriveVideoImport {
         defer { try? FileManager.default.removeItem(at: transfer.fileURL) }
+        await onProgress?(.inspecting)
         let metadata = try await DriveVideoAssetInspector.metadata(for: transfer.fileURL)
         let sourceExtension = transfer.fileURL.pathExtension.isEmpty ? "mov" : transfer.fileURL.pathExtension.lowercased()
         let destination = try DriveVideoFileStore.newRecordingURL(fileExtension: sourceExtension)
 
         do {
-            try FileManager.default.copyItem(at: transfer.fileURL, to: destination)
-            let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
-            let bytes = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+            let bytes = try await copyFile(
+                from: transfer.fileURL,
+                to: destination,
+                onProgress: onProgress
+            )
             return PreparedDriveVideoImport(
                 fileName: destination.lastPathComponent,
                 displayName: transfer.fileURL.deletingPathExtension().lastPathComponent,
@@ -156,6 +167,45 @@ enum DriveVideoImportService {
             try? FileManager.default.removeItem(at: destination)
             throw error
         }
+    }
+
+    private nonisolated static func copyFile(
+        from source: URL,
+        to destination: URL,
+        onProgress: (@MainActor @Sendable (DriveVideoPreparationStage) -> Void)?
+    ) async throws -> Int64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: source.path)
+        let totalBytes = max(0, (attributes[.size] as? NSNumber)?.int64Value ?? 0)
+        guard FileManager.default.createFile(atPath: destination.path, contents: nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+
+        let sourceHandle = try FileHandle(forReadingFrom: source)
+        let destinationHandle = try FileHandle(forWritingTo: destination)
+        defer {
+            try? sourceHandle.close()
+            try? destinationHandle.close()
+        }
+
+        // Four-megabyte chunks keep memory bounded without flooding SwiftUI with
+        // hundreds of progress updates per second on fast local storage.
+        let chunkSize = 4_194_304
+        var copiedBytes: Int64 = 0
+        await onProgress?(.copying(0))
+
+        while let data = try sourceHandle.read(upToCount: chunkSize), !data.isEmpty {
+            try Task.checkCancellation()
+            try destinationHandle.write(contentsOf: data)
+            copiedBytes += Int64(data.count)
+            let fraction = totalBytes > 0
+                ? min(1, Double(copiedBytes) / Double(totalBytes))
+                : 0
+            await onProgress?(.copying(fraction))
+        }
+
+        try destinationHandle.synchronize()
+        await onProgress?(.copying(1))
+        return copiedBytes
     }
 }
 

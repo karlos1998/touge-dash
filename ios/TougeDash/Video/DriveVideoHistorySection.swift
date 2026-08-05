@@ -4,6 +4,61 @@ import PhotosUI
 import SwiftData
 import SwiftUI
 
+private enum GalleryVideoImportStage: Equatable {
+    case retrieving(Double?)
+    case inspecting
+    case copying(Double)
+    case saving
+
+    var step: Int {
+        switch self {
+        case .retrieving: 1
+        case .inspecting: 2
+        case .copying: 3
+        case .saving: 4
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .retrieving: localized("Pobieranie filmu ze Zdjęć…")
+        case .inspecting: localized("Analizowanie filmu…")
+        case .copying: localized("Tworzenie lokalnej kopii roboczej…")
+        case .saving: localized("Zapisywanie projektu…")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .retrieving: "icloud.and.arrow.down.fill"
+        case .inspecting: "waveform.badge.magnifyingglass"
+        case .copying: "internaldrive.fill"
+        case .saving: "checkmark.circle.fill"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .retrieving:
+            localized("Jeśli film znajduje się w iCloud, czas zależy od połączenia z internetem.")
+        case .inspecting:
+            localized("Odczytywanie czasu, obrazu i dźwięku.")
+        case .copying:
+            localized("Film jest kopiowany do lokalnej przestrzeni Touge Dash.")
+        case .saving:
+            localized("Przygotowywanie projektu do edycji.")
+        }
+    }
+
+    var fraction: Double? {
+        switch self {
+        case .retrieving(let fraction): fraction
+        case .copying(let fraction): fraction
+        case .inspecting, .saving: nil
+        }
+    }
+}
+
 struct DriveVideoHistorySection: View {
     @Environment(\.modelContext) private var modelContext
     let session: DriveSession
@@ -21,6 +76,7 @@ struct DriveVideoHistorySection: View {
     @State private var recordingPendingDeletion: DriveVideoRecording?
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isImportingVideo = false
+    @State private var importStage: GalleryVideoImportStage = .retrieving(nil)
     @State private var importError: String?
 
     private var capturedRecordings: [DriveVideoRecording] {
@@ -248,14 +304,7 @@ struct DriveVideoHistorySection: View {
             }
 
             if isImportingVideo {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text(localized("Tworzenie lokalnej kopii roboczej…"))
-                        .font(.caption.weight(.bold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(16)
-                .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 14))
+                importProgressCard
             } else if externalProjects.isEmpty {
                 VStack(spacing: 9) {
                     Image(systemName: "photo.on.rectangle.angled")
@@ -286,6 +335,44 @@ struct DriveVideoHistorySection: View {
             .font(.caption2)
             .foregroundStyle(.secondary)
         }
+    }
+
+    private var importProgressCard: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 10) {
+                Image(systemName: importStage.systemImage)
+                    .foregroundStyle(Color.tougeMint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(importStage.title)
+                        .font(.caption.weight(.black))
+                    Text(String(format: localized("Etap %d z 4"), importStage.step))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if let fraction = importStage.fraction {
+                    Text("\(Int((fraction * 100).rounded()))%")
+                        .font(.caption.monospacedDigit().weight(.black))
+                        .foregroundStyle(Color.tougeMint)
+                } else {
+                    ProgressView()
+                        .tint(.tougeMint)
+                }
+            }
+
+            if let fraction = importStage.fraction {
+                ProgressView(value: fraction, total: 1)
+                    .tint(.tougeMint)
+            }
+
+            Text(importStage.detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
     }
 
     private func externalProjectRow(_ project: DriveVideoRecording, index: Int) -> some View {
@@ -377,6 +464,7 @@ struct DriveVideoHistorySection: View {
     private func importVideo(from item: PhotosPickerItem) async {
         guard !isImportingVideo else { return }
         isImportingVideo = true
+        importStage = .retrieving(nil)
         var copiedFileName: String?
         var insertedRecording: DriveVideoRecording?
         defer {
@@ -384,11 +472,17 @@ struct DriveVideoHistorySection: View {
             selectedPhotoItem = nil
         }
         do {
-            guard let transfer = try await item.loadTransferable(type: DriveVideoTransfer.self) else {
-                throw DriveVideoImportError.unavailable
+            let transfer = try await loadVideoTransfer(from: item)
+            let prepared = try await DriveVideoImportService.prepare(from: transfer) { stage in
+                switch stage {
+                case .inspecting:
+                    importStage = .inspecting
+                case .copying(let fraction):
+                    importStage = .copying(fraction)
+                }
             }
-            let prepared = try await DriveVideoImportService.prepare(from: transfer)
             copiedFileName = prepared.fileName
+            importStage = .saving
             let recording = DriveVideoRecording(
                 sessionID: session.id,
                 fileName: prepared.fileName,
@@ -418,6 +512,41 @@ struct DriveVideoHistorySection: View {
             }
             if let insertedRecording { modelContext.delete(insertedRecording) }
             importError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func loadVideoTransfer(from item: PhotosPickerItem) async throws -> DriveVideoTransfer {
+        var monitorTask: Task<Void, Never>?
+        defer { monitorTask?.cancel() }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let progress = item.loadTransferable(type: DriveVideoTransfer.self) { result in
+                switch result {
+                case .success(let transfer):
+                    if let transfer {
+                        continuation.resume(returning: transfer)
+                    } else {
+                        continuation.resume(throwing: DriveVideoImportError.unavailable)
+                    }
+                case .failure(let error):
+                    continuation.resume(throwing: error)
+                }
+            }
+
+            let currentFraction: Double? = progress.totalUnitCount > 0
+                ? min(1, max(0, progress.fractionCompleted))
+                : nil
+            importStage = .retrieving(currentFraction)
+            monitorTask = Task { @MainActor in
+                while !Task.isCancelled, !progress.isFinished {
+                    let fraction: Double? = progress.totalUnitCount > 0
+                        ? min(1, max(0, progress.fractionCompleted))
+                        : nil
+                    importStage = .retrieving(fraction)
+                    try? await Task.sleep(for: .milliseconds(120))
+                }
+            }
         }
     }
 

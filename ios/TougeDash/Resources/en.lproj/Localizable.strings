@@ -465,6 +465,14 @@
 "Osobne projekty · ręczne dopasowanie telemetrii" = "Separate projects · manually aligned telemetry";
 "Nowy montaż" = "New edit";
 "Tworzenie lokalnej kopii roboczej…" = "Creating a local working copy…";
+"Pobieranie filmu ze Zdjęć…" = "Downloading video from Photos…";
+"Jeśli film znajduje się w iCloud, czas zależy od połączenia z internetem." = "If the video is stored in iCloud, this depends on your internet connection.";
+"Analizowanie filmu…" = "Analyzing video…";
+"Odczytywanie czasu, obrazu i dźwięku." = "Reading duration, video and audio metadata.";
+"Film jest kopiowany do lokalnej przestrzeni Touge Dash." = "The video is being copied to Touge Dash local storage.";
+"Zapisywanie projektu…" = "Saving project…";
+"Przygotowywanie projektu do edycji." = "Preparing the project for editing.";
+"Etap %d z 4" = "Step %d of 4";
 "Nie masz jeszcze montażu dla tego przejazdu" = "No video edit for this drive yet";
 "Wybierz film z galerii, wskaż odpowiadający mu fragment danych i wyeksportuj gotową kopię z HUD-em." = "Choose a video from Photos, select its matching telemetry range and export a finished copy with a HUD.";
 "Touge Dash zapisuje lokalną kopię roboczą filmu, aby projekt pozostał dostępny do edycji. Nie jest ona częścią nagrania przejazdu ani nie trafia do chmury." = "Touge Dash keeps a local working copy so the project remains editable. It is not an in-app drive recording and is never uploaded to the cloud.";

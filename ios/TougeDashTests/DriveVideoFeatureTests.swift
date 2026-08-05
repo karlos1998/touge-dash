@@ -221,12 +221,27 @@ final class DriveVideoFeatureTests: XCTestCase {
             .appending(path: "dashcam-\(UUID().uuidString).mov")
         try await makeTestVideo(at: sourceURL)
 
+        var didInspect = false
+        var copyProgress: [Double] = []
         let prepared = try await DriveVideoImportService.prepare(
             from: DriveVideoTransfer(fileURL: sourceURL)
-        )
+        ) { stage in
+            switch stage {
+            case .inspecting:
+                didInspect = true
+            case .copying(let fraction):
+                copyProgress.append(fraction)
+            }
+        }
         let destination = try DriveVideoFileStore.directoryURL().appending(path: prepared.fileName)
         defer { try? FileManager.default.removeItem(at: destination) }
 
+        XCTAssertTrue(didInspect)
+        XCTAssertEqual(copyProgress.first, 0)
+        XCTAssertEqual(copyProgress.last, 1)
+        XCTAssertTrue(zip(copyProgress, copyProgress.dropFirst()).allSatisfy { pair in
+            pair.0 <= pair.1
+        })
         XCTAssertFalse(FileManager.default.fileExists(atPath: sourceURL.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: destination.path))
         XCTAssertEqual(prepared.metadata.width, 320)
