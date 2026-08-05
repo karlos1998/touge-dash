@@ -249,6 +249,13 @@ final class DriveVideoRecording {
     var cameraName: String
     var hasAudio: Bool
     var preferredOverlayTemplateID: UUID?
+    // Optional fields keep the SwiftData migration lightweight for recordings
+    // created before imported videos and timeline alignment were introduced.
+    var sourceKindRaw: String?
+    var sourceDisplayName: String?
+    var videoTrimStartSeconds: Double?
+    var telemetryTrimStartSeconds: Double?
+    var exportDurationSeconds: Double?
     var createdAt: Date
 
     init(
@@ -265,6 +272,11 @@ final class DriveVideoRecording {
         cameraName: String,
         hasAudio: Bool,
         preferredOverlayTemplateID: UUID? = nil,
+        sourceKind: DriveVideoSourceKind = .camera,
+        sourceDisplayName: String? = nil,
+        videoTrimStartSeconds: Double? = nil,
+        telemetryTrimStartSeconds: Double? = nil,
+        exportDurationSeconds: Double? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
@@ -280,7 +292,17 @@ final class DriveVideoRecording {
         self.cameraName = cameraName
         self.hasAudio = hasAudio
         self.preferredOverlayTemplateID = preferredOverlayTemplateID
+        sourceKindRaw = sourceKind.rawValue
+        self.sourceDisplayName = sourceDisplayName
+        self.videoTrimStartSeconds = videoTrimStartSeconds
+        self.telemetryTrimStartSeconds = telemetryTrimStartSeconds
+        self.exportDurationSeconds = exportDurationSeconds
         self.createdAt = createdAt
+    }
+
+    var sourceKind: DriveVideoSourceKind {
+        get { sourceKindRaw.flatMap(DriveVideoSourceKind.init(rawValue:)) ?? .camera }
+        set { sourceKindRaw = newValue.rawValue }
     }
 }
 

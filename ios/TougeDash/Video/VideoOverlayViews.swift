@@ -6,57 +6,70 @@ struct VideoTelemetryOverlayView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ForEach(VideoOverlaySlot.allCases) { slot in
-                let elements = template.elements.filter { $0.slot == slot }
-                if !elements.isEmpty {
-                    VStack(alignment: horizontalAlignment(for: slot), spacing: max(4, proxy.size.width * 0.008)) {
-                        ForEach(elements) { element in
-                            VideoOverlayElementView(
-                                element: element,
-                                style: template.style,
-                                sample: sample,
-                                canvasWidth: proxy.size.width
-                            )
-                        }
-                    }
-                    .frame(maxWidth: proxy.size.width * 0.42, alignment: frameAlignment(for: slot))
-                    .position(position(for: slot, in: proxy.size))
-                }
+            let orientation = VideoOverlayCanvasOrientation(size: proxy.size)
+            ForEach(template.elements) { element in
+                let position = element.position(for: orientation)
+                VideoOverlayElementView(
+                    element: element,
+                    style: template.style,
+                    sample: sample,
+                    canvasSize: proxy.size
+                )
+                .position(
+                    x: proxy.size.width * position.x,
+                    y: proxy.size.height * position.y
+                )
             }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
+}
 
-    private func position(for slot: VideoOverlaySlot, in size: CGSize) -> CGPoint {
-        let x: CGFloat
-        switch slot {
-        case .topLeading, .bottomLeading: x = size.width * 0.23
-        case .topCenter, .bottomCenter: x = size.width * 0.5
-        case .topTrailing, .bottomTrailing: x = size.width * 0.77
-        }
-        let y: CGFloat
-        switch slot {
-        case .topLeading, .topCenter, .topTrailing: y = size.height * 0.16
-        case .bottomLeading, .bottomCenter, .bottomTrailing: y = size.height * 0.84
-        }
-        return CGPoint(x: x, y: y)
-    }
+struct EditableVideoTelemetryOverlayView: View {
+    @Binding var template: VideoOverlayTemplate
+    @Binding var selectedElementID: UUID?
+    let sample: TelemetryHistorySample?
 
-    private func horizontalAlignment(for slot: VideoOverlaySlot) -> HorizontalAlignment {
-        switch slot {
-        case .topLeading, .bottomLeading: .leading
-        case .topCenter, .bottomCenter: .center
-        case .topTrailing, .bottomTrailing: .trailing
+    var body: some View {
+        GeometryReader { proxy in
+            let orientation = VideoOverlayCanvasOrientation(size: proxy.size)
+            ForEach($template.elements) { $element in
+                let position = element.position(for: orientation)
+                VideoOverlayElementView(
+                    element: element,
+                    style: template.style,
+                    sample: sample,
+                    canvasSize: proxy.size
+                )
+                .overlay {
+                    if selectedElementID == element.id {
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white, style: StrokeStyle(lineWidth: 1.5, dash: [5, 3]))
+                            .padding(-5)
+                    }
+                }
+                .contentShape(Rectangle())
+                .position(
+                    x: proxy.size.width * position.x,
+                    y: proxy.size.height * position.y
+                )
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 0, coordinateSpace: .named("video-overlay-canvas"))
+                        .onChanged { value in
+                            selectedElementID = element.id
+                            element.setPosition(
+                                VideoOverlayPosition(
+                                    x: value.location.x / max(1, proxy.size.width),
+                                    y: value.location.y / max(1, proxy.size.height)
+                                ),
+                                for: orientation
+                            )
+                        }
+                )
+            }
         }
-    }
-
-    private func frameAlignment(for slot: VideoOverlaySlot) -> Alignment {
-        switch slot {
-        case .topLeading, .bottomLeading: .leading
-        case .topCenter, .bottomCenter: .center
-        case .topTrailing, .bottomTrailing: .trailing
-        }
+        .coordinateSpace(name: "video-overlay-canvas")
     }
 }
 
@@ -64,20 +77,33 @@ private struct VideoOverlayElementView: View {
     let element: VideoOverlayElement
     let style: VideoOverlayStyle
     let sample: TelemetryHistorySample?
-    let canvasWidth: CGFloat
+    let canvasSize: CGSize
 
     private var value: Double { sample.map { element.metric.value(in: $0) } ?? 0 }
-    private var scale: CGFloat { max(0.62, canvasWidth / 390) * CGFloat(element.scale.multiplier) }
+    private var scale: CGFloat {
+        max(0.48, min(canvasSize.width / 390, canvasSize.height / 220)) * CGFloat(element.scale.multiplier)
+    }
     private var progress: Double {
         let range = element.metric.defaultRange
         return min(1, max(0, (value - range.lowerBound) / (range.upperBound - range.lowerBound)))
     }
 
     var body: some View {
+        Group {
+            switch element.kind {
+            case .digital: digitalValue
+            case .gauge: gaugeValue
+            case .bar: barValue
+            }
+        }
+        .shadow(color: shadowColor, radius: 5 * scale)
+    }
+
+    private var digitalValue: some View {
         VStack(alignment: .leading, spacing: 2 * scale) {
             HStack(alignment: .lastTextBaseline, spacing: 4 * scale) {
                 Text(value.formatted(.number.precision(.fractionLength(element.metric.precision))))
-                    .font(.system(size: baseValueSize * scale, weight: .black, design: .rounded))
+                    .font(.system(size: 19 * scale, weight: .black, design: .rounded))
                     .fontWidth(.expanded)
                     .monospacedDigit()
                     .foregroundStyle(.white)
@@ -102,7 +128,7 @@ private struct VideoOverlayElementView: View {
         }
         .padding(.horizontal, 9 * scale)
         .padding(.vertical, 6 * scale)
-        .frame(minWidth: 74 * scale, alignment: .leading)
+        .frame(width: 94 * scale, alignment: .leading)
         .background(background)
         .overlay(alignment: .topLeading) {
             if style == .racing {
@@ -110,15 +136,100 @@ private struct VideoOverlayElementView: View {
                     .padding(.leading, 8 * scale)
             }
         }
-        .shadow(color: style == .arcade ? element.accent.color.opacity(0.5) : .black.opacity(0.45), radius: 5 * scale)
     }
 
-    private var baseValueSize: CGFloat {
-        switch element.scale {
-        case .small: 15
-        case .medium: 18
-        case .large: 23
+    private var gaugeValue: some View {
+        ZStack {
+            Circle()
+                .trim(from: 0.12, to: 0.88)
+                .stroke(Color.white.opacity(0.14), style: StrokeStyle(lineWidth: 6 * scale, lineCap: .round))
+                .rotationEffect(.degrees(68))
+            Circle()
+                .trim(from: 0.12, to: 0.12 + 0.76 * progress)
+                .stroke(
+                    element.accent.color,
+                    style: StrokeStyle(lineWidth: 6 * scale, lineCap: .round)
+                )
+                .rotationEffect(.degrees(68))
+                .shadow(color: style == .arcade ? element.accent.color.opacity(0.8) : .clear, radius: 5 * scale)
+
+            VStack(spacing: 0) {
+                Text(element.metric.shortTitle)
+                    .font(.system(size: 6.5 * scale, weight: .black))
+                    .tracking(0.8 * scale)
+                    .foregroundStyle(element.accent.color)
+                HStack(alignment: .lastTextBaseline, spacing: 3 * scale) {
+                    Text(value.formatted(.number.precision(.fractionLength(element.metric.precision))))
+                        .font(.system(size: 22 * scale, weight: .black, design: .rounded))
+                        .fontWidth(.expanded)
+                        .monospacedDigit()
+                    Text(element.metric.unit)
+                        .font(.system(size: 6 * scale, weight: .black))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .offset(y: 5 * scale)
         }
+        .foregroundStyle(.white)
+        .frame(width: 102 * scale, height: 102 * scale)
+        .padding(5 * scale)
+        .background(Color.black.opacity(style == .minimal ? 0.28 : 0.5), in: Circle())
+        .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: max(0.5, scale * 0.6)))
+    }
+
+    private var barValue: some View {
+        VStack(alignment: .leading, spacing: 4 * scale) {
+            HStack(alignment: .lastTextBaseline) {
+                Text(element.metric.shortTitle)
+                    .font(.system(size: 7 * scale, weight: .black))
+                    .tracking(0.8 * scale)
+                    .foregroundStyle(element.accent.color)
+                Spacer()
+                Text(value.formatted(.number.precision(.fractionLength(element.metric.precision))))
+                    .font(.system(size: 14 * scale, weight: .black, design: .rounded))
+                    .monospacedDigit()
+                Text(element.metric.unit)
+                    .font(.system(size: 6 * scale, weight: .black))
+                    .foregroundStyle(.secondary)
+            }
+
+            if style == .arcade, element.metric == .rpm {
+                HStack(spacing: 2 * scale) {
+                    ForEach(0..<12, id: \.self) { index in
+                        let threshold = Double(index + 1) / 12
+                        Capsule()
+                            .fill(threshold <= progress ? shiftLightColor(index) : Color.white.opacity(0.12))
+                    }
+                }
+                .frame(height: 6 * scale)
+            } else {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.14))
+                        Capsule()
+                            .fill(element.accent.color)
+                            .frame(width: max(3, geometry.size.width * progress))
+                    }
+                }
+                .frame(height: 5 * scale)
+            }
+        }
+        .padding(.horizontal, 10 * scale)
+        .padding(.vertical, 7 * scale)
+        .frame(width: 190 * scale)
+        .background(background)
+    }
+
+    private func shiftLightColor(_ index: Int) -> Color {
+        switch index {
+        case 0..<7: element.accent.color
+        case 7..<10: .tougeOrange
+        default: .tougeRed
+        }
+    }
+
+    private var shadowColor: Color {
+        style == .arcade ? element.accent.color.opacity(0.42) : .black.opacity(0.45)
     }
 
     @ViewBuilder
@@ -210,7 +321,7 @@ struct VideoOverlayTemplateManagerView: View {
                     }
                 )
             }
-            .confirmationDialog(localized("Przywrócić trzy gotowe nakładki?"), isPresented: $showingReset) {
+            .confirmationDialog(localized("Przywrócić gotowe nakładki?"), isPresented: $showingReset) {
                 Button(localized("Przywróć"), role: .destructive) { store.restoreFactoryTemplates() }
                 Button(localized("Anuluj"), role: .cancel) { }
             }
@@ -266,7 +377,7 @@ private struct VideoOverlayTemplateEditor: View {
                 } header: {
                     Text(localized("Parametry HUD"))
                 } footer: {
-                    Text(localized("Kilka parametrów może zajmować tę samą pozycję — zostaną ułożone jeden pod drugim."))
+                    Text(localized("Pozycję każdego elementu możesz później dopasować palcem bezpośrednio na podglądzie filmu."))
                 }
 
                 if canDelete {
@@ -301,6 +412,11 @@ private struct VideoOverlayElementEditor: View {
             Picker(localized("Parametr"), selection: $element.metric) {
                 ForEach(DashboardMetric.allCases) { metric in Text(metric.title).tag(metric) }
             }
+            Picker(localized("Wygląd"), selection: $element.kind) {
+                ForEach(VideoOverlayElementKind.allCases) { kind in
+                    Label(kind.title, systemImage: kind.icon).tag(kind)
+                }
+            }
             Picker(localized("Pozycja"), selection: $element.slot) {
                 ForEach(VideoOverlaySlot.allCases) { slot in Text(slot.title).tag(slot) }
             }
@@ -324,7 +440,7 @@ private struct VideoOverlayElementEditor: View {
                     .background(element.accent.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(element.metric.title).font(.headline)
-                    Text("\(element.slot.title) · \(element.scale.title)")
+                    Text("\(element.kind.title) · \(element.scale.title)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

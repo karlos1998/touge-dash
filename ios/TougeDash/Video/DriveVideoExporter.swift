@@ -94,7 +94,9 @@ final class DriveVideoExporter: ObservableObject {
     func export(
         recording: DriveVideoRecording,
         samples: [TelemetryHistorySample],
-        template: VideoOverlayTemplate?
+        template: VideoOverlayTemplate?,
+        alignment: DriveVideoTimelineAlignment? = nil,
+        telemetryStartDate: Date? = nil
     ) async {
         guard !state.isWorking else { return }
         wasCancelled = false
@@ -106,15 +108,17 @@ final class DriveVideoExporter: ObservableObject {
             }
 
             let outputURL: URL
-            if let template {
+            if template != nil || alignment != nil {
                 let renderedURL = FileManager.default.temporaryDirectory
                     .appending(path: "touge-dash-export-\(UUID().uuidString).mp4")
                 temporaryURL = renderedURL
-                outputURL = try await renderOverlay(
+                outputURL = try await renderVideo(
                     sourceURL: sourceURL,
-                    recordingStart: recording.startedAt,
+                    telemetryStart: telemetryStartDate ?? recording.startedAt,
                     samples: samples.map(VideoTelemetryFrame.init(sample:)),
                     template: template,
+                    videoStartSeconds: alignment?.videoStartSeconds ?? 0,
+                    duration: alignment?.duration,
                     outputURL: renderedURL
                 )
             } else {
@@ -157,18 +161,51 @@ final class DriveVideoExporter: ObservableObject {
         template: VideoOverlayTemplate,
         outputURL: URL
     ) async throws -> URL {
-        let asset = AVURLAsset(url: sourceURL)
-        let cache = VideoOverlayFrameCache(
-            recordingStart: recordingStart,
+        try await renderVideo(
+            sourceURL: sourceURL,
+            telemetryStart: recordingStart,
             samples: samples,
-            template: template
+            template: template,
+            videoStartSeconds: 0,
+            duration: nil,
+            outputURL: outputURL
         )
-        let composition = try await makeVideoComposition(asset: asset, cache: cache)
-        guard let exporter = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHEVCHighestQuality) else {
+    }
+
+    func renderVideo(
+        sourceURL: URL,
+        telemetryStart: Date,
+        samples: [VideoTelemetryFrame],
+        template: VideoOverlayTemplate?,
+        videoStartSeconds: Double,
+        duration requestedDuration: Double?,
+        outputURL: URL
+    ) async throws -> URL {
+        let asset = AVURLAsset(url: sourceURL)
+        let assetDuration = try await asset.load(.duration).seconds
+        let startSeconds = min(max(0, videoStartSeconds), max(0, assetDuration))
+        let availableDuration = max(0, assetDuration - startSeconds)
+        let exportDuration = min(max(0, requestedDuration ?? availableDuration), availableDuration)
+        guard exportDuration > 0 else { throw DriveVideoExportError.emptyTimeRange }
+
+        let preset = template == nil ? AVAssetExportPresetHighestQuality : AVAssetExportPresetHEVCHighestQuality
+        guard let exporter = AVAssetExportSession(asset: asset, presetName: preset) else {
             throw DriveVideoExportError.exportUnavailable
         }
         activeExport = exporter
-        exporter.videoComposition = composition
+        if let template {
+            let cache = VideoOverlayFrameCache(
+                recordingStart: telemetryStart,
+                sourceStartSeconds: startSeconds,
+                samples: samples,
+                template: template
+            )
+            exporter.videoComposition = try await makeVideoComposition(asset: asset, cache: cache)
+        }
+        exporter.timeRange = CMTimeRange(
+            start: CMTime(seconds: startSeconds, preferredTimescale: 600),
+            duration: CMTime(seconds: exportDuration, preferredTimescale: 600)
+        )
         state = .rendering(0)
 
         let progressTask = Task { @MainActor [weak self, weak exporter] in
@@ -239,6 +276,7 @@ enum DriveVideoPhotoLibrarySaver {
 
 private final class VideoOverlayFrameCache: @unchecked Sendable {
     private let recordingStart: Date
+    private let sourceStartSeconds: Double
     private let samples: [VideoTelemetryFrame]
     private let template: VideoOverlayTemplate
     private let lock = NSLock()
@@ -246,15 +284,21 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
     private var cachedSize = CGSize.zero
     private var cachedImage: CIImage?
 
-    init(recordingStart: Date, samples: [VideoTelemetryFrame], template: VideoOverlayTemplate) {
+    init(
+        recordingStart: Date,
+        sourceStartSeconds: Double,
+        samples: [VideoTelemetryFrame],
+        template: VideoOverlayTemplate
+    ) {
         self.recordingStart = recordingStart
+        self.sourceStartSeconds = sourceStartSeconds
         self.samples = samples
         self.template = template
     }
 
     func image(at seconds: Double, size: CGSize) -> CIImage? {
         guard size.width > 0, size.height > 0, !samples.isEmpty else { return nil }
-        let timestamp = recordingStart.addingTimeInterval(max(0, seconds))
+        let timestamp = recordingStart.addingTimeInterval(max(0, seconds - sourceStartSeconds))
         let index = nearestIndex(to: timestamp)
 
         lock.lock()
@@ -298,46 +342,47 @@ private enum VideoOverlayCGRenderer {
             context.setAllowsAntialiasing(true)
             context.setShouldAntialias(true)
 
-            for slot in VideoOverlaySlot.allCases {
-                let elements = template.elements.filter { $0.slot == slot }
-                guard !elements.isEmpty else { continue }
-                draw(elements: elements, slot: slot, style: template.style, sample: sample, size: size, context: context)
+            let orientation = VideoOverlayCanvasOrientation(size: size)
+            let baseScale = max(0.48, min(size.width / 390, size.height / 220))
+            for element in template.elements {
+                let position = element.position(for: orientation)
+                let elementSize = elementSize(for: element, baseScale: baseScale)
+                let rect = clampedRect(
+                    centeredAt: CGPoint(x: size.width * position.x, y: size.height * position.y),
+                    size: elementSize,
+                    canvasSize: size
+                )
+                draw(
+                    element: element,
+                    style: template.style,
+                    sample: sample,
+                    rect: rect,
+                    context: context,
+                    baseScale: baseScale
+                )
             }
         }.cgImage
     }
 
-    private static func draw(
-        elements: [VideoOverlayElement],
-        slot: VideoOverlaySlot,
-        style: VideoOverlayStyle,
-        sample: VideoTelemetryFrame,
-        size: CGSize,
-        context: CGContext
-    ) {
-        let baseScale = max(0.7, min(size.width / 390, size.height / 220))
-        let spacing = 5 * baseScale
-        let heights = elements.map { 50 * baseScale * CGFloat($0.scale.multiplier) }
-        let totalHeight = heights.reduce(0, +) + spacing * CGFloat(max(0, elements.count - 1))
-        let centerX: CGFloat
-        switch slot {
-        case .topLeading, .bottomLeading: centerX = size.width * 0.23
-        case .topCenter, .bottomCenter: centerX = size.width * 0.5
-        case .topTrailing, .bottomTrailing: centerX = size.width * 0.77
+    private static func elementSize(for element: VideoOverlayElement, baseScale: CGFloat) -> CGSize {
+        let scale = baseScale * CGFloat(element.scale.multiplier)
+        switch element.kind {
+        case .digital: return CGSize(width: 94 * scale, height: 56 * scale)
+        case .gauge: return CGSize(width: 112 * scale, height: 112 * scale)
+        case .bar: return CGSize(width: 190 * scale, height: 48 * scale)
         }
-        var y: CGFloat
-        switch slot {
-        case .topLeading, .topCenter, .topTrailing: y = size.height * 0.07
-        case .bottomLeading, .bottomCenter, .bottomTrailing: y = size.height * 0.93 - totalHeight
-        }
+    }
 
-        for (index, element) in elements.enumerated() {
-            let multiplier = CGFloat(element.scale.multiplier)
-            let width = min(size.width * 0.42, 104 * baseScale * multiplier)
-            let height = heights[index]
-            let rect = CGRect(x: centerX - width / 2, y: y, width: width, height: height)
-            draw(element: element, style: style, sample: sample, rect: rect, context: context, baseScale: baseScale)
-            y += height + spacing
-        }
+    private static func clampedRect(centeredAt center: CGPoint, size: CGSize, canvasSize: CGSize) -> CGRect {
+        let width = min(size.width, canvasSize.width * 0.94)
+        let height = min(size.height, canvasSize.height * 0.94)
+        let halfWidth = width / 2
+        let halfHeight = height / 2
+        let safeCenter = CGPoint(
+            x: min(max(halfWidth, center.x), canvasSize.width - halfWidth),
+            y: min(max(halfHeight, center.y), canvasSize.height - halfHeight)
+        )
+        return CGRect(x: safeCenter.x - halfWidth, y: safeCenter.y - halfHeight, width: width, height: height)
     }
 
     private static func draw(
@@ -348,53 +393,212 @@ private enum VideoOverlayCGRenderer {
         context: CGContext,
         baseScale: CGFloat
     ) {
-        let accent = element.accent.uiColor
-        let corner = 7 * baseScale
-        let path = UIBezierPath(roundedRect: rect, cornerRadius: corner)
-        context.addPath(path.cgPath)
-        context.setFillColor(UIColor.black.withAlphaComponent(style == .minimal ? 0.42 : 0.7).cgColor)
-        context.fillPath()
+        context.saveGState()
+        defer { context.restoreGState() }
 
+        switch element.kind {
+        case .digital:
+            drawDigital(element: element, style: style, sample: sample, rect: rect, context: context, baseScale: baseScale)
+        case .gauge:
+            drawGauge(element: element, style: style, sample: sample, rect: rect, context: context, baseScale: baseScale)
+        case .bar:
+            drawBar(element: element, style: style, sample: sample, rect: rect, context: context, baseScale: baseScale)
+        }
+    }
+
+    private static func drawDigital(
+        element: VideoOverlayElement,
+        style: VideoOverlayStyle,
+        sample: VideoTelemetryFrame,
+        rect: CGRect,
+        context: CGContext,
+        baseScale: CGFloat
+    ) {
+        let accent = element.accent.uiColor
+        drawBackground(rect: rect, style: style, accent: accent, context: context, baseScale: baseScale)
+        let value = sample.value(for: element.metric)
+        let valueText = value.formatted(.number.precision(.fractionLength(element.metric.precision)))
+        let localScale = rect.width / 94
+        let valueFont = UIFont.monospacedDigitSystemFont(ofSize: 19 * localScale, weight: .black)
+        let smallFont = UIFont.systemFont(ofSize: 7 * localScale, weight: .black)
+        let padding = 9 * localScale
+
+        (valueText as NSString).draw(
+            at: CGPoint(x: rect.minX + padding, y: rect.minY + 6 * localScale),
+            withAttributes: [.font: valueFont, .foregroundColor: UIColor.white]
+        )
+        let valueWidth = (valueText as NSString).size(withAttributes: [.font: valueFont]).width
+        (element.metric.unit as NSString).draw(
+            at: CGPoint(x: rect.minX + padding + valueWidth + 4 * localScale, y: rect.minY + 17 * localScale),
+            withAttributes: [.font: smallFont, .foregroundColor: accent]
+        )
+        (element.metric.shortTitle as NSString).draw(
+            at: CGPoint(x: rect.minX + padding, y: rect.maxY - 17 * localScale),
+            withAttributes: [.font: smallFont, .foregroundColor: accent]
+        )
+
+        if style != .minimal {
+            let progress = progress(for: element.metric, value: value)
+            let bar = CGRect(x: rect.minX + padding, y: rect.maxY - 7 * localScale, width: rect.width - padding * 2, height: max(2, 2.5 * localScale))
+            context.setFillColor(UIColor.white.withAlphaComponent(0.15).cgColor)
+            fillRoundedRect(bar, context: context)
+            context.setFillColor(accent.cgColor)
+            let fill = CGRect(x: bar.minX, y: bar.minY, width: max(2, bar.width * progress), height: bar.height)
+            fillRoundedRect(fill, context: context)
+        }
+    }
+
+    private static func drawGauge(
+        element: VideoOverlayElement,
+        style: VideoOverlayStyle,
+        sample: VideoTelemetryFrame,
+        rect: CGRect,
+        context: CGContext,
+        baseScale: CGFloat
+    ) {
+        let accent = element.accent.uiColor
+        let value = sample.value(for: element.metric)
+        let progress = progress(for: element.metric, value: value)
+        let lineWidth = max(3, rect.width * 0.054)
+        let circleRect = rect.insetBy(dx: lineWidth * 1.25, dy: lineWidth * 1.25)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = min(circleRect.width, circleRect.height) / 2
+        let start = CGFloat.pi * 0.75
+        let sweep = CGFloat.pi * 1.5
+
+        context.setFillColor(UIColor.black.withAlphaComponent(style == .minimal ? 0.28 : 0.52).cgColor)
+        context.fillEllipse(in: rect)
+        context.setLineCap(.round)
+        context.setLineWidth(lineWidth)
+        context.setStrokeColor(UIColor.white.withAlphaComponent(0.14).cgColor)
+        context.addArc(center: center, radius: radius, startAngle: start, endAngle: start + sweep, clockwise: false)
+        context.strokePath()
+        context.setStrokeColor(accent.cgColor)
+        context.addArc(center: center, radius: radius, startAngle: start, endAngle: start + sweep * progress, clockwise: false)
+        context.strokePath()
+
+        let localScale = rect.width / 112
+        let titleFont = UIFont.systemFont(ofSize: 6.5 * localScale, weight: .black)
+        let valueFont = UIFont.monospacedDigitSystemFont(ofSize: 22 * localScale, weight: .black)
+        let unitFont = UIFont.systemFont(ofSize: 6 * localScale, weight: .black)
+        drawCentered(element.metric.shortTitle, font: titleFont, color: accent, centerX: rect.midX, y: rect.midY - 17 * localScale)
+        let valueText = value.formatted(.number.precision(.fractionLength(element.metric.precision)))
+        let valueSize = (valueText as NSString).size(withAttributes: [.font: valueFont])
+        let unitSize = (element.metric.unit as NSString).size(withAttributes: [.font: unitFont])
+        let totalWidth = valueSize.width + 3 * localScale + unitSize.width
+        let originX = rect.midX - totalWidth / 2
+        (valueText as NSString).draw(
+            at: CGPoint(x: originX, y: rect.midY - 5 * localScale),
+            withAttributes: [.font: valueFont, .foregroundColor: UIColor.white]
+        )
+        (element.metric.unit as NSString).draw(
+            at: CGPoint(x: originX + valueSize.width + 3 * localScale, y: rect.midY + 8 * localScale),
+            withAttributes: [.font: unitFont, .foregroundColor: UIColor.white.withAlphaComponent(0.65)]
+        )
+    }
+
+    private static func drawBar(
+        element: VideoOverlayElement,
+        style: VideoOverlayStyle,
+        sample: VideoTelemetryFrame,
+        rect: CGRect,
+        context: CGContext,
+        baseScale: CGFloat
+    ) {
+        let accent = element.accent.uiColor
+        let value = sample.value(for: element.metric)
+        let progress = progress(for: element.metric, value: value)
+        drawBackground(rect: rect, style: style, accent: accent, context: context, baseScale: baseScale)
+        let localScale = rect.width / 190
+        let padding = 10 * localScale
+        let titleFont = UIFont.systemFont(ofSize: 7 * localScale, weight: .black)
+        let valueFont = UIFont.monospacedDigitSystemFont(ofSize: 14 * localScale, weight: .black)
+        let unitFont = UIFont.systemFont(ofSize: 6 * localScale, weight: .black)
+        (element.metric.shortTitle as NSString).draw(
+            at: CGPoint(x: rect.minX + padding, y: rect.minY + 7 * localScale),
+            withAttributes: [.font: titleFont, .foregroundColor: accent]
+        )
+        let valueText = value.formatted(.number.precision(.fractionLength(element.metric.precision)))
+        let valueSize = (valueText as NSString).size(withAttributes: [.font: valueFont])
+        let unitSize = (element.metric.unit as NSString).size(withAttributes: [.font: unitFont])
+        (valueText as NSString).draw(
+            at: CGPoint(x: rect.maxX - padding - valueSize.width - unitSize.width - 4 * localScale, y: rect.minY + 3 * localScale),
+            withAttributes: [.font: valueFont, .foregroundColor: UIColor.white]
+        )
+        (element.metric.unit as NSString).draw(
+            at: CGPoint(x: rect.maxX - padding - unitSize.width, y: rect.minY + 10 * localScale),
+            withAttributes: [.font: unitFont, .foregroundColor: UIColor.white.withAlphaComponent(0.65)]
+        )
+
+        let bar = CGRect(x: rect.minX + padding, y: rect.maxY - 14 * localScale, width: rect.width - padding * 2, height: 6 * localScale)
+        if style == .arcade, element.metric == .rpm {
+            let segments = 12
+            let gap = 2 * localScale
+            let width = (bar.width - gap * CGFloat(segments - 1)) / CGFloat(segments)
+            for index in 0..<segments {
+                let segment = CGRect(x: bar.minX + CGFloat(index) * (width + gap), y: bar.minY, width: width, height: bar.height)
+                let threshold = CGFloat(index + 1) / CGFloat(segments)
+                let color: UIColor
+                if threshold > progress {
+                    color = UIColor.white.withAlphaComponent(0.12)
+                } else if index >= 10 {
+                    color = DashboardAccent.red.uiColor
+                } else if index >= 7 {
+                    color = DashboardAccent.orange.uiColor
+                } else {
+                    color = accent
+                }
+                context.setFillColor(color.cgColor)
+                fillRoundedRect(segment, context: context)
+            }
+        } else {
+            context.setFillColor(UIColor.white.withAlphaComponent(0.14).cgColor)
+            fillRoundedRect(bar, context: context)
+            let fill = CGRect(x: bar.minX, y: bar.minY, width: max(2, bar.width * progress), height: bar.height)
+            context.setFillColor(accent.cgColor)
+            fillRoundedRect(fill, context: context)
+        }
+    }
+
+    private static func drawBackground(
+        rect: CGRect,
+        style: VideoOverlayStyle,
+        accent: UIColor,
+        context: CGContext,
+        baseScale: CGFloat
+    ) {
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: max(5, 7 * baseScale))
+        context.setFillColor(UIColor.black.withAlphaComponent(style == .minimal ? 0.42 : 0.68).cgColor)
+        context.addPath(path.cgPath)
+        context.fillPath()
         if style == .arcade {
-            context.addPath(path.cgPath)
-            context.setStrokeColor(accent.withAlphaComponent(0.8).cgColor)
+            context.setStrokeColor(accent.withAlphaComponent(0.75).cgColor)
             context.setLineWidth(max(1, 1.2 * baseScale))
+            context.addPath(path.cgPath)
             context.strokePath()
         } else if style == .racing {
             context.setFillColor(accent.cgColor)
             context.fill(CGRect(x: rect.minX + 9 * baseScale, y: rect.minY, width: min(rect.width * 0.34, 34 * baseScale), height: max(2, 2 * baseScale)))
         }
+    }
 
-        let multiplier = CGFloat(element.scale.multiplier)
-        let value = sample.value(for: element.metric)
-        let valueText = value.formatted(.number.precision(.fractionLength(element.metric.precision)))
-        let valueFont = UIFont.systemFont(ofSize: 18 * baseScale * multiplier, weight: .black)
-        let smallFont = UIFont.systemFont(ofSize: 7 * baseScale * multiplier, weight: .bold)
-        let padding = 8 * baseScale * multiplier
+    private static func progress(for metric: DashboardMetric, value: Double) -> CGFloat {
+        let range = metric.defaultRange
+        let raw = (value - range.lowerBound) / max(0.0001, range.upperBound - range.lowerBound)
+        return CGFloat(min(1, max(0, raw)))
+    }
 
-        (valueText as NSString).draw(
-            at: CGPoint(x: rect.minX + padding, y: rect.minY + 7 * baseScale * multiplier),
-            withAttributes: [.font: valueFont, .foregroundColor: UIColor.white]
+    private static func drawCentered(_ text: String, font: UIFont, color: UIColor, centerX: CGFloat, y: CGFloat) {
+        let size = (text as NSString).size(withAttributes: [.font: font])
+        (text as NSString).draw(
+            at: CGPoint(x: centerX - size.width / 2, y: y),
+            withAttributes: [.font: font, .foregroundColor: color]
         )
-        let valueWidth = (valueText as NSString).size(withAttributes: [.font: valueFont]).width
-        (element.metric.unit as NSString).draw(
-            at: CGPoint(x: rect.minX + padding + valueWidth + 4 * baseScale, y: rect.minY + 15 * baseScale * multiplier),
-            withAttributes: [.font: smallFont, .foregroundColor: accent]
-        )
-        (element.metric.shortTitle as NSString).draw(
-            at: CGPoint(x: rect.minX + padding, y: rect.maxY - 15 * baseScale * multiplier),
-            withAttributes: [.font: smallFont, .foregroundColor: accent]
-        )
+    }
 
-        if style != .minimal {
-            let range = element.metric.defaultRange
-            let progress = min(1, max(0, (value - range.lowerBound) / (range.upperBound - range.lowerBound)))
-            let bar = CGRect(x: rect.minX + padding, y: rect.maxY - 7 * baseScale, width: rect.width - padding * 2, height: max(2, 2.5 * baseScale))
-            context.setFillColor(UIColor.white.withAlphaComponent(0.15).cgColor)
-            context.fillEllipse(in: bar)
-            context.setFillColor(accent.cgColor)
-            context.fill(CGRect(x: bar.minX, y: bar.minY, width: max(2, bar.width * CGFloat(progress)), height: bar.height))
-        }
+    private static func fillRoundedRect(_ rect: CGRect, context: CGContext) {
+        context.addPath(UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2).cgPath)
+        context.fillPath()
     }
 }
 
@@ -418,6 +622,7 @@ private enum DriveVideoExportError: LocalizedError {
     case exportUnavailable
     case photoAccessDenied
     case photoSaveFailed
+    case emptyTimeRange
 
     var errorDescription: String? {
         switch self {
@@ -425,6 +630,7 @@ private enum DriveVideoExportError: LocalizedError {
         case .exportUnavailable: localized("Nie udało się przygotować eksportu filmu.")
         case .photoAccessDenied: localized("Brak zgody na dodawanie filmów do aplikacji Zdjęcia.")
         case .photoSaveFailed: localized("Nie udało się dodać filmu do aplikacji Zdjęcia.")
+        case .emptyTimeRange: localized("Wybrany wspólny fragment filmu i danych jest pusty.")
         }
     }
 }

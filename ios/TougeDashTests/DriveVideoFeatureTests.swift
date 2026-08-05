@@ -21,7 +21,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let store = VideoOverlayTemplateStore(defaults: defaults, keyPrefix: suite)
-        XCTAssertEqual(store.templates.count, 3)
+        XCTAssertEqual(store.templates.count, 4)
         XCTAssertEqual(store.selectedTemplate.style, .racing)
 
         let copy = store.createCopy()
@@ -44,6 +44,86 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertTrue(metrics.isSuperset(of: [
             .speed, .rpm, .boost, .oilPressure, .oilTemperature, .coolant
         ]))
+        XCTAssertTrue(VideoOverlayTemplate.racing.elements.contains(where: { $0.kind == .gauge }))
+        XCTAssertTrue(VideoOverlayTemplate.racing.elements.contains(where: { $0.kind == .bar }))
+        for template in VideoOverlayTemplate.factoryTemplates {
+            for element in template.elements {
+                let landscape = element.position(for: .landscape)
+                let portrait = element.position(for: .portrait)
+                XCTAssertTrue((0...1).contains(landscape.x))
+                XCTAssertTrue((0...1).contains(landscape.y))
+                XCTAssertTrue((0...1).contains(portrait.x))
+                XCTAssertTrue((0...1).contains(portrait.y))
+            }
+        }
+    }
+
+    func testTimelineAlignmentSupportsDelayedDashcamAndPersists() {
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let session = DriveSession(
+            vehicleID: UUID(),
+            startedAt: startedAt,
+            endedAt: startedAt.addingTimeInterval(180)
+        )
+        let recording = DriveVideoRecording(
+            sessionID: session.id,
+            fileName: "dashcam.mov",
+            startedAt: startedAt,
+            endedAt: startedAt.addingTimeInterval(160),
+            duration: 160,
+            fileSizeBytes: 1,
+            pixelWidth: 1_920,
+            pixelHeight: 1_080,
+            framesPerSecond: 30,
+            cameraName: "Dashcam",
+            hasAudio: true,
+            sourceKind: .photoLibrary
+        )
+        var alignment = DriveVideoTimelineAlignment(
+            videoStartSeconds: 0,
+            telemetryStartSeconds: 20,
+            duration: 160,
+            videoDuration: recording.duration,
+            telemetryDuration: session.duration
+        )
+        XCTAssertEqual(alignment.videoEndSeconds, 160, accuracy: 0.001)
+        XCTAssertEqual(alignment.telemetryEndSeconds, 180, accuracy: 0.001)
+
+        alignment.duration = 150
+        alignment.persist(to: recording)
+        let restored = DriveVideoTimelineAlignment(recording: recording, session: session)
+        XCTAssertEqual(restored.videoStartSeconds, 0, accuracy: 0.001)
+        XCTAssertEqual(restored.telemetryStartSeconds, 20, accuracy: 0.001)
+        XCTAssertEqual(restored.duration, 150, accuracy: 0.001)
+        XCTAssertEqual(restored.telemetryStartDate(session: session), startedAt.addingTimeInterval(20))
+    }
+
+    func testLegacyOverlayMigratesToFreeformLayout() throws {
+        let templateID = UUID()
+        let firstID = UUID()
+        let secondID = UUID()
+        let json = """
+        {
+          "id": "\(templateID.uuidString)",
+          "name": "Legacy HUD",
+          "style": "racing",
+          "elements": [
+            {"id":"\(firstID.uuidString)","metric":"speed","slot":"topLeading","scale":"medium","accent":"cyan"},
+            {"id":"\(secondID.uuidString)","metric":"rpm","slot":"topLeading","scale":"large","accent":"yellow"}
+          ],
+          "modifiedAt": "2026-08-05T10:00:00Z"
+        }
+        """
+        let decoded = try JSONDecoder.tougeDashCloud().decode(VideoOverlayTemplate.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.layoutVersion, 1)
+        XCTAssertEqual(decoded.elements.map(\.kind), [.digital, .digital])
+
+        let migrated = decoded.migratedToFreeformLayout()
+        XCTAssertEqual(migrated.layoutVersion, 2)
+        XCTAssertNotEqual(
+            migrated.elements[0].position(for: .landscape),
+            migrated.elements[1].position(for: .landscape)
+        )
     }
 
     func testTelemetryFrameUsesRecordedSampleInsteadOfLiveState() {
@@ -133,6 +213,49 @@ final class DriveVideoFeatureTests: XCTestCase {
         let videoTrackCount = try await asset.loadTracks(withMediaType: .video).count
         XCTAssertGreaterThan(duration, 0.8)
         XCTAssertEqual(videoTrackCount, 1)
+    }
+
+    @MainActor
+    func testImportedVideoIsInspectedAndCopiedIntoLocalDriveStorage() async throws {
+        let sourceURL = FileManager.default.temporaryDirectory
+            .appending(path: "dashcam-\(UUID().uuidString).mov")
+        try await makeTestVideo(at: sourceURL)
+
+        let prepared = try await DriveVideoImportService.prepare(
+            from: DriveVideoTransfer(fileURL: sourceURL)
+        )
+        let destination = try DriveVideoFileStore.directoryURL().appending(path: prepared.fileName)
+        defer { try? FileManager.default.removeItem(at: destination) }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: sourceURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertEqual(prepared.metadata.width, 320)
+        XCTAssertEqual(prepared.metadata.height, 180)
+        XCTAssertEqual(prepared.metadata.duration, 1, accuracy: 0.08)
+        XCTAssertGreaterThan(prepared.fileSizeBytes, 1_000)
+    }
+
+    @MainActor
+    func testRendererTrimsVideoToSelectedCommonRange() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "TougeDashVideoTrimTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sourceURL = directory.appending(path: "source.mov")
+        let outputURL = directory.appending(path: "trimmed.mp4")
+        try await makeTestVideo(at: sourceURL)
+
+        let rendered = try await DriveVideoExporter().renderVideo(
+            sourceURL: sourceURL,
+            telemetryStart: Date(timeIntervalSince1970: 1_800_000_000),
+            samples: [],
+            template: nil,
+            videoStartSeconds: 0.2,
+            duration: 0.4,
+            outputURL: outputURL
+        )
+        let duration = try await AVURLAsset(url: rendered).load(.duration).seconds
+        XCTAssertEqual(duration, 0.4, accuracy: 0.08)
     }
 
     @MainActor

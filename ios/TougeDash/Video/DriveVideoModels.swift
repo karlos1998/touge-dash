@@ -1,6 +1,175 @@
 import AVFoundation
 import Combine
+import CoreTransferable
 import Foundation
+import UniformTypeIdentifiers
+
+enum DriveVideoSourceKind: String, Codable, Sendable {
+    case camera
+    case photoLibrary
+
+    var title: String {
+        switch self {
+        case .camera: localized("Kamera telefonu")
+        case .photoLibrary: localized("Film z biblioteki")
+        }
+    }
+}
+
+struct DriveVideoTimelineAlignment: Equatable, Sendable {
+    var videoStartSeconds: Double
+    var telemetryStartSeconds: Double
+    var duration: Double
+
+    var videoEndSeconds: Double { videoStartSeconds + duration }
+    var telemetryEndSeconds: Double { telemetryStartSeconds + duration }
+
+    init(
+        videoStartSeconds: Double,
+        telemetryStartSeconds: Double,
+        duration: Double,
+        videoDuration: Double,
+        telemetryDuration: Double
+    ) {
+        self.videoStartSeconds = videoStartSeconds
+        self.telemetryStartSeconds = telemetryStartSeconds
+        self.duration = duration
+        clamp(videoDuration: videoDuration, telemetryDuration: telemetryDuration)
+    }
+
+    init(recording: DriveVideoRecording, session: DriveSession) {
+        let videoStart = recording.videoTrimStartSeconds ?? 0
+        let telemetryStart = recording.telemetryTrimStartSeconds
+            ?? max(0, recording.startedAt.timeIntervalSince(session.startedAt))
+        let telemetryDuration = session.duration > 0 ? session.duration : recording.duration
+        let available = min(
+            max(0, recording.duration - videoStart),
+            max(0, telemetryDuration - telemetryStart)
+        )
+        self.init(
+            videoStartSeconds: videoStart,
+            telemetryStartSeconds: telemetryStart,
+            duration: recording.exportDurationSeconds.flatMap { $0 > 0 ? $0 : nil } ?? available,
+            videoDuration: recording.duration,
+            telemetryDuration: telemetryDuration
+        )
+    }
+
+    mutating func clamp(videoDuration: Double, telemetryDuration: Double) {
+        let safeVideoDuration = max(0, videoDuration)
+        let safeTelemetryDuration = max(0, telemetryDuration)
+        videoStartSeconds = min(max(0, videoStartSeconds), safeVideoDuration)
+        telemetryStartSeconds = min(max(0, telemetryStartSeconds), safeTelemetryDuration)
+        let maximumDuration = min(
+            max(0, safeVideoDuration - videoStartSeconds),
+            max(0, safeTelemetryDuration - telemetryStartSeconds)
+        )
+        duration = min(max(0, duration), maximumDuration)
+    }
+
+    func telemetryStartDate(session: DriveSession) -> Date {
+        session.startedAt.addingTimeInterval(telemetryStartSeconds)
+    }
+
+    func persist(to recording: DriveVideoRecording) {
+        recording.videoTrimStartSeconds = videoStartSeconds
+        recording.telemetryTrimStartSeconds = telemetryStartSeconds
+        recording.exportDurationSeconds = duration
+    }
+}
+
+struct DriveVideoTransfer: Transferable, Sendable {
+    let fileURL: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { value in
+            SentTransferredFile(value.fileURL)
+        } importing: { received in
+            let sourceExtension = received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension
+            let temporaryURL = FileManager.default.temporaryDirectory
+                .appending(path: "touge-dash-import-\(UUID().uuidString).\(sourceExtension)")
+            try FileManager.default.copyItem(at: received.file, to: temporaryURL)
+            return DriveVideoTransfer(fileURL: temporaryURL)
+        }
+    }
+}
+
+struct DriveVideoAssetMetadata: Sendable {
+    let duration: Double
+    let width: Int
+    let height: Int
+    let framesPerSecond: Double
+    let hasAudio: Bool
+}
+
+enum DriveVideoAssetInspector {
+    nonisolated static func metadata(for url: URL) async throws -> DriveVideoAssetMetadata {
+        let asset = AVURLAsset(url: url)
+        let rawDuration = try await asset.load(.duration).seconds
+        guard let track = try await asset.loadTracks(withMediaType: .video).first else {
+            throw DriveVideoImportError.invalidVideo
+        }
+        let size = try await track.load(.naturalSize)
+        let transform = try await track.load(.preferredTransform)
+        let transformed = size.applying(transform)
+        let rate = try await track.load(.nominalFrameRate)
+        let hasAudio = try await !asset.loadTracks(withMediaType: .audio).isEmpty
+        let duration = rawDuration.isFinite ? max(0, rawDuration) : 0
+        guard duration > 0, abs(transformed.width) > 0, abs(transformed.height) > 0 else {
+            throw DriveVideoImportError.invalidVideo
+        }
+        return DriveVideoAssetMetadata(
+            duration: duration,
+            width: Int(abs(transformed.width).rounded()),
+            height: Int(abs(transformed.height).rounded()),
+            framesPerSecond: Double(rate),
+            hasAudio: hasAudio
+        )
+    }
+}
+
+struct PreparedDriveVideoImport: Sendable {
+    let fileName: String
+    let displayName: String
+    let fileSizeBytes: Int64
+    let metadata: DriveVideoAssetMetadata
+}
+
+enum DriveVideoImportService {
+    nonisolated static func prepare(from transfer: DriveVideoTransfer) async throws -> PreparedDriveVideoImport {
+        defer { try? FileManager.default.removeItem(at: transfer.fileURL) }
+        let metadata = try await DriveVideoAssetInspector.metadata(for: transfer.fileURL)
+        let sourceExtension = transfer.fileURL.pathExtension.isEmpty ? "mov" : transfer.fileURL.pathExtension.lowercased()
+        let destination = try DriveVideoFileStore.newRecordingURL(fileExtension: sourceExtension)
+
+        do {
+            try FileManager.default.copyItem(at: transfer.fileURL, to: destination)
+            let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
+            let bytes = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+            return PreparedDriveVideoImport(
+                fileName: destination.lastPathComponent,
+                displayName: transfer.fileURL.deletingPathExtension().lastPathComponent,
+                fileSizeBytes: bytes,
+                metadata: metadata
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
+    }
+}
+
+enum DriveVideoImportError: LocalizedError {
+    case invalidVideo
+    case unavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidVideo: localized("Wybrany plik nie zawiera prawidłowego obrazu wideo.")
+        case .unavailable: localized("Nie udało się pobrać filmu z biblioteki Zdjęć.")
+        }
+    }
+}
 
 enum DriveVideoQuality: String, Codable, CaseIterable, Identifiable, Sendable {
     case storageSaver
@@ -103,9 +272,16 @@ enum DriveVideoFileStore {
         return directory
     }
 
-    static func newRecordingURL(id: UUID = UUID(), fileManager: FileManager = .default) throws -> URL {
-        try directoryURL(fileManager: fileManager)
-            .appending(path: "\(id.uuidString).mov", directoryHint: .notDirectory)
+    static func newRecordingURL(
+        id: UUID = UUID(),
+        fileExtension: String = "mov",
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        let safeExtension = fileExtension
+            .lowercased()
+            .filter { $0.isLetter || $0.isNumber }
+        return try directoryURL(fileManager: fileManager)
+            .appending(path: "\(id.uuidString).\(safeExtension.isEmpty ? "mov" : safeExtension)", directoryHint: .notDirectory)
     }
 
     static func url(for recording: DriveVideoRecording, fileManager: FileManager = .default) throws -> URL {
