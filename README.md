@@ -40,6 +40,7 @@ zasobów z oficjalnego eDash.
 - eksport filmu do Zdjęć z konfigurowalną nakładką parametrów,
 - automatyczne raporty incydentów obejmujące 30 sekund przed i 60 sekund po zdarzeniu,
 - notatki przypinane do dokładnego momentu przejazdu,
+- bezpieczne linki do raportów incydentów wysyłane mechanikowi bez dostępu do całego auta,
 - Centrum alertów z progami per auto, pracą offline i synchronizacją zmian mechanika,
 - opcjonalne konto i synchronizacja historii z Touge Dash Cloud,
 - logowanie e-mail/hasło, Sign in with Apple oraz bezpieczny handoff Google/Facebook z panelu WWW,
@@ -98,8 +99,9 @@ kursor telemetrii, a wskazanie momentu na wykresie przewija nagranie.
 Nagrania nie są synchronizowane z API ani kopią iCloud. Lista historii pokazuje
 ich rozmiar, a każdy plik można usunąć albo wyeksportować do aplikacji Zdjęcia.
 Eksport może zachować surowy obraz lub wyrenderować wybrany szablon HUD z
-prędkością, RPM, boostem, AFR, temperaturami i ciśnieniami. Szablony, pozycje,
-rozmiary oraz kolory nakładek są konfigurowalne i zapisywane lokalnie.
+prędkością, RPM, boostem, AFR, temperaturami i ciśnieniami. Szablony, pozycje i
+rozmiary nakładek są konfigurowalne osobno dla filmu pionowego i poziomego oraz
+zapisywane lokalnie. HUD można przeciągnąć bezpośrednio na podglądzie przed eksportem.
 
 ## Raporty incydentów
 
