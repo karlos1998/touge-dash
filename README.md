@@ -56,6 +56,7 @@ zasobów z oficjalnego eDash.
 Aktualna wersja była testowana na:
 
 - emulatorze Pixel z Androidem 14 w pionie i poziomie,
+- emulatorze Android Automotive OS 14 (1408 × 792) z systemowym Templates Host,
 - iPhone 14 Pro z iOS 26.5.2,
 - Apple Watch Series 11 (46 mm) Simulator z watchOS 26.2,
 - ECUMaster EMU Black,
@@ -145,12 +146,36 @@ Projekt otwiera się w Android Studio przez katalog `android/`. Build developers
 
 ```bash
 cd android
-./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleAutomotive connectedDebugAndroidTest
 ```
 
 Android automatycznie wyszukuje wyłącznie pasujące interfejsy ECUMaster, zapamiętuje
 ostatni EMULOGGER i utrzymuje zapis w usłudze pierwszoplanowej po wygaszeniu ekranu.
 Połączenie z FFE1 pozostaje tylko do odczytu. Zapis GPS jest domyślnie wyłączony.
+
+### Android Auto — developer preview
+
+Build `debug` zawiera ekran Android Auto z sześcioma najważniejszymi parametrami:
+ciśnieniem i temperaturą oleju, temperaturą płynu, boostem, AFR oraz ciśnieniem
+paliwa. Korzysta z oficjalnej Car App Library i odświeża bezpieczny szablon raz
+na sekundę. Wartości ostrzegawcze używają progów aktywnego auta. Ekran wyłącznie
+obserwuje istniejący strumień telemetrii i nie wysyła danych do EMU.
+
+Google nie udostępnia obecnie kategorii Android Auto dla rejestratora telemetrii
+silnika. Dlatego `CarAppService` i testowa deklaracja kategorii są umieszczone w
+`src/carPreview`, dołączanym wyłącznie do wariantów developerskich, i nie trafiają
+do produkcyjnego APK. Nie należy publikować wersji testowej jako aplikacji IoT.
+
+Projekt rozdziela oba oficjalne hosty Google:
+
+- `assembleDebug` buduje APK telefonu dla projektowanego Android Auto i Desktop Head Unit,
+- `assembleAutomotive` buduje osobny APK dla emulatora Android Automotive OS,
+- oba warianty korzystają z tego samego ekranu, progów alertów i strumienia telemetrii.
+
+Ekran został sprawdzony na oficjalnym emulatorze Automotive oraz testem
+instrumentacyjnym uruchamianym jednocześnie na emulatorze telefonu i auta.
+Uruchomienie ikony w aucie startuje tę samą usługę odczytu BLE co aplikacja
+telefonu; nadal nie istnieje żadna ścieżka zapisu do EMU.
 
 ## iPhone
 

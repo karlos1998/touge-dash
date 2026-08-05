@@ -51,6 +51,11 @@ android {
             versionNameSuffix = "-debug"
             buildConfigField("boolean", "ALLOW_SERVER_OVERRIDE", "true")
         }
+        create("automotive") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".automotive"
+            versionNameSuffix = "-automotive"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -76,6 +81,17 @@ android {
         "META-INF/NOTICE*"
     )
     testOptions.unitTests.isIncludeAndroidResources = true
+
+    sourceSets {
+        getByName("debug") {
+            java.srcDir("src/carPreview/java")
+            res.srcDir("src/carPreview/res")
+        }
+        getByName("automotive") {
+            java.srcDir("src/carPreview/java")
+            res.srcDir("src/carPreview/res")
+        }
+    }
 }
 
 dependencies {
@@ -94,6 +110,14 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.5")
+
+    // Android Auto is currently a developer preview. Google does not provide a
+    // production car-app category for an engine telemetry display, so the
+    // CarAppService is compiled only into local car preview variants.
+    debugImplementation("androidx.car.app:app:1.7.0")
+    debugImplementation("androidx.car.app:app-projected:1.7.0")
+    add("automotiveImplementation", "androidx.car.app:app:1.7.0")
+    add("automotiveImplementation", "androidx.car.app:app-automotive:1.7.0")
 
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")

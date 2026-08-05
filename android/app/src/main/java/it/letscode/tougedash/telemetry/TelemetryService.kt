@@ -51,7 +51,10 @@ import kotlinx.coroutines.withContext
 
 // Every Bluetooth entry point is guarded by hasBluetoothPermission(). Android lint
 // cannot carry that fact through asynchronous GATT callbacks, hence the scoped suppression.
-@SuppressLint("MissingPermission")
+// ForegroundServiceType is declared on TelemetryService in the merged manifest.
+// Car App Library 1.7's lint model cannot associate the source-set manifest
+// declaration with this ServiceCompat call, so suppress that false positive.
+@SuppressLint("MissingPermission", "ForegroundServiceType")
 class TelemetryService : Service() {
     inner class LocalBinder : Binder() { val service get() = this@TelemetryService }
     private val binder = LocalBinder()
