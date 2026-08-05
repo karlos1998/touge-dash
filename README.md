@@ -1,5 +1,8 @@
 # Touge Dash
 
+[![Android CI](https://github.com/karlos1998/touge-dash/actions/workflows/android.yml/badge.svg)](https://github.com/karlos1998/touge-dash/actions/workflows/android.yml)
+[![iOS CI](https://github.com/karlos1998/touge-dash/actions/workflows/ios.yml/badge.svg)](https://github.com/karlos1998/touge-dash/actions/workflows/ios.yml)
+
 Natywne aplikacje mobilne do podglądu danych z ECUMaster EMU Black na Androidzie,
 iPhonie, Apple Watch i ekranie CarPlay. Powstały po to, żeby najważniejsze parametry
 silnika były zawsze pod ręką bez telefonu przyklejonego do szyby.

@@ -1,0 +1,83 @@
+name: Verify iOS
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - name: Show toolchain
+        run: xcodebuild -version
+      - name: Select an available iPhone simulator
+        run: |
+          SIMULATOR_ID="$(xcodebuild \
+            -project ios/TougeDash.xcodeproj \
+            -scheme TougeDash \
+            -showdestinations \
+            | awk -F 'id:' '/platform:iOS Simulator, arch:.*name:iPhone/ { split($2, id, ","); gsub(/[[:space:]]/, "", id[1]); print id[1]; exit }')"
+          test -n "$SIMULATOR_ID"
+          echo "SIMULATOR_ID=$SIMULATOR_ID" >> "$GITHUB_ENV"
+      - name: Run unit tests
+        run: |
+          xcodebuild \
+            -project ios/TougeDash.xcodeproj \
+            -scheme TougeDash \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=${SIMULATOR_ID}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/TougeDash.xcresult" \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO \
+            test
+      - name: Run Xcode static analyzer
+        run: |
+          xcodebuild \
+            -project ios/TougeDash.xcodeproj \
+            -scheme TougeDash \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath "$RUNNER_TEMP/AnalyzeData" \
+            CODE_SIGNING_ALLOWED=NO \
+            analyze
+      - name: Export coverage summary
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/TougeDash.xcresult"; then
+            xcrun xccov view --report --json "$RUNNER_TEMP/TougeDash.xcresult" \
+              > "$RUNNER_TEMP/coverage.json"
+            jq -r '.targets[] | select(.name == "TougeDash.app") | "TougeDash line coverage: \((.lineCoverage * 10000 | round) / 100)% (\(.coveredLines)/\(.executableLines))"' \
+              "$RUNNER_TEMP/coverage.json" \
+              | tee "$RUNNER_TEMP/coverage.txt"
+            jq -e 'any(.targets[]; .name == "TougeDash.app" and .lineCoverage >= 0.20)' \
+              "$RUNNER_TEMP/coverage.json" >/dev/null
+          fi
+      - name: Upload iOS reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-reports
+          path: |
+            ${{ runner.temp }}/TougeDash.xcresult
+            ${{ runner.temp }}/coverage.json
+            ${{ runner.temp }}/coverage.txt
+          if-no-files-found: ignore
+          retention-days: 7
