@@ -81,6 +81,9 @@ import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.TelemetrySnapshot
 import it.letscode.tougedash.model.VehicleAlertRules
 import it.letscode.tougedash.telemetry.TimedTelemetry
+import it.letscode.tougedash.telemetry.EcuControlCoordinator
+import it.letscode.tougedash.telemetry.EcuControlSnapshot
+import it.letscode.tougedash.telemetry.EcuControlState
 import it.letscode.tougedash.performance.AccelerationRuntimeState
 import it.letscode.tougedash.performance.AccelerationType
 import it.letscode.tougedash.ui.theme.TougeCyan
@@ -100,6 +103,7 @@ fun ConfigurableDashboardScreen(
     val templates by container.dashboardRepository.templates.collectAsState(initial = listOf(DashboardTemplate.factory()))
     val chartPoints by container.runtime.chartPoints.collectAsState()
     val performance by container.accelerationEngine.state.collectAsState()
+    val ecuControlState by container.ecuControls.state.collectAsState()
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
     var editorWidget by remember { mutableStateOf<DashboardWidget?>(null) }
@@ -175,6 +179,7 @@ fun ConfigurableDashboardScreen(
             items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) { widget ->
                 EditableDashboardCard(
                     widget, snapshot, chartPoints, performance, alertRules, landscape, editing,
+                    ecuControlState, container.ecuControls,
                     edit = { editorWidget = widget },
                     remove = { scope.launch { saveWidgets(container, template, template.definition.widgets.filterNot { it.id == widget.id }) } },
                     move = { direction -> scope.launch { saveWidgets(container, template, moveWidget(template.definition.widgets, widget.id, direction, landscape)) } }
@@ -242,6 +247,8 @@ private fun EditableDashboardCard(
     alertRules: VehicleAlertRules,
     landscape: Boolean,
     editing: Boolean,
+    ecuControlState: EcuControlState,
+    ecuControls: EcuControlCoordinator,
     edit: () -> Unit,
     remove: () -> Unit,
     move: (Int) -> Unit
@@ -259,9 +266,13 @@ private fun EditableDashboardCard(
         }
     ) {
         val effectiveKind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
-        if (effectiveKind == DashboardWidgetKind.CHART) ChartCard(widget, snapshot, chartPoints, landscape)
-        else if (effectiveKind == DashboardWidgetKind.PERFORMANCE) PerformanceCard(widget, performance, landscape)
-        else DashboardCard(widget, snapshot, landscape, alertRules)
+        when (effectiveKind) {
+            DashboardWidgetKind.CHART -> ChartCard(widget, snapshot, chartPoints, landscape)
+            DashboardWidgetKind.PERFORMANCE -> PerformanceCard(widget, performance, landscape)
+            DashboardWidgetKind.ECU_SWITCH -> EcuSwitchCard(widget, ecuControlState, landscape, !editing) { ecuControls.toggleSwitch(it) }
+            DashboardWidgetKind.ECU_ROTARY -> EcuRotaryCard(widget, ecuControlState, landscape, !editing) { channel, value -> ecuControls.setRotary(channel, value) }
+            else -> DashboardCard(widget, snapshot, landscape, alertRules)
+        }
         if (editing) {
             Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(7.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(30.dp).background(TougeRed.copy(alpha = .88f), CircleShape).border(1.dp, Color.White.copy(alpha = .18f), CircleShape).clickable(onClick = remove), contentAlignment = Alignment.Center) { Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(15.dp)) }
@@ -377,7 +388,15 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                     DashboardWidgetKind.entries.forEach { kind ->
                         FilterChip(
                             selected = value.kind == kind,
-                            onClick = { value = value.copy(kind = kind, metrics = normalizeMetrics(value.metrics, kind)) },
+                            onClick = {
+                                val control = kind == DashboardWidgetKind.ECU_SWITCH || kind == DashboardWidgetKind.ECU_ROTARY
+                                value = value.copy(
+                                    kind = kind,
+                                    metrics = normalizeMetrics(value.metrics, kind),
+                                    controlChannel = if (control) (value.controlChannel ?: 1).coerceIn(1, 8) else null,
+                                    wideKind = if (control) null else value.wideKind
+                                )
+                            },
                             modifier = Modifier.widthIn(min = 104.dp),
                             label = { Text(kind.localizedName(), maxLines = 1) }
                         )
@@ -396,6 +415,18 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                             label = { Text("${type.label} km/h") }
                         )
                     }
+                } else if (value.kind == DashboardWidgetKind.ECU_SWITCH || value.kind == DashboardWidgetKind.ECU_ROTARY) {
+                    Text(appText("ECU CHANNEL", "KANAŁ ECU"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        EcuControlSnapshot.CHANNEL_RANGE.forEach { channel ->
+                            FilterChip(
+                                selected = (value.controlChannel ?: 1) == channel,
+                                onClick = { value = value.copy(controlChannel = channel) },
+                                label = { Text(if (value.kind == DashboardWidgetKind.ECU_SWITCH) "SW $channel" else "ROT $channel") }
+                            )
+                        }
+                    }
+                    Text(appText("The current value is read from EMU after every connection. A cached phone value is never sent.", "Aktualny stan jest odczytywany z EMU po każdym połączeniu. Zapamiętana wartość telefonu nigdy nie jest wysyłana."), color = TougeMuted, fontSize = 10.sp)
                 } else {
                     Text(if (maximumMetricCount(value.kind) > 1) appText("PARAMETERS", "PARAMETRY") else appText("PARAMETER", "PARAMETR"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
@@ -427,11 +458,13 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                 SpanSelector(value.portraitSpan) { value = value.copy(portraitSpan = it) }
                 Text(appText("LANDSCAPE WIDTH", "SZEROKOŚĆ W POZIOMIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 SpanSelector(value.landscapeSpan) { value = value.copy(landscapeSpan = it) }
-                Text(appText("LANDSCAPE PRESENTATION", "WIDOK W POZIOMIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    FilterChip(selected = value.wideKind == null, onClick = { value = value.copy(wideKind = null) }, label = { Text(appText("Same", "Taki sam")) })
-                    DashboardWidgetKind.entries.forEach { kind ->
-                        FilterChip(selected = value.wideKind == kind, onClick = { value = value.copy(wideKind = kind) }, label = { Text(kind.localizedName()) })
+                if (value.kind != DashboardWidgetKind.ECU_SWITCH && value.kind != DashboardWidgetKind.ECU_ROTARY) {
+                    Text(appText("LANDSCAPE PRESENTATION", "WIDOK W POZIOMIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        FilterChip(selected = value.wideKind == null, onClick = { value = value.copy(wideKind = null) }, label = { Text(appText("Same", "Taki sam")) })
+                        DashboardWidgetKind.entries.filterNot { it == DashboardWidgetKind.ECU_SWITCH || it == DashboardWidgetKind.ECU_ROTARY }.forEach { kind ->
+                            FilterChip(selected = value.wideKind == kind, onClick = { value = value.copy(wideKind = kind) }, label = { Text(kind.localizedName()) })
+                        }
                     }
                 }
                 if (value.kind == DashboardWidgetKind.HERO || value.kind == DashboardWidgetKind.GAUGE || value.kind == DashboardWidgetKind.CHART) {
@@ -472,7 +505,7 @@ private fun SpanSelector(selected: Int, changed: (Int) -> Unit) {
 private fun maximumMetricCount(kind: DashboardWidgetKind): Int = when (kind) {
     DashboardWidgetKind.HERO -> 4
     DashboardWidgetKind.GROUP -> 3
-    DashboardWidgetKind.PERFORMANCE -> 0
+    DashboardWidgetKind.PERFORMANCE, DashboardWidgetKind.ECU_SWITCH, DashboardWidgetKind.ECU_ROTARY -> 0
     else -> 1
 }
 

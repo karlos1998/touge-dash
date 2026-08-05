@@ -66,9 +66,13 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
             val metricLimit = when (widget.kind) {
                 it.letscode.tougedash.model.DashboardWidgetKind.HERO -> 4
                 it.letscode.tougedash.model.DashboardWidgetKind.GROUP -> 3
-                it.letscode.tougedash.model.DashboardWidgetKind.PERFORMANCE -> 0
+                it.letscode.tougedash.model.DashboardWidgetKind.PERFORMANCE,
+                it.letscode.tougedash.model.DashboardWidgetKind.ECU_SWITCH,
+                it.letscode.tougedash.model.DashboardWidgetKind.ECU_ROTARY -> 0
                 else -> 1
             }
+            val isControl = widget.kind == it.letscode.tougedash.model.DashboardWidgetKind.ECU_SWITCH ||
+                widget.kind == it.letscode.tougedash.model.DashboardWidgetKind.ECU_ROTARY
             widget.copy(
                 metrics = if (metricLimit == 0) emptyList() else widget.metrics.take(metricLimit).ifEmpty { listOf(it.letscode.tougedash.model.TelemetryMetric.BOOST) },
                 portraitSpan = widget.portraitSpan.coerceIn(0, 12),
@@ -76,7 +80,9 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
                 portraitOrder = widget.portraitOrder.takeIf { it >= 0 } ?: index,
                 landscapeOrder = widget.landscapeOrder.takeIf { it >= 0 } ?: index,
                 gaugeMinimum = widget.gaugeMinimum?.takeIf { minimum -> widget.gaugeMaximum == null || minimum < widget.gaugeMaximum },
-                chartDurationSeconds = widget.chartDurationSeconds?.takeIf { it in setOf(30, 180, 600) }
+                chartDurationSeconds = widget.chartDurationSeconds?.takeIf { it in setOf(30, 180, 600) },
+                controlChannel = if (isControl) (widget.controlChannel ?: 1).coerceIn(1, 8) else null,
+                wideKind = if (isControl) null else widget.wideKind
             )
         }
         return copy(
@@ -89,7 +95,7 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
 
 internal fun normalizeLegacyDashboardJson(value: String): String {
     val names = mapOf(
-        "HERO" to "hero", "GROUP" to "group", "VALUE" to "value", "GAUGE" to "gauge", "CHART" to "chart", "COMPACT" to "compact", "PERFORMANCE" to "performance",
+        "HERO" to "hero", "GROUP" to "group", "VALUE" to "value", "GAUGE" to "gauge", "CHART" to "chart", "COMPACT" to "compact", "PERFORMANCE" to "performance", "ECU_SWITCH" to "ecuSwitch", "ECU_ROTARY" to "ecuRotary",
         "CYAN" to "cyan", "MINT" to "mint", "BLUE" to "blue", "ICE" to "ice", "ORANGE" to "orange", "YELLOW" to "yellow", "RED" to "red", "WHITE" to "white",
         "RPM" to "rpm", "BOOST" to "boost", "MAP" to "map", "THROTTLE" to "throttle", "COOLANT" to "coolant", "INTAKE" to "intake",
         "OIL_TEMPERATURE" to "oilTemperature", "OIL_PRESSURE" to "oilPressure", "FUEL_PRESSURE" to "fuelPressure", "AFR" to "afr", "LAMBDA" to "lambda",

@@ -50,4 +50,6 @@ internal fun DashboardWidgetKind.localizedName(): String = when (this) {
     DashboardWidgetKind.CHART -> appText("chart", "wykres")
     DashboardWidgetKind.COMPACT -> appText("compact", "mała")
     DashboardWidgetKind.PERFORMANCE -> appText("acceleration", "przyspieszenie")
+    DashboardWidgetKind.ECU_SWITCH -> appText("ECU switch", "przełącznik ECU")
+    DashboardWidgetKind.ECU_ROTARY -> appText("ECU rotary", "pokrętło ECU")
 }

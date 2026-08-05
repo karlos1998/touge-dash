@@ -250,12 +250,96 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(Set(samples.compactMap { $0.session?.id }), [firstChange.sessionID, secondChange.sessionID])
     }
 
-    func testBluetoothPolicyNeverAllowsLoggerWrites() {
+    func testPassiveTelemetryPolicyNeverAllowsWrites() {
         let allProperties: CBCharacteristicProperties = [.read, .notify, .write, .writeWithoutResponse]
 
         XCTAssertTrue(BluetoothTelemetryAccessPolicy.shouldRead(allProperties))
         XCTAssertTrue(BluetoothTelemetryAccessPolicy.shouldSubscribe(to: allProperties))
         XCTAssertFalse(BluetoothTelemetryAccessPolicy.allowsCharacteristicWrites)
+    }
+
+    func testECUControlFrameEncodesWholeStateAndChecksum() throws {
+        var state = ECUControlSnapshot()
+        state = try XCTUnwrap(state.settingSwitch(channel: 1, to: true))
+        state = try XCTUnwrap(state.settingSwitch(channel: 3, to: true))
+        state = try XCTUnwrap(state.settingRotary(channel: 1, to: 2))
+        state = try XCTUnwrap(state.settingRotary(channel: 2, to: 7))
+
+        let frame = Array(state.encodedStatusFrame())
+
+        XCTAssertEqual(frame, [0x08, 0x55, 0xA0, 0x27, 0x00, 0x00, 0x00, 0x24])
+        XCTAssertTrue(ECUControlSnapshot.isValidStatusFrame(Data(frame)))
+    }
+
+    func testECUControlLoopbackDecodesSwitchesAndEveryRotaryNibble() throws {
+        var loopback = ECUControlLoopbackAccumulator()
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        loopback.apply(EMUFrame(channel: 254, rawValue: 0x00A0), receivedAt: now)
+        loopback.apply(EMUFrame(channel: 253, rawValue: 0x1234), receivedAt: now)
+        loopback.apply(EMUFrame(channel: 252, rawValue: 0xABCD), receivedAt: now)
+
+        let state = try XCTUnwrap(loopback.snapshotIfFresh(at: now))
+        XCTAssertEqual(state.switches, [true, false, true, false, false, false, false, false])
+        XCTAssertEqual(state.rotaryValues, [1, 2, 3, 4, 10, 11, 12, 13])
+        XCTAssertNil(loopback.snapshotIfFresh(at: now.addingTimeInterval(2.1)))
+    }
+
+    func testECUControlRejectsInvalidChannelRangeAndChecksum() {
+        let state = ECUControlSnapshot()
+        XCTAssertNil(state.settingSwitch(channel: 0, to: true))
+        XCTAssertNil(state.settingSwitch(channel: 9, to: true))
+        XCTAssertNil(state.settingRotary(channel: 1, to: 16))
+
+        var frame = state.encodedStatusFrame()
+        frame[7] &+= 1
+        XCTAssertFalse(ECUControlSnapshot.isValidStatusFrame(frame))
+    }
+
+    func testECUControlTransportAllowsOnlyExactKnownProfiles() {
+        XCTAssertEqual(ECUControlTransportPolicy.priority(
+            service: CBUUID(string: "FFE0"),
+            characteristic: CBUUID(string: "FFE1")
+        ), 1)
+        XCTAssertEqual(ECUControlTransportPolicy.priority(
+            service: CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"),
+            characteristic: CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+        ), 2)
+        XCTAssertNil(ECUControlTransportPolicy.priority(
+            service: CBUUID(string: "FFE0"),
+            characteristic: CBUUID(string: "FFE2")
+        ))
+    }
+
+    @MainActor
+    func testECUControlCoordinatorWaitsForLoopbackAndConfirmsExactState() throws {
+        let coordinator = ECUControlCoordinator(notificationCenter: NotificationCenter(), applicationIsActive: true)
+        var sentFrame: Data?
+        coordinator.writer = { frame, completion in
+            sentFrame = frame
+            completion(.success(()))
+        }
+        coordinator.connectionChanged(isConnected: true)
+        coordinator.transportAvailabilityChanged(true)
+
+        XCTAssertFalse(coordinator.toggleSwitch(channel: 1))
+        let now = Date.now
+        coordinator.ingest(EMUFrame(channel: 254, rawValue: 0), receivedAt: now)
+        coordinator.ingest(EMUFrame(channel: 253, rawValue: 0), receivedAt: now)
+        coordinator.ingest(EMUFrame(channel: 252, rawValue: 0), receivedAt: now)
+        XCTAssertTrue(coordinator.isReady)
+
+        XCTAssertTrue(coordinator.toggleSwitch(channel: 1))
+        XCTAssertTrue(try XCTUnwrap(sentFrame).count == 8)
+        XCTAssertNotNil(coordinator.pending)
+
+        let confirmationTime = Date.now.addingTimeInterval(0.01)
+        coordinator.ingest(EMUFrame(channel: 254, rawValue: 0x80), receivedAt: confirmationTime)
+        XCTAssertNotNil(coordinator.pending)
+        coordinator.ingest(EMUFrame(channel: 253, rawValue: 0), receivedAt: confirmationTime)
+        XCTAssertNotNil(coordinator.pending)
+        coordinator.ingest(EMUFrame(channel: 252, rawValue: 0), receivedAt: confirmationTime)
+        XCTAssertEqual(coordinator.switchValue(channel: 1), true)
+        XCTAssertNil(coordinator.pending)
     }
 
     func testCloudSyncProgressTracksSamplesAndEmptySessions() {

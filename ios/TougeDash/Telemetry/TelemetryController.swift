@@ -25,6 +25,7 @@ final class TelemetryController: ObservableObject {
     let cloudSync: CloudSyncManager
     let videoRecorder: DriveVideoRecorder
     let accelerationEngine: AccelerationEngine
+    let ecuControls = ECUControlCoordinator()
     private let watchBridge = WatchTelemetryBridge.shared
     private let engineAlertManager = EngineAlertManager()
 
@@ -71,8 +72,26 @@ final class TelemetryController: ObservableObject {
         #endif
 
         bluetooth.onBytes = { [weak self] data in self?.ingest(data) }
+        ecuControls.writer = { [weak bluetooth] data, completion in
+            guard let bluetooth else {
+                completion(.failure(NSError(
+                    domain: "TougeDash.ECUControl",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: localized("Bluetooth jest niedostępny.")]
+                )))
+                return
+            }
+            bluetooth.writeControlFrame(data, completion: completion)
+        }
+        bluetooth.onControlTransportChanged = { [weak self] available in
+            self?.ecuControls.transportAvailabilityChanged(available)
+        }
         bluetooth.onConnectionChanged = { [weak self] state in
             guard let self else { return }
+            self.ecuControls.connectionChanged(isConnected: state.isConnected)
+            if state.isConnected {
+                self.ecuControls.transportAvailabilityChanged(self.bluetooth.controlTransportAvailable)
+            }
             self.locationTracker.setDriveActive(state.isConnected)
             UIApplication.shared.isIdleTimerDisabled = state.isConnected
             if state.isConnected {
@@ -216,7 +235,10 @@ final class TelemetryController: ObservableObject {
             lastDiagnosticsPublish = now
         }
         guard !frames.isEmpty else { return }
-        for frame in frames { accumulator.apply(frame) }
+        for frame in frames {
+            ecuControls.ingest(frame, receivedAt: now)
+            accumulator.apply(frame)
+        }
         enqueueTelemetryProcessing(accumulator.snapshot, now: now)
     }
 

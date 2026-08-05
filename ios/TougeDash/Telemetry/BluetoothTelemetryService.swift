@@ -15,8 +15,8 @@ struct DiscoveredTelemetryDevice: Identifiable, Hashable, Sendable {
     let isLikelyEMU: Bool
 }
 
-/// Touge Dash is a passive dashboard. Its BLE contract intentionally exposes
-/// only GATT reads and notifications; ECU/logger writes are never permitted.
+/// The telemetry path is passive: it only reads and subscribes. Optional BT
+/// control cards use the separate, tightly scoped policy below.
 enum BluetoothTelemetryAccessPolicy {
     static let allowsCharacteristicWrites = false
 
@@ -26,6 +26,38 @@ enum BluetoothTelemetryAccessPolicy {
 
     static func shouldRead(_ properties: CBCharacteristicProperties) -> Bool {
         properties.contains(.read)
+    }
+}
+
+/// ECU control is intentionally separate from the passive telemetry contract.
+/// Only the two profiles observed in eDash are accepted; an arbitrary writable
+/// characteristic must never become a control target.
+enum ECUControlTransportPolicy {
+    static let nordicUARTService = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+    static let nordicUARTRX = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+    static let emuService = CBUUID(string: "FFE0")
+    static let emuCharacteristic = CBUUID(string: "FFE1")
+
+    static func priority(service: CBUUID, characteristic: CBUUID) -> Int? {
+        if service == nordicUARTService, characteristic == nordicUARTRX { return 2 }
+        if service == emuService, characteristic == emuCharacteristic { return 1 }
+        return nil
+    }
+}
+
+private enum ECUControlTransportError: LocalizedError {
+    case unavailable
+    case busy
+    case rejected
+    case disconnected
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable: localized("Brak zatwierdzonego kanału zapisu ECU.")
+        case .busy: localized("Poprzednia zmiana nadal jest wysyłana.")
+        case .rejected: localized("Bluetooth odrzucił ramkę sterującą.")
+        case .disconnected: localized("Połączenie Bluetooth zostało przerwane.")
+        }
     }
 }
 
@@ -64,9 +96,11 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     @Published private(set) var lastPacketHex = ""
     @Published private(set) var connectedIdentifier: UUID?
     @Published private(set) var connectedIsSimulator = false
+    @Published private(set) var controlTransportAvailable = false
 
     var onBytes: ((Data) -> Void)?
     var onConnectionChanged: ((BluetoothConnectionState) -> Void)?
+    var onControlTransportChanged: ((Bool) -> Void)?
 
     private var central: CBCentralManager!
     private var peripherals: [UUID: CBPeripheral] = [:]
@@ -78,6 +112,9 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     private var totalPacketCount = 0
     private var totalByteCount = 0
     private var lastCounterPublishAt = Date.distantPast
+    private var controlCharacteristic: CBCharacteristic?
+    private var controlCharacteristicPriority = 0
+    private var pendingControlWrite: (characteristicID: CBUUID, completion: (Result<Void, Error>) -> Void)?
     private let lastPeripheralKey = "TougeDash.lastECUMasterPeripheral"
     private let debugLogURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("tougedash-ble.log")
@@ -186,7 +223,47 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         connectedPeripheral = nil
         connectedIdentifier = nil
         connectedIsSimulator = false
+        resetControlTransport(error: ECUControlTransportError.disconnected)
         setState(.disconnected(nil))
+    }
+
+    func writeControlFrame(_ data: Data, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard ECUControlSnapshot.isValidStatusFrame(data),
+              let peripheral = connectedPeripheral,
+              peripheral.state == .connected,
+              let characteristic = controlCharacteristic else {
+            completion(.failure(ECUControlTransportError.unavailable))
+            return
+        }
+        guard pendingControlWrite == nil else {
+            completion(.failure(ECUControlTransportError.busy))
+            return
+        }
+
+        let properties = characteristic.properties
+        let writeType: CBCharacteristicWriteType
+        if properties.contains(.write) {
+            writeType = .withResponse
+        } else if properties.contains(.writeWithoutResponse) {
+            writeType = .withoutResponse
+        } else {
+            completion(.failure(ECUControlTransportError.unavailable))
+            return
+        }
+
+        pendingControlWrite = (characteristic.uuid, completion)
+        peripheral.writeValue(data, for: characteristic, type: writeType)
+        appendDiagnostic("ECU TX [\(characteristic.uuid.uuidString)] \(data.map { String(format: "%02X", $0) }.joined(separator: " "))")
+
+        if writeType == .withoutResponse {
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(40))
+                guard let self, let pending = self.pendingControlWrite,
+                      pending.characteristicID == characteristic.uuid else { return }
+                self.pendingControlWrite = nil
+                pending.completion(.success(()))
+            }
+        }
     }
 
     private func setState(_ newState: BluetoothConnectionState) {
@@ -204,6 +281,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         let name = discoveredName ?? peripheral.name ?? "ECUMaster interface"
         let isSimulator = Self.isSimulatorName(name)
         connectedIsSimulator = isSimulator
+        resetControlTransport()
         peripherals[peripheral.identifier] = peripheral
         let connectedDevice = DiscoveredTelemetryDevice(
             id: peripheral.identifier,
@@ -281,6 +359,34 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
 
         return likelyEMUName(advertisedText)
     }
+
+    private func considerControlCharacteristic(_ characteristic: CBCharacteristic, service: CBService) {
+        guard characteristic.properties.contains(.write) || characteristic.properties.contains(.writeWithoutResponse),
+              let priority = ECUControlTransportPolicy.priority(
+                service: service.uuid,
+                characteristic: characteristic.uuid
+              ), priority > controlCharacteristicPriority else {
+            return
+        }
+        controlCharacteristic = characteristic
+        controlCharacteristicPriority = priority
+        controlTransportAvailable = true
+        onControlTransportChanged?(true)
+        appendDiagnostic(String(format: localized("Zatwierdzony kanał sterowania ECU: %@"), characteristic.uuid.uuidString))
+    }
+
+    private func resetControlTransport(error: Error? = nil) {
+        controlCharacteristic = nil
+        controlCharacteristicPriority = 0
+        if controlTransportAvailable {
+            controlTransportAvailable = false
+            onControlTransportChanged?(false)
+        }
+        if let pending = pendingControlWrite {
+            pendingControlWrite = nil
+            pending.completion(.failure(error ?? ECUControlTransportError.unavailable))
+        }
+    }
 }
 
 extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
@@ -351,6 +457,7 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         connectedPeripheral = nil
         connectedIdentifier = nil
         connectedIsSimulator = false
+        resetControlTransport(error: error ?? ECUControlTransportError.disconnected)
         resumeScanning()
     }
 
@@ -366,6 +473,7 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         connectedPeripheral = nil
         connectedIdentifier = nil
         connectedIsSimulator = false
+        resetControlTransport(error: error ?? ECUControlTransportError.disconnected)
         resumeScanning()
     }
 
@@ -425,10 +533,14 @@ extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
                 peripheral.readValue(for: characteristic)
             }
             if properties.contains(.write) || properties.contains(.writeWithoutResponse) {
-                appendDiagnostic(String(
-                    format: localized("Characteristic %@ offers writes; ignored by read-only policy"),
-                    characteristic.uuid.uuidString
-                ))
+                if ECUControlTransportPolicy.priority(service: service.uuid, characteristic: characteristic.uuid) != nil {
+                    considerControlCharacteristic(characteristic, service: service)
+                } else {
+                    appendDiagnostic(String(
+                        format: localized("Characteristic %@ offers writes; ignored by read-only policy"),
+                        characteristic.uuid.uuidString
+                    ))
+                }
             }
         }
     }
@@ -468,5 +580,17 @@ extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
             lastCounterPublishAt = now
         }
         onBytes?(value)
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        guard let pending = pendingControlWrite,
+              pending.characteristicID == characteristic.uuid else { return }
+        pendingControlWrite = nil
+        if let error {
+            appendDiagnostic(String(format: localized("Błąd zapisu sterowania ECU: %@"), error.localizedDescription))
+            pending.completion(.failure(error))
+        } else {
+            pending.completion(.success(()))
+        }
     }
 }

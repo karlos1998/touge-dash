@@ -94,12 +94,19 @@ można dodać również do dowolnego momentu zwykłego przejazdu. Przejazdy, rap
 i notatki trafiają do kolejki offline i są wysyłane w tej kolejności po
 odzyskaniu internetu.
 
-## Gwarancja trybu tylko do odczytu
+## Granica bezpieczeństwa Bluetooth
 
-Warstwa CoreBluetooth dopuszcza wyłącznie `setNotifyValue` i `readValue`.
-Charakterystyki oferujące zapis są jawnie ignorowane, a test jednostkowy blokuje
-przypadkowe rozszerzenie tej polityki. Touge Dash nie wysyła ustawień ani poleceń
-do EMU/EMULOGGERA.
+Tor telemetrii CoreBluetooth dopuszcza wyłącznie `setNotifyValue` i `readValue`.
+Dowolne charakterystyki oferujące zapis są ignorowane. Osobna warstwa kart
+sterujących rozpoznaje wyłącznie NUS RX albo `FFE0/FFE1` i przyjmuje tylko
+poprawną ośmiobajtową ramkę BT Switch/BT Rotary z checksumem. Nie udostępnia API
+do surowych zapisów GATT, CAN, map ani nastaw silnika.
+
+Po każdym połączeniu karta pozostaje nieaktywna, dopóki kanały zwrotne 254–252
+nie dostarczą kompletnego i świeżego stanu. Zmiana jest uznana za wykonaną dopiero
+po identycznym loopbacku z EMU. Timeout, rozłączenie lub tło aplikacji wycofują
+stan oczekujący. Telefon nie zapisuje ostatniego położenia przełączników jako
+wartości, którą mógłby później automatycznie wysłać.
 
 ## Synchronizacja online
 
@@ -201,5 +208,5 @@ xcodebuild \
 
 Testy obejmują fragmentację notyfikacji BLE, szum, złą sumę kontrolną,
 resynchronizację, skalowanie kanałów, wartości ze znakiem, podział sesji,
-częstotliwość zapisu, politykę Bluetooth tylko do odczytu oraz wszystkie reguły
-incydentów z buforem przed i po zdarzeniu.
+częstotliwość zapisu, pasywną politykę telemetrii, kodowanie i loopback kart
+sterujących oraz wszystkie reguły incydentów z buforem przed i po zdarzeniu.

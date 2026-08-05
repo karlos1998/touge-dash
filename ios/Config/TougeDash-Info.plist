@@ -39,9 +39,9 @@
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Touge Dash uses Bluetooth to receive engine data from a compatible ECUMaster interface.</string>
+	<string>Touge Dash uses Bluetooth to receive engine data and to send explicitly configured BT Switch or BT Rotary values to a compatible ECUMaster interface.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Touge Dash uses Bluetooth to receive engine data from a compatible ECUMaster interface.</string>
+	<string>Touge Dash uses Bluetooth to receive engine data and to send explicitly configured BT Switch or BT Rotary values to a compatible ECUMaster interface.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Touge Dash uses the selected camera to record a drive locally on this device.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

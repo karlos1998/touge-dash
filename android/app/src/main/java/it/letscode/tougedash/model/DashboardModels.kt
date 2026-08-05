@@ -13,7 +13,9 @@ enum class DashboardWidgetKind {
     @SerialName("gauge") GAUGE,
     @SerialName("chart") CHART,
     @SerialName("compact") COMPACT,
-    @SerialName("performance") PERFORMANCE
+    @SerialName("performance") PERFORMANCE,
+    @SerialName("ecuSwitch") ECU_SWITCH,
+    @SerialName("ecuRotary") ECU_ROTARY
 }
 
 @Serializable
@@ -43,6 +45,7 @@ data class DashboardWidget(
     val gaugeMaximum: Double? = null,
     @SerialName("chartDuration") val chartDurationSeconds: Int? = null,
     val accelerationTypes: List<AccelerationType> = AccelerationType.entries,
+    val controlChannel: Int? = null,
     val accent: DashboardAccent = DashboardAccent.CYAN
 )
 

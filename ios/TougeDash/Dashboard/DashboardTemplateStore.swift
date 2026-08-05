@@ -233,10 +233,19 @@ final class DashboardTemplateStore: ObservableObject {
     private func normalize(_ record: inout DashboardTemplateRecord) {
         record.definition.widgets = record.definition.widgets.map { widget in
             var value = widget
-            if value.metrics.isEmpty && value.kind != .performance { value.metrics = [.boost] }
-            if value.kind == .performance { value.metrics = [] }
+            let isControl = value.kind == .ecuSwitch || value.kind == .ecuRotary
+            if value.metrics.isEmpty && value.kind != .performance && !isControl { value.metrics = [.boost] }
+            if value.kind == .performance || isControl { value.metrics = [] }
             if value.kind == .group { value.metrics = Array(value.metrics.prefix(3)) }
-            if value.kind != .group && value.kind != .hero { value.metrics = [value.primaryMetric] }
+            if value.kind != .group && value.kind != .hero && value.kind != .performance && !isControl {
+                value.metrics = [value.primaryMetric]
+            }
+            if isControl {
+                value.controlChannel = min(8, max(1, value.controlChannel ?? 1))
+                value.wideKind = nil
+            } else {
+                value.controlChannel = nil
+            }
             return value
         }
         normalizeOrder(in: &record, isWide: false)

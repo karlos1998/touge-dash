@@ -95,6 +95,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.delay
 
 @Composable
@@ -116,6 +118,18 @@ fun TougeDashApp(
     val lifecycleOwner = LocalLifecycleOwner.current
     val videoSettings by container.videoRecordingSettings.settings.collectAsState()
     val namePrompts = remember { context.getSharedPreferences("vehicle-name-prompts", android.content.Context.MODE_PRIVATE) }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner, container) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> container.ecuControls.applicationActive(true)
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> container.ecuControls.applicationActive(false)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        container.ecuControls.applicationActive(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     androidx.compose.runtime.DisposableEffect(rootView, connection.state, videoSettings.automaticRecording) {
         rootView.keepScreenOn = connection.state == ConnectionState.Connected || videoSettings.automaticRecording
         onDispose { rootView.keepScreenOn = false }

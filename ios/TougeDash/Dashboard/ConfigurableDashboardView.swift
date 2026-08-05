@@ -6,6 +6,7 @@ struct ConfigurableDashboardView: View {
     let snapshot: TelemetrySnapshot
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
     @ObservedObject var accelerationEngine: AccelerationEngine
+    @ObservedObject var ecuControls: ECUControlCoordinator
     let isWide: Bool
     let compact: Bool
     let isEditing: Bool
@@ -37,6 +38,7 @@ struct ConfigurableDashboardView: View {
                     snapshot: snapshot,
                     telemetryBuffer: telemetryBuffer,
                     accelerationEngine: accelerationEngine,
+                    ecuControls: ecuControls,
                     isWide: isWide,
                     compact: compact,
                     spacing: spacing,
@@ -57,6 +59,7 @@ private struct DashboardGridRow: View {
     let snapshot: TelemetrySnapshot
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
     @ObservedObject var accelerationEngine: AccelerationEngine
+    @ObservedObject var ecuControls: ECUControlCoordinator
     let isWide: Bool
     let compact: Bool
     let spacing: CGFloat
@@ -85,6 +88,7 @@ private struct DashboardGridRow: View {
                         snapshot: snapshot,
                         telemetryBuffer: telemetryBuffer,
                         accelerationEngine: accelerationEngine,
+                        ecuControls: ecuControls,
                         isWide: isWide,
                         compact: compact,
                         isEditing: isEditing,
@@ -127,6 +131,7 @@ private struct EditableDashboardWidget: View {
     let snapshot: TelemetrySnapshot
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
     @ObservedObject var accelerationEngine: AccelerationEngine
+    @ObservedObject var ecuControls: ECUControlCoordinator
     let isWide: Bool
     let compact: Bool
     let isEditing: Bool
@@ -242,16 +247,18 @@ private struct EditableDashboardWidget: View {
             snapshot: snapshot,
             telemetryBuffer: telemetryBuffer,
             accelerationEngine: accelerationEngine,
+            ecuControls: ecuControls,
             isWide: isWide,
-            compact: compact
+            compact: compact,
+            controlsAreInteractive: !isEditing
         )
     }
 
     private var dragPreview: some View {
         HStack(spacing: 9) {
-            Image(systemName: widget.primaryMetric.icon)
+            Image(systemName: widget.displayIcon)
                 .foregroundStyle(widget.accent.color)
-            Text(widget.title?.isEmpty == false ? widget.title! : widget.primaryMetric.title)
+            Text(widget.displayTitle)
                 .font(.subheadline.weight(.bold))
                 .lineLimit(1)
         }
@@ -322,7 +329,7 @@ enum DashboardGridLayout {
             switch kind {
             case .hero: return 150
             case .group: return 112
-            case .value, .gauge, .chart, .performance: return 96
+            case .value, .gauge, .chart, .performance, .ecuSwitch, .ecuRotary: return 96
             case .compact: return 54
             }
         } else {
@@ -334,6 +341,7 @@ enum DashboardGridLayout {
             case .chart: return 220
             case .compact: return 70
             case .performance: return 188
+            case .ecuSwitch, .ecuRotary: return 145
             }
         }
     }
@@ -344,8 +352,10 @@ private struct DashboardWidgetView: View {
     let snapshot: TelemetrySnapshot
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
     @ObservedObject var accelerationEngine: AccelerationEngine
+    @ObservedObject var ecuControls: ECUControlCoordinator
     let isWide: Bool
     let compact: Bool
+    let controlsAreInteractive: Bool
 
     var body: some View {
         let kind = isWide ? (widget.wideKind ?? widget.kind) : widget.kind
@@ -364,6 +374,20 @@ private struct DashboardWidgetView: View {
             DashboardCompactWidget(widget: widget, snapshot: snapshot, compact: compact)
         case .performance:
             DashboardPerformanceWidget(widget: widget, engine: accelerationEngine, compact: compact)
+        case .ecuSwitch:
+            DashboardECUSwitchWidget(
+                widget: widget,
+                controls: ecuControls,
+                compact: compact,
+                interactionEnabled: controlsAreInteractive
+            )
+        case .ecuRotary:
+            DashboardECURotaryWidget(
+                widget: widget,
+                controls: ecuControls,
+                compact: compact,
+                interactionEnabled: controlsAreInteractive
+            )
         }
     }
 }

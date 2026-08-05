@@ -162,7 +162,9 @@ cd android
 
 Android automatycznie wyszukuje wyłącznie pasujące interfejsy ECUMaster, zapamiętuje
 ostatni EMULOGGER i utrzymuje zapis w usłudze pierwszoplanowej po wygaszeniu ekranu.
-Połączenie z FFE1 pozostaje tylko do odczytu. Zapis GPS jest domyślnie wyłączony.
+Telemetria z FFE1 pozostaje pasywna. Opcjonalne karty `BT Switch` i `BT Rotary`
+mogą wysłać wyłącznie ośmiobajtową ramkę stanu po uprzednim odczytaniu aktualnych
+wartości zwrotnych z EMU. Zapis GPS jest domyślnie wyłączony.
 Dashboardy mają osobne układy pionowe i poziome, można je duplikować, zmieniać,
 przywracać oraz synchronizować z kontem. Centrum alertów i szablony HUD używają
 tych samych modeli danych co iOS, dzięki czemu konfiguracja nie zmienia znaczenia
@@ -236,9 +238,9 @@ pilne powiadomienie na iPhonie oraz zmienia kartę Live Activity i CarPlay na cz
 
 ## Protokół
 
-Połączenie Bluetooth jest celowo tylko do odczytu. Aplikacja subskrybuje
-notyfikacje GATT i odczytuje charakterystyki; nie wykonuje `writeValue` i nie
-wysyła do ECU ani loggera poleceń, map, nastaw lub konfiguracji.
+Podstawowy tor telemetrii Bluetooth jest tylko do odczytu. Aplikacja subskrybuje
+notyfikacje GATT i odczytuje charakterystyki. Nie wysyła map ECU, nastaw silnika
+ani dowolnych danych CAN/GATT.
 
 Strumień ECUMaster składa się z pięciobajtowych ramek:
 
@@ -250,6 +252,21 @@ Strumień ECUMaster składa się z pięciobajtowych ramek:
 strumieniowo, radzi sobie z ramkami rozdzielonymi pomiędzy notyfikacje BLE i
 wraca do synchronizacji po uszkodzonych danych.
 
+Opcjonalne karty dashboardu `BT Switch 1...8` i `BT Rotary 1...8` używają
+wydzielonej ramki zgodnej z eDash:
+
+```text
+[0x08] [0x55] [switch bitmap] [rotary 1/2] [3/4] [5/6] [7/8] [checksum]
+```
+
+Zapis jest dozwolony wyłącznie do rozpoznanej charakterystyki NUS RX albo
+`FFE0/FFE1`. Przed odblokowaniem karty aplikacja musi odebrać świeży, kompletny
+stan zwrotny na kanałach 254, 253 i 252. Po zmianie wysyła pełny stan, a interfejs
+pozostaje w trybie oczekiwania do chwili, gdy EMU potwierdzi dokładnie tę samą
+wartość. Brak potwierdzenia, utrata połączenia lub przejście aplikacji w tło
+anuluje operację. Szablon dashboardu zapisuje tylko typ karty i numer kanału —
+nigdy ostatni stan przełącznika.
+
 ## Symulator EMULOGGERA na macOS
 
 Do repozytorium jest dołączona natywna aplikacja macOS reklamująca przez BLE
@@ -258,7 +275,8 @@ albo 25 razy na sekundę, udostępnia gotowe scenariusze jazdy i pozwala ręczni
 zmieniać parametry. Dzięki temu można sprawdzić dashboard, nagrania, historię,
 alerty i reconnect bez uruchamiania samochodu.
 
-Symulator nie obsługuje zapisów do BLE ani komunikacji z ECU. Przy włączonej
+Symulator przyjmuje wyłącznie testową ramkę kart BT Switch/BT Rotary, emituje
+odpowiadający jej loopback i nie komunikuje się z ECU. Przy włączonej
 synchronizacji online jest rozpoznawany jako osobne auto, któremu można nadać
 własną nazwę. Instrukcja uruchomienia znajduje się w
 [`tools/EMULoggerSimulator/README.md`](tools/EMULoggerSimulator/README.md).

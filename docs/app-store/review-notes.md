@@ -12,7 +12,9 @@ Live engine values require all of the following:
 
 The app automatically discovers and reconnects to the compatible interface. It intentionally does not present the reviewer with a list of unrelated Bluetooth devices.
 
-Because this hardware and a running vehicle are difficult to provide to App Review, a private recording made with the physical ECU, EMULOGGER, iPhone and iPad is attached in App Store Connect. The recording demonstrates automatic connection, live read-only dashboard updates, connection diagnostics and local drive history.
+Because this hardware and a running vehicle are difficult to provide to App Review, a private recording made with the physical ECU, EMULOGGER, iPhone and iPad is attached in App Store Connect. The recording demonstrates automatic connection, live dashboard updates, connection diagnostics and local drive history.
+
+Telemetry is passive and read-only. Users may optionally add explicit `BT Switch` or `BT Rotary` cards to a custom dashboard. Those cards can only send the documented eight-byte virtual-control state to a recognized ECUMaster BLE characteristic after the app has received the complete current state from the interface. They cannot write ECU maps, engine calibration, CAN messages or arbitrary GATT data. The UI waits for an identical loopback value from the interface and reports a timeout instead of assuming that a change succeeded.
 
 The app remains usable without the hardware: the reviewer can inspect navigation, account functionality, permissions, existing synchronized vehicle data in the web dashboard and account deletion. No feature requires payment or an in-app purchase.
 

@@ -21,6 +21,11 @@ struct SimulatorTelemetry: Equatable, Sendable {
     var mapKPa: Double { max(0, barometricKPa + boostBar * 100) }
 }
 
+struct SimulatorControlState: Equatable, Sendable {
+    var switches = Array(repeating: false, count: 8)
+    var rotaryValues = Array(repeating: UInt8(0), count: 8)
+}
+
 enum EMUFrameCodec {
     static func encode(channel: UInt8, rawValue: UInt16) -> Data {
         let payload = [channel, 0xA3, UInt8(rawValue >> 8), UInt8(rawValue & 0xFF)]
@@ -50,6 +55,36 @@ enum EMUFrameCodec {
         return frames.reduce(into: Data()) { data, frame in
             data.append(encode(channel: frame.0, rawValue: frame.1))
         }
+    }
+
+    static func decodeControlStatus(_ data: Data) -> SimulatorControlState? {
+        let bytes = Array(data)
+        guard bytes.count == 8, bytes[0] == 0x08, bytes[1] == 0x55 else { return nil }
+        let checksum = UInt8(truncatingIfNeeded: bytes.prefix(7).reduce(0) { $0 + Int($1) })
+        guard checksum == bytes[7] else { return nil }
+
+        let switches = (0..<8).map { index in
+            (bytes[2] & UInt8(1 << (7 - index))) != 0
+        }
+        let rotary = bytes[3...6].flatMap { byte in [byte >> 4, byte & 0x0F] }
+        return SimulatorControlState(switches: switches, rotaryValues: rotary)
+    }
+
+    static func encodeControlLoopback(_ state: SimulatorControlState) -> Data {
+        let switchByte = state.switches.enumerated().reduce(UInt8(0)) { result, entry in
+            entry.element ? result | UInt8(1 << (7 - entry.offset)) : result
+        }
+        let first = packRotary(state.rotaryValues[0..<4])
+        let second = packRotary(state.rotaryValues[4..<8])
+        var data = Data()
+        data.append(encode(channel: 254, rawValue: UInt16(switchByte)))
+        data.append(encode(channel: 253, rawValue: first))
+        data.append(encode(channel: 252, rawValue: second))
+        return data
+    }
+
+    private static func packRotary(_ values: ArraySlice<UInt8>) -> UInt16 {
+        values.reduce(UInt16(0)) { result, value in (result << 4) | UInt16(value & 0x0F) }
     }
 
     private static func unsigned8(_ value: Double) -> UInt16 {

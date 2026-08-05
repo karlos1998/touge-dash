@@ -2,6 +2,8 @@ package it.letscode.tougedash.dashboard
 
 import it.letscode.tougedash.model.DashboardDefinition
 import it.letscode.tougedash.model.DashboardTemplate
+import it.letscode.tougedash.model.DashboardWidget
+import it.letscode.tougedash.model.DashboardWidgetKind
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -29,6 +31,23 @@ class DashboardParityTest {
         assertTrue(encoded.contains("\"metrics\":[\"boost\",\"map\",\"throttle\",\"rpm\"]"))
         assertTrue(encoded.contains("\"accent\":\"cyan\""))
         assertTrue(encoded.contains("\"chartDuration\""))
+    }
+
+    @Test
+    fun `control card uses the same optional schema as ios`() {
+        val widget = DashboardWidget(
+            kind = DashboardWidgetKind.ECU_ROTARY,
+            metrics = emptyList(),
+            portraitSpan = 6,
+            landscapeSpan = 4,
+            portraitOrder = 0,
+            controlChannel = 6
+        )
+        val encoded = json.encodeToString(widget)
+
+        assertTrue(encoded.contains("\"kind\":\"ecuRotary\""))
+        assertTrue(encoded.contains("\"controlChannel\":6"))
+        assertEquals(widget, json.decodeFromString<DashboardWidget>(encoded))
     }
 
     @Test

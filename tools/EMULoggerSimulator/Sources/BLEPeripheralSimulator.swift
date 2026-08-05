@@ -13,6 +13,7 @@ final class BLEPeripheralSimulator: NSObject, ObservableObject {
     @Published private(set) var notificationCount = 0
     @Published private(set) var byteCount = 0
     @Published private(set) var lastPacketHex = "—"
+    @Published private(set) var controlState = SimulatorControlState()
     @Published private(set) var lastError: String?
 
     private var manager: CBPeripheralManager!
@@ -20,6 +21,7 @@ final class BLEPeripheralSimulator: NSObject, ObservableObject {
     private var wantsAdvertising = false
     private var subscribedCentralIDs = Set<UUID>()
     private var pendingChunks: [Data] = []
+    private var latestTelemetryPayload = Data()
     private var latestPayload = Data()
 
     override init() {
@@ -61,9 +63,14 @@ final class BLEPeripheralSimulator: NSObject, ObservableObject {
     }
 
     func send(_ payload: Data) {
-        latestPayload = payload
+        latestTelemetryPayload = payload
+        publishLatestPayload()
+    }
+
+    private func publishLatestPayload() {
+        latestPayload = latestTelemetryPayload + EMUFrameCodec.encodeControlLoopback(controlState)
         guard wantsAdvertising, subscriberCount > 0, characteristic != nil else { return }
-        pendingChunks = chunks(for: payload)
+        pendingChunks = chunks(for: latestPayload)
         drainPendingChunks()
     }
 
@@ -81,9 +88,9 @@ final class BLEPeripheralSimulator: NSObject, ObservableObject {
 
         let characteristic = CBMutableCharacteristic(
             type: Self.characteristicUUID,
-            properties: [.read, .notify],
+            properties: [.read, .notify, .write],
             value: nil,
-            permissions: [.readable]
+            permissions: [.readable, .writeable]
         )
         let service = CBMutableService(type: Self.serviceUUID, primary: true)
         service.characteristics = [characteristic]
@@ -156,7 +163,7 @@ extension BLEPeripheralSimulator: @preconcurrency CBPeripheralManagerDelegate {
     ) {
         subscribedCentralIDs.insert(central.identifier)
         subscriberCount = subscribedCentralIDs.count
-        if !latestPayload.isEmpty { send(latestPayload) }
+        publishLatestPayload()
     }
 
     func peripheralManager(
@@ -187,7 +194,15 @@ extension BLEPeripheralSimulator: @preconcurrency CBPeripheralManagerDelegate {
 
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
         for request in requests {
-            peripheral.respond(to: request, withResult: .writeNotPermitted)
+            guard request.characteristic.uuid == Self.characteristicUUID,
+                  let value = request.value,
+                  let decoded = EMUFrameCodec.decodeControlStatus(value) else {
+                peripheral.respond(to: request, withResult: .unlikelyError)
+                continue
+            }
+            controlState = decoded
+            peripheral.respond(to: request, withResult: .success)
+            publishLatestPayload()
         }
     }
 }

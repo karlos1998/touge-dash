@@ -10,6 +10,7 @@
 		0445B54FD5520FC04D8FF0DA /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 766C369A028C9554F6713EF4 /* PrivacyInfo.xcprivacy */; };
 		06B80D050A4A57A6F2042E94 /* DriveVideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68EE821538067F559C124118 /* DriveVideoRecorder.swift */; };
 		07DD3DEBC6F93D500397E40D /* TougeDashRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E791078ECAA3EBD6D0CDB63 /* TougeDashRootView.swift */; };
+		0AEAC90FB71C0B4C951A3FFB /* ECUControlCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A58979507C455A34C62243C7 /* ECUControlCoordinator.swift */; };
 		0EBCD9A1BB5ED65085F937EC /* CloudWebAuthenticationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F31DF319B7913DE4E073912F /* CloudWebAuthenticationSession.swift */; };
 		112733D2EDB08FD8A7923BD2 /* TougeDashWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = E697F34CB3FBBBECDE56B5FB /* TougeDashWatch.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		145DC707D755B1C800A818E0 /* DriveVideoFeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B05E162CFE078B735FA31F7 /* DriveVideoFeatureTests.swift */; };
@@ -23,6 +24,7 @@
 		2F5A43CF144D24A36986C752 /* WatchAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */; };
 		30A4F8895C5D5D7DCF993BBB /* CloudAccountService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959C63DBA5B8A3C9E02CC0A2 /* CloudAccountService.swift */; };
 		32C08267B68F81BBDB3BE1A2 /* TougeDashWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 867564BA0BCD96BE13BB6CF2 /* TougeDashWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		34EED1753DFB332DAFB5DDC7 /* DashboardECUControlWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9974EC3FF4BB5544EF4CCC48 /* DashboardECUControlWidgets.swift */; };
 		3BCB3D0B6BC454922D743146 /* WatchTelemetryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5EC0840422B283BEFAECA00 /* WatchTelemetryController.swift */; };
 		3D36302E4ADB8DAAB6E746E4 /* DashboardTemplateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1008C0FBAC866F95BABD8A9B /* DashboardTemplateStore.swift */; };
 		418EFD2CB073246DEB3FA87F /* DriveVideoRecordingCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324ECA2B4DB8807A9925483F /* DriveVideoRecordingCard.swift */; };
@@ -43,6 +45,7 @@
 		93B92EBD25C2A7DD562B0349 /* CloudCredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D4BDC1640C2CC10C5B971C /* CloudCredentialStore.swift */; };
 		9CDDC9896D9EAC134E86C104 /* HistoryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1B6F75BEE169D2AC7626A3 /* HistoryModels.swift */; };
 		9F0A9C87668727632F2E2367 /* CloudViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B13510CE4FA317F340E83B /* CloudViews.swift */; };
+		A00292686479C8D58F0B9112 /* ECUControlProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D85B1610883F11F264EE4259 /* ECUControlProtocol.swift */; };
 		A013B1B7AB2E77C176694780 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0ABE317B4A0CDB49B92ABA6 /* ContentView.swift */; };
 		A3D885FB266C889302457D68 /* CloudPasswordPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 767D9110B65429B111BC8471 /* CloudPasswordPolicy.swift */; };
 		A6CD8DBB2FCE3F3AB3D631E2 /* AlertCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23DB35220D4E5079DFF7037A /* AlertCenterView.swift */; };
@@ -167,7 +170,9 @@
 		90C8C98EFFBD36920D116D0E /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		959C63DBA5B8A3C9E02CC0A2 /* CloudAccountService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAccountService.swift; sourceTree = "<group>"; };
 		97630148259D8776DD8E7BD5 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		9974EC3FF4BB5544EF4CCC48 /* DashboardECUControlWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardECUControlWidgets.swift; sourceTree = "<group>"; };
 		9E791078ECAA3EBD6D0CDB63 /* TougeDashRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashRootView.swift; sourceTree = "<group>"; };
+		A58979507C455A34C62243C7 /* ECUControlCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ECUControlCoordinator.swift; sourceTree = "<group>"; };
 		B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryPayload.swift; sourceTree = "<group>"; };
 		B38F2608603DA13A1DCCB7BF /* DriveVideoHistorySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoHistorySection.swift; sourceTree = "<group>"; };
 		B6DF9230FC2BD86F85A70343 /* TougeDashWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashWidgets.swift; sourceTree = "<group>"; };
@@ -177,6 +182,7 @@
 		C864400F6D0621EB9AE0063F /* EMUProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EMUProtocol.swift; sourceTree = "<group>"; };
 		D642E0E53B986134A1AD69DA /* CloudSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncManager.swift; sourceTree = "<group>"; };
 		D665D4EDDED532A21F6CE081 /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
+		D85B1610883F11F264EE4259 /* ECUControlProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ECUControlProtocol.swift; sourceTree = "<group>"; };
 		D8B13510CE4FA317F340E83B /* CloudViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudViews.swift; sourceTree = "<group>"; };
 		DA1B6F75BEE169D2AC7626A3 /* HistoryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryModels.swift; sourceTree = "<group>"; };
 		E0283F8F27A9276CBEC6AA4F /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -226,6 +232,7 @@
 			isa = PBXGroup;
 			children = (
 				2C91642725B1BB61E1466BB0 /* ConfigurableDashboardView.swift */,
+				9974EC3FF4BB5544EF4CCC48 /* DashboardECUControlWidgets.swift */,
 				8920142F4ACD5BE349220C77 /* DashboardModels.swift */,
 				4D8E154F0783092C9E408ED1 /* DashboardTelemetryBuffer.swift */,
 				0995A0CC3CAECAE373495929 /* DashboardTemplateControls.swift */,
@@ -424,6 +431,8 @@
 			isa = PBXGroup;
 			children = (
 				8EB4599FA4D016749B9DEF63 /* BluetoothTelemetryService.swift */,
+				A58979507C455A34C62243C7 /* ECUControlCoordinator.swift */,
+				D85B1610883F11F264EE4259 /* ECUControlProtocol.swift */,
 				C864400F6D0621EB9AE0063F /* EMUProtocol.swift */,
 				697C6502047A8B29FFEA91EF /* EngineAlertManager.swift */,
 				F4AB235F1E099FCAD2444AEC /* TelemetryController.swift */,
@@ -636,6 +645,7 @@
 				0EBCD9A1BB5ED65085F937EC /* CloudWebAuthenticationSession.swift in Sources */,
 				F469901AF43C776D3A20B4D3 /* ConfigurableDashboardView.swift in Sources */,
 				A013B1B7AB2E77C176694780 /* ContentView.swift in Sources */,
+				34EED1753DFB332DAFB5DDC7 /* DashboardECUControlWidgets.swift in Sources */,
 				461565700F8C1458526589B9 /* DashboardModels.swift in Sources */,
 				DF0EFA5F5E90AC47FB60A2C9 /* DashboardTelemetryBuffer.swift in Sources */,
 				D8CFE42360328B0EEE565637 /* DashboardTemplateControls.swift in Sources */,
@@ -646,6 +656,8 @@
 				44EC962E52388A57767D2763 /* DriveVideoModels.swift in Sources */,
 				06B80D050A4A57A6F2042E94 /* DriveVideoRecorder.swift in Sources */,
 				418EFD2CB073246DEB3FA87F /* DriveVideoRecordingCard.swift in Sources */,
+				0AEAC90FB71C0B4C951A3FFB /* ECUControlCoordinator.swift in Sources */,
+				A00292686479C8D58F0B9112 /* ECUControlProtocol.swift in Sources */,
 				E7C3A817DFBB318DB2BA1366 /* EMUProtocol.swift in Sources */,
 				F3E8E9984021000DE8B68120 /* EngineAlertManager.swift in Sources */,
 				9CDDC9896D9EAC134E86C104 /* HistoryModels.swift in Sources */,

@@ -31,6 +31,24 @@ final class DashboardTemplateTests: XCTestCase {
         XCTAssertEqual(DashboardMetric.speed.value(in: snapshot), 128)
     }
 
+    func testControlCardUsesCloudCompatibleDashboardSchema() throws {
+        let widget = DashboardWidget(
+            kind: .ecuSwitch,
+            metrics: [],
+            portraitSpan: .half,
+            landscapeSpan: .third,
+            portraitOrder: 0,
+            controlChannel: 7,
+            accent: .mint
+        )
+        let data = try JSONEncoder().encode(widget)
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+
+        XCTAssertTrue(json.contains("\"kind\":\"ecuSwitch\""))
+        XCTAssertTrue(json.contains("\"controlChannel\":7"))
+        XCTAssertEqual(try JSONDecoder().decode(DashboardWidget.self, from: data), widget)
+    }
+
     func testGridPacksWidgetsWithoutExceedingTwelveColumns() {
         let widgets = DashboardTemplateRecord.factory().definition.widgets
             .filter { $0.landscapeSpan != .hidden }

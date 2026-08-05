@@ -16,7 +16,7 @@ settings:
     SWIFT_VERSION: "6.0"
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "10"
+    CURRENT_PROJECT_VERSION: "11"
     ENABLE_USER_SCRIPT_SANDBOXING: YES
     TOUGE_DASH_CRITICAL_ALERTS_ENABLED: NO
     CLANG_ENABLE_MODULES: YES
@@ -47,8 +47,8 @@ targets:
           - CFBundleURLName: it.letscode.touge-dash.auth
             CFBundleURLSchemes:
               - tougedash
-        NSBluetoothAlwaysUsageDescription: Touge Dash uses Bluetooth to receive engine data from a compatible ECUMaster interface.
-        NSBluetoothPeripheralUsageDescription: Touge Dash uses Bluetooth to receive engine data from a compatible ECUMaster interface.
+        NSBluetoothAlwaysUsageDescription: Touge Dash uses Bluetooth to receive engine data and to send explicitly configured BT Switch or BT Rotary values to a compatible ECUMaster interface.
+        NSBluetoothPeripheralUsageDescription: Touge Dash uses Bluetooth to receive engine data and to send explicitly configured BT Switch or BT Rotary values to a compatible ECUMaster interface.
         NSLocationWhenInUseUsageDescription: When route recording is enabled, Touge Dash records location with engine telemetry, including while the phone is locked.
         NSCameraUsageDescription: Touge Dash uses the selected camera to record a drive locally on this device.
         NSMicrophoneUsageDescription: Touge Dash can record sound with a local drive video when you enable audio.

@@ -34,6 +34,7 @@ struct ContentView: View {
                             snapshot: controller.snapshot,
                             telemetryBuffer: telemetryBuffer,
                             accelerationEngine: controller.accelerationEngine,
+                            ecuControls: controller.ecuControls,
                             isWide: isWide,
                             compact: isCompactWide,
                             isEditing: isEditingDashboard,

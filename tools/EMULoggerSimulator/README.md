@@ -5,7 +5,8 @@ do testowania Touge Dash bez uruchamiania samochodu.
 
 Symulator reklamuje usługę GATT `FFE0`, charakterystykę `FFE1` z odczytem i
 notyfikacjami oraz wysyła ramki w formacie używanym przez aplikację mobilną.
-Nie obsługuje zapisów i nie komunikuje się z ECU.
+Przyjmuje wyłącznie poprawne ramki testowe `BT Switch` / `BT Rotary` i zwraca ich
+stan w kanałach loopback 254–252. Nie komunikuje się z prawdziwym ECU.
 
 ## Użycie
 

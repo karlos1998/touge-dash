@@ -161,6 +161,8 @@ enum DashboardWidgetKind: String, Codable, CaseIterable, Identifiable, Sendable 
     case chart
     case compact
     case performance
+    case ecuSwitch
+    case ecuRotary
 
     var id: String { rawValue }
 
@@ -173,6 +175,8 @@ enum DashboardWidgetKind: String, Codable, CaseIterable, Identifiable, Sendable 
         case .chart: localized("Wykres na żywo")
         case .compact: localized("Mała wartość")
         case .performance: localized("Pomiar przyspieszenia")
+        case .ecuSwitch: localized("Przełącznik ECU")
+        case .ecuRotary: localized("Pokrętło ECU")
         }
     }
 }
@@ -255,6 +259,7 @@ struct DashboardWidget: Codable, Hashable, Identifiable, Sendable {
     var gaugeMaximum: Double?
     var chartDuration: DashboardChartDuration?
     var accelerationTypes: [AccelerationType]?
+    var controlChannel: Int?
     var accent: DashboardAccent
 
     init(
@@ -271,6 +276,7 @@ struct DashboardWidget: Codable, Hashable, Identifiable, Sendable {
         gaugeMaximum: Double? = nil,
         chartDuration: DashboardChartDuration? = nil,
         accelerationTypes: [AccelerationType]? = nil,
+        controlChannel: Int? = nil,
         accent: DashboardAccent = .cyan
     ) {
         self.id = id
@@ -286,10 +292,28 @@ struct DashboardWidget: Codable, Hashable, Identifiable, Sendable {
         self.gaugeMaximum = gaugeMaximum
         self.chartDuration = chartDuration
         self.accelerationTypes = accelerationTypes
+        self.controlChannel = controlChannel
         self.accent = accent
     }
 
     var primaryMetric: DashboardMetric { metrics.first ?? .boost }
+
+    var displayIcon: String {
+        switch kind {
+        case .ecuSwitch: "switch.2"
+        case .ecuRotary: "dial.medium"
+        default: primaryMetric.icon
+        }
+    }
+
+    var displayTitle: String {
+        if let title, !title.isEmpty { return title }
+        switch kind {
+        case .ecuSwitch: return String(format: localized("BT Switch %d"), controlChannel ?? 1)
+        case .ecuRotary: return String(format: localized("BT Rotary %d"), controlChannel ?? 1)
+        default: return primaryMetric.title
+        }
+    }
 }
 
 struct DashboardDefinition: Codable, Hashable, Sendable {

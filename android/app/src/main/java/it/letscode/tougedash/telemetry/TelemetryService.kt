@@ -66,6 +66,7 @@ class TelemetryService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var samplingJob: Job? = null
     private var bluetoothGatt: BluetoothGatt? = null
+    private var controlCharacteristic: BluetoothGattCharacteristic? = null
     private var scanning = false
     private var manuallyStopped = false
     private var lastConnectionPublishAt = 0L
@@ -89,6 +90,7 @@ class TelemetryService : Service() {
     override fun onBind(intent: Intent?): IBinder = binder
     override fun onDestroy() {
         stopSampling()
+        container.ecuControls.connectionChanged(false)
         container.locationTracker.stop()
         serviceScope.cancel()
         super.onDestroy()
@@ -133,6 +135,8 @@ class TelemetryService : Service() {
         bluetoothGatt?.disconnect()
         bluetoothGatt?.close()
         bluetoothGatt = null
+        controlCharacteristic = null
+        container.ecuControls.connectionChanged(false)
         stopSampling()
         updateConnection(ConnectionState.Idle, message = local("Stopped", "Zatrzymano"))
         stopForeground(STOP_FOREGROUND_DETACH)
@@ -169,9 +173,12 @@ class TelemetryService : Service() {
                 if (!hasBluetoothPermission()) return
                 lastAddress = gatt.device.address
                 updateConnection(ConnectionState.Connected, gatt.device.name ?: "EMULOGGER", gatt.device.address)
+                container.ecuControls.connectionChanged(true)
                 TelemetryRuntime.diagnostic("Connected; discovering FFE0")
                 gatt.discoverServices()
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                controlCharacteristic = null
+                container.ecuControls.connectionChanged(false)
                 gatt.close()
                 if (bluetoothGatt === gatt) bluetoothGatt = null
                 stopSampling()
@@ -191,17 +198,31 @@ class TelemetryService : Service() {
             }
             gatt.setCharacteristicNotification(characteristic, true)
             characteristic.getDescriptor(CCCD_UUID)?.let { descriptor ->
-                // CCCD is Bluetooth subscription metadata; no value is ever written to EMU data characteristic FFE1.
+                // CCCD is Bluetooth subscription metadata, not an ECU control value.
                 descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                 gatt.writeDescriptor(descriptor)
             }
-            TelemetryRuntime.diagnostic("Subscribed read-only to FFE1 notifications")
+            val nusControl = gatt.getService(NUS_SERVICE_UUID)?.getCharacteristic(NUS_RX_UUID)
+                ?.takeIf(::supportsWrite)
+            val emuControl = characteristic.takeIf(::supportsWrite)
+            controlCharacteristic = nusControl ?: emuControl
+            val approvedControl = controlCharacteristic
+            container.ecuControls.transportChanged(approvedControl != null) { data ->
+                approvedControl != null && writeControlFrame(gatt, approvedControl, data)
+            }
+            TelemetryRuntime.diagnostic(
+                if (approvedControl == null) "Subscribed to FFE1; ECU control is unavailable"
+                else "Subscribed to FFE1; approved ECU control ${approvedControl.uuid}"
+            )
             startSampling(gatt.device.address, gatt.device.name ?: "EMULOGGER")
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
             if (characteristic.uuid != EMU_CHARACTERISTIC_UUID) return
-            parser.feed(characteristic.value ?: return).forEach { TelemetryRuntime.updateSnapshot(accumulator.apply(it)) }
+            parser.feed(characteristic.value ?: return).forEach {
+                container.ecuControls.ingest(it)
+                TelemetryRuntime.updateSnapshot(accumulator.apply(it))
+            }
             updateConnection(
                 ConnectionState.Connected,
                 gatt.device.name ?: "EMULOGGER",
@@ -211,6 +232,39 @@ class TelemetryService : Service() {
                 dropped = parser.stats.droppedBytes
             )
         }
+
+        override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            if (characteristic.uuid != controlCharacteristic?.uuid) return
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                TelemetryRuntime.diagnostic("ECU control write failed ($status)")
+                container.ecuControls.transportWriteFailed()
+            }
+        }
+    }
+
+    private fun supportsWrite(characteristic: BluetoothGattCharacteristic): Boolean {
+        val properties = characteristic.properties
+        return properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0 ||
+            properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+    }
+
+    private fun writeControlFrame(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        data: ByteArray
+    ): Boolean {
+        if (bluetoothGatt !== gatt || !EcuControlSnapshot.isValidStatusFrame(data) || !supportsWrite(characteristic)) return false
+        characteristic.writeType = if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) {
+            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+        } else {
+            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+        }
+        characteristic.value = data
+        val accepted = gatt.writeCharacteristic(characteristic)
+        if (accepted) {
+            TelemetryRuntime.diagnostic("ECU TX [${characteristic.uuid}] ${data.joinToString(" ") { "%02X".format(it.toUByte().toInt()) }}")
+        }
+        return accepted
     }
 
     private fun startSampling(hardwareId: String, deviceName: String) {
@@ -365,6 +419,8 @@ class TelemetryService : Service() {
         private const val NOTIFICATION_ID = 42
         val EMU_SERVICE_UUID: UUID = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
         val EMU_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
+        val NUS_SERVICE_UUID: UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
+        val NUS_RX_UUID: UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 }

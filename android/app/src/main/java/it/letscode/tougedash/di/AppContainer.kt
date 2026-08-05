@@ -21,6 +21,7 @@ import it.letscode.tougedash.cloud.CloudAuthRepository
 import it.letscode.tougedash.cloud.CloudSyncRepository
 import it.letscode.tougedash.model.DashboardTemplate
 import it.letscode.tougedash.telemetry.TelemetryRuntime
+import it.letscode.tougedash.telemetry.EcuControlCoordinator
 import it.letscode.tougedash.performance.AccelerationEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,6 +64,7 @@ class AppContainer(val application: Application) {
         .build()
     val dao = database.dao()
     val runtime = TelemetryRuntime
+    val ecuControls = EcuControlCoordinator(applicationScope)
     val historyRepository = HistoryRepository(dao)
     val accelerationEngine = AccelerationEngine()
     val alertNotifier = EngineAlertNotifier(application)

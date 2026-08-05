@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.test.runTest
 
 class EmuProtocolTest {
     @Test fun fragmentedAndConcatenatedFramesAreDecoded() {
@@ -52,5 +53,56 @@ class EmuProtocolTest {
 
         TelemetryRuntime.updateConnection(TelemetryConnection(state = ConnectionState.Idle))
         assertFalse(TelemetryRuntime.requestDriveSplit())
+    }
+
+    @Test fun ecuControlFrameMatchesEDashWholeStateFormat() {
+        val state = EcuControlSnapshot()
+            .settingSwitch(1, true)!!
+            .settingSwitch(3, true)!!
+            .settingRotary(1, 2)!!
+            .settingRotary(2, 7)!!
+        val frame = state.encodeStatusFrame()
+
+        assertEquals(listOf(0x08, 0x55, 0xA0, 0x27, 0, 0, 0, 0x24), frame.map { it.toUByte().toInt() })
+        assertTrue(EcuControlSnapshot.isValidStatusFrame(frame))
+    }
+
+    @Test fun ecuControlLoopbackDecodesAllChannelsAndExpires() {
+        val accumulator = EcuControlLoopbackAccumulator()
+        accumulator.apply(EmuFrame(254, 0xA0), 1_000)
+        accumulator.apply(EmuFrame(253, 0x1234), 1_000)
+        accumulator.apply(EmuFrame(252, 0xABCD), 1_000)
+
+        val state = accumulator.freshSnapshot(1_000)!!
+        assertEquals(listOf(true, false, true, false, false, false, false, false), state.switches)
+        assertEquals(listOf(1, 2, 3, 4, 10, 11, 12, 13), state.rotaryValues)
+        assertEquals(null, accumulator.freshSnapshot(3_001))
+    }
+
+    @Test fun coordinatorNeverWritesBeforeFreshLoopbackAndConfirmsFromEmu() = runTest {
+        val coordinator = EcuControlCoordinator(backgroundScope)
+        var sent: ByteArray? = null
+        coordinator.connectionChanged(true)
+        coordinator.transportChanged(true) { frame -> sent = frame; true }
+
+        assertFalse(coordinator.toggleSwitch(1))
+        val now = System.currentTimeMillis()
+        coordinator.ingest(EmuFrame(254, 0), now)
+        coordinator.ingest(EmuFrame(253, 0), now)
+        coordinator.ingest(EmuFrame(252, 0), now)
+        assertTrue(coordinator.state.value.ready)
+
+        assertTrue(coordinator.toggleSwitch(1))
+        assertTrue(EcuControlSnapshot.isValidStatusFrame(sent!!))
+        assertTrue(coordinator.state.value.pending != null)
+
+        val confirmationAt = System.currentTimeMillis() + 1
+        coordinator.ingest(EmuFrame(254, 0x80), confirmationAt)
+        assertTrue(coordinator.state.value.pending != null)
+        coordinator.ingest(EmuFrame(253, 0), confirmationAt)
+        assertTrue(coordinator.state.value.pending != null)
+        coordinator.ingest(EmuFrame(252, 0), confirmationAt)
+        assertEquals(true, coordinator.state.value.observed?.switchValue(1))
+        assertEquals(null, coordinator.state.value.pending)
     }
 }

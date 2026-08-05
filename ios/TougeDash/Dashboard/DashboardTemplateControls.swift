@@ -303,7 +303,7 @@ struct DashboardTemplateEditor: View {
                 }
 
                 Section {
-                    Label(localized("Touge Dash wyłącznie odczytuje dane. Konfiguracja dashboardu nie wysyła żadnych wartości ani poleceń do ECU lub EMULOGGERA."), systemImage: "checkmark.shield.fill")
+                    Label(localized("Karty parametrów pozostają tylko do odczytu. Karta sterowania wysyła wyłącznie stan BT Switch lub BT Rotary po potwierdzonej synchronizacji z EMU."), systemImage: "checkmark.shield.fill")
                         .font(.footnote)
                         .foregroundStyle(Color.tougeMint)
                 }
@@ -383,7 +383,7 @@ struct DashboardWidgetQuickEditor: View {
 
                 Section {
                     Label(
-                        localized("Zmiany dotyczą wyłącznie wyglądu dashboardu i nie są wysyłane do ECU."),
+                        localized("Konfiguracja wyglądu nie jest wysyłana do ECU. Dopiero użycie gotowej karty sterowania może zmienić przypisany BT Switch lub BT Rotary."),
                         systemImage: "checkmark.shield.fill"
                     )
                     .font(.footnote)
@@ -418,7 +418,7 @@ private struct DashboardWidgetEditorRow: View {
         switch widget.kind {
         case .hero: 4
         case .group: 3
-        case .performance: 0
+        case .performance, .ecuSwitch, .ecuRotary: 0
         default: 1
         }
     }
@@ -439,6 +439,19 @@ private struct DashboardWidgetEditorRow: View {
                         Toggle("\(type.label) km/h", isOn: accelerationTypeBinding(type))
                     }
                 }
+            } else if widget.kind == .ecuSwitch || widget.kind == .ecuRotary {
+                Picker(localized("Kanał ECU"), selection: controlChannelBinding) {
+                    ForEach(ECUControlSnapshot.channelRange, id: \.self) { channel in
+                        Text(widget.kind == .ecuSwitch ? "BT Switch \(channel)" : "BT Rotary \(channel)")
+                            .tag(channel)
+                    }
+                }
+                Label(
+                    localized("Stan zostanie odczytany z EMU po połączeniu. Karta nie używa zapamiętanej wartości z telefonu."),
+                    systemImage: "arrow.triangle.2.circlepath"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             } else {
                 Picker(localized("Główny parametr"), selection: metricBinding(at: 0, fallback: .boost)) {
                     ForEach(DashboardMetric.allCases) { metric in
@@ -495,12 +508,12 @@ private struct DashboardWidgetEditorRow: View {
             }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: widget.primaryMetric.icon)
+                Image(systemName: widget.displayIcon)
                     .frame(width: 34, height: 34)
                     .foregroundStyle(widget.accent.color)
                     .background(widget.accent.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(widget.title?.isEmpty == false ? widget.title! : widget.primaryMetric.title)
+                    Text(widget.displayTitle)
                         .font(.headline)
                     Text(widget.kind.title)
                         .font(.caption)
@@ -568,13 +581,23 @@ private struct DashboardWidgetEditorRow: View {
         )
     }
 
+    private var controlChannelBinding: Binding<Int> {
+        Binding(
+            get: { min(8, max(1, widget.controlChannel ?? 1)) },
+            set: { widget.controlChannel = min(8, max(1, $0)) }
+        )
+    }
+
     private func normalizeMetrics(for kind: DashboardWidgetKind) {
-        let count = kind == .hero ? 4 : (kind == .group ? 3 : (kind == .performance ? 0 : 1))
+        let isControl = kind == .ecuSwitch || kind == .ecuRotary
+        let count = kind == .hero ? 4 : (kind == .group ? 3 : ((kind == .performance || isControl) ? 0 : 1))
         if count == 0 {
             widget.metrics = []
             widget.wideKind = nil
+            widget.controlChannel = isControl ? min(8, max(1, widget.controlChannel ?? 1)) : nil
             return
         }
+        widget.controlChannel = nil
         while widget.metrics.count < count {
             widget.metrics.append(fallbackMetric(at: widget.metrics.count))
         }
