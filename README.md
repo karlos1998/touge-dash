@@ -7,6 +7,22 @@ silnika były zawsze pod ręką bez telefonu przyklejonego do szyby.
 Kod protokołu jest niezależną implementacją — projekt nie zawiera kodu ani
 zasobów z oficjalnego eDash.
 
+## Aplikacja
+
+### Android
+
+<p align="center">
+  <img src="docs/screenshots/android-dashboard.png" width="250" alt="Dashboard Touge Dash na Androidzie" />
+  <img src="docs/screenshots/android-history.png" width="250" alt="Historia przejazdów Touge Dash na Androidzie" />
+  <img src="docs/screenshots/android-alert-center.png" width="250" alt="Centrum alertów Touge Dash na Androidzie" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/android-dashboard-landscape.png" width="780" alt="Poziomy dashboard Touge Dash na Androidzie" />
+</p>
+
+### iPhone, iPad, CarPlay i Apple Watch
+
 <p align="center">
   <img src="docs/screenshots/dashboard.png" width="390" alt="Touge Dash na iPhone" />
   <img src="docs/screenshots/live-activity.png" width="390" alt="Touge Dash Live Activity" />
