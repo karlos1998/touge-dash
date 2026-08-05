@@ -21,6 +21,7 @@ class DashboardParityTest {
         assertEquals(10, widgets.size)
         assertEquals(12, widgets[1].landscapeSpan)
         assertEquals(listOf("MAP", "RPM"), widgets.filter { it.portraitSpan == 0 }.map { it.metrics.first().name })
+        assertEquals(0, DashboardTemplate.factory().definition.pageOrder)
     }
 
     @Test
@@ -63,5 +64,16 @@ class DashboardParityTest {
 
         assertEquals(DashboardTemplate.factory().definition.widgets.size, decoded.widgets.size)
         assertEquals(DashboardTemplate.factory().definition.widgets.first().kind, decoded.widgets.first().kind)
+    }
+
+    @Test
+    fun `dashboard page order is optional for old cloud records`() {
+        val current = json.encodeToString(DashboardTemplate.factory().definition)
+        val legacy = current.replace(Regex(",?\\\"pageOrder\\\":0"), "")
+
+        val decoded = json.decodeFromString<DashboardDefinition>(legacy)
+
+        assertEquals(null, decoded.pageOrder)
+        assertEquals(10, decoded.widgets.size)
     }
 }

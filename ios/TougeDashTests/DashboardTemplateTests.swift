@@ -121,6 +121,34 @@ final class DashboardTemplateTests: XCTestCase {
     }
 
     @MainActor
+    func testDashboardPagesKeepOrderNavigateAndNeverDeleteTheLastPage() throws {
+        let suite = "TougeDashTests.dashboard.pages.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = DashboardTemplateStore(defaults: defaults, keyPrefix: suite)
+
+        let trailing = store.createPage(atStart: false)
+        let leading = store.createPage(atStart: true)
+        XCTAssertEqual(store.templates.map(\.id), [leading.id, DashboardTemplateRecord.factoryID, trailing.id])
+        XCTAssertEqual(store.activePageIndex, 0)
+
+        XCTAssertTrue(store.selectAdjacentPage(offset: 1))
+        XCTAssertEqual(store.activeTemplateID, DashboardTemplateRecord.factoryID)
+        XCTAssertTrue(store.selectAdjacentPage(offset: 1))
+        XCTAssertEqual(store.activeTemplateID, trailing.id)
+        XCTAssertFalse(store.selectAdjacentPage(offset: 1))
+
+        store.delete(trailing.id)
+        store.delete(DashboardTemplateRecord.factoryID)
+        XCTAssertEqual(store.templates.count, 1)
+        store.delete(leading.id)
+        XCTAssertEqual(store.templates.map(\.id), [leading.id])
+
+        let reloaded = DashboardTemplateStore(defaults: defaults, keyPrefix: suite)
+        XCTAssertEqual(reloaded.templates.map(\.id), [leading.id])
+    }
+
+    @MainActor
     func testServerTombstoneRemovesTemplateButKeepsAUsableDashboard() throws {
         let suite = "TougeDashTests.dashboard.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

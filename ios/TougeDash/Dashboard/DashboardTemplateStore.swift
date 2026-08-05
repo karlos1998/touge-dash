@@ -52,6 +52,17 @@ final class DashboardTemplateStore: ObservableObject {
         if initialRecords.allSatisfy({ $0.deletedAt != nil }) {
             initialRecords.append(.factory())
         }
+        let needsPageOrderMigration = initialRecords.contains {
+            $0.deletedAt == nil && $0.definition.pageOrder == nil
+        }
+        if needsPageOrderMigration {
+            var nextOrder = 0
+            for index in initialRecords.indices where initialRecords[index].deletedAt == nil {
+                initialRecords[index].definition.pageOrder = nextOrder
+                initialRecords[index].modifiedAt = .now
+                nextOrder += 1
+            }
+        }
         let storedActive = defaults.string(forKey: activeTemplateKey).flatMap(UUID.init(uuidString:))
         let visibleIDs = Set(initialRecords.filter { $0.deletedAt == nil }.map(\.id))
         records = initialRecords
@@ -59,6 +70,9 @@ final class DashboardTemplateStore: ObservableObject {
             ?? initialRecords.first(where: { $0.deletedAt == nil })?.id
             ?? DashboardTemplateRecord.factoryID
         persist()
+        if needsPageOrderMigration {
+            syncState = .pending
+        }
     }
 
     var templates: [DashboardTemplateRecord] {
@@ -66,10 +80,15 @@ final class DashboardTemplateStore: ObservableObject {
             .filter { $0.deletedAt == nil }
             .sorted {
                 if $0.id == $1.id { return false }
-                if $0.id == activeTemplateID { return true }
-                if $1.id == activeTemplateID { return false }
-                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                let lhsOrder = $0.definition.pageOrder ?? .max
+                let rhsOrder = $1.definition.pageOrder ?? .max
+                if lhsOrder != rhsOrder { return lhsOrder < rhsOrder }
+                return $0.id.uuidString < $1.id.uuidString
             }
+    }
+
+    var activePageIndex: Int {
+        templates.firstIndex(where: { $0.id == activeTemplateID }) ?? 0
     }
 
     var activeTemplate: DashboardTemplateRecord {
@@ -83,11 +102,27 @@ final class DashboardTemplateStore: ObservableObject {
     @discardableResult
     func createCopy(of source: DashboardTemplateRecord? = nil, name: String? = nil) -> DashboardTemplateRecord {
         let source = source ?? activeTemplate
-        let newRecord = DashboardTemplateRecord(
+        var newRecord = DashboardTemplateRecord(
             name: name ?? String(format: localized("Kopia %@"), source.name),
             definition: source.definition
         )
+        newRecord.definition.pageOrder = templates.count
         records.append(newRecord)
+        activeTemplateID = newRecord.id
+        markLocalChange()
+        return newRecord
+    }
+
+    @discardableResult
+    func createPage(atStart: Bool) -> DashboardTemplateRecord {
+        let source = activeTemplate
+        var newRecord = DashboardTemplateRecord(
+            name: String(format: localized("Ekran %d"), templates.count + 1),
+            definition: source.definition
+        )
+        newRecord.definition.pageOrder = atStart ? 0 : templates.count
+        records.append(newRecord)
+        reorderPages(moving: newRecord.id, to: atStart ? 0 : templates.count)
         activeTemplateID = newRecord.id
         markLocalChange()
         return newRecord
@@ -162,20 +197,35 @@ final class DashboardTemplateStore: ObservableObject {
         activeTemplateID = id
     }
 
+    @discardableResult
+    func selectAdjacentPage(offset: Int) -> Bool {
+        let pages = templates
+        guard let index = pages.firstIndex(where: { $0.id == activeTemplateID }) else { return false }
+        let destination = index + offset
+        guard pages.indices.contains(destination) else { return false }
+        activeTemplateID = pages[destination].id
+        return true
+    }
+
     func delete(_ id: UUID) {
-        guard templates.count > 1,
+        let pagesBeforeDeletion = templates
+        guard pagesBeforeDeletion.count > 1,
               let index = records.firstIndex(where: { $0.id == id && $0.deletedAt == nil }) else { return }
+        let deletedPageIndex = pagesBeforeDeletion.firstIndex(where: { $0.id == id }) ?? 0
         let now = Date.now
         records[index].deletedAt = now
         records[index].modifiedAt = now
         if activeTemplateID == id {
-            activeTemplateID = records.first(where: { $0.deletedAt == nil })?.id ?? DashboardTemplateRecord.factoryID
+            let remaining = pagesBeforeDeletion.filter { $0.id != id }
+            activeTemplateID = remaining[min(deletedPageIndex, remaining.count - 1)].id
         }
+        normalizePageOrders(modifiedAt: now)
         markLocalChange()
     }
 
     func restoreFactoryTemplate() {
-        let factory = DashboardTemplateRecord.factory(modifiedAt: .now)
+        var factory = DashboardTemplateRecord.factory(modifiedAt: .now)
+        factory.definition.pageOrder = records.first(where: { $0.id == DashboardTemplateRecord.factoryID })?.definition.pageOrder ?? 0
         if let index = records.firstIndex(where: { $0.id == DashboardTemplateRecord.factoryID }) {
             records[index] = factory
         } else {
@@ -215,6 +265,7 @@ final class DashboardTemplateStore: ObservableObject {
             records.append(.factory())
             activeTemplateID = DashboardTemplateRecord.factoryID
         }
+        normalizeMissingPageOrders()
         persist()
         syncState = .synchronized(synchronizedAt)
     }
@@ -274,6 +325,40 @@ final class DashboardTemplateStore: ObservableObject {
             } else {
                 record.definition.widgets[index].portraitOrder = order
             }
+        }
+    }
+
+    private func reorderPages(moving id: UUID, to destination: Int) {
+        var pageIDs = templates.map(\.id).filter { $0 != id }
+        pageIDs.insert(id, at: min(max(0, destination), pageIDs.count))
+        let now = Date.now
+        for (order, pageID) in pageIDs.enumerated() {
+            guard let index = records.firstIndex(where: { $0.id == pageID }) else { continue }
+            records[index].definition.pageOrder = order
+            records[index].modifiedAt = now
+        }
+    }
+
+    private func normalizePageOrders(modifiedAt: Date) {
+        let pageIDs = templates.map(\.id)
+        for (order, pageID) in pageIDs.enumerated() {
+            guard let index = records.firstIndex(where: { $0.id == pageID }) else { continue }
+            records[index].definition.pageOrder = order
+            records[index].modifiedAt = modifiedAt
+        }
+    }
+
+    private func normalizeMissingPageOrders() {
+        let ordered = records
+            .filter { $0.deletedAt == nil }
+            .sorted {
+                let lhs = $0.definition.pageOrder ?? .max
+                let rhs = $1.definition.pageOrder ?? .max
+                return lhs == rhs ? $0.id.uuidString < $1.id.uuidString : lhs < rhs
+            }
+        for (order, page) in ordered.enumerated() {
+            guard let index = records.firstIndex(where: { $0.id == page.id }) else { continue }
+            records[index].definition.pageOrder = order
         }
     }
 }

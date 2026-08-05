@@ -50,7 +50,10 @@ data class DashboardWidget(
 )
 
 @Serializable
-data class DashboardDefinition(val widgets: List<DashboardWidget>)
+data class DashboardDefinition(
+    val widgets: List<DashboardWidget>,
+    val pageOrder: Int? = null
+)
 
 @Serializable
 data class DashboardTemplate(
@@ -68,7 +71,7 @@ data class DashboardTemplate(
             id = FACTORY_ID,
             name = "Factory",
             definition = DashboardDefinition(
-                listOf(
+                widgets = listOf(
                     DashboardWidget(kind = DashboardWidgetKind.HERO, wideKind = DashboardWidgetKind.VALUE, metrics = listOf(TelemetryMetric.BOOST, TelemetryMetric.MAP, TelemetryMetric.THROTTLE, TelemetryMetric.RPM), portraitSpan = 12, landscapeSpan = 4, portraitOrder = 0, landscapeOrder = 1, gaugeMinimum = 0.0, gaugeMaximum = 2.0),
                     DashboardWidget(kind = DashboardWidgetKind.GROUP, title = "Engine health", metrics = listOf(TelemetryMetric.OIL_PRESSURE, TelemetryMetric.OIL_TEMPERATURE, TelemetryMetric.COOLANT), portraitSpan = 12, landscapeSpan = 12, portraitOrder = 1, landscapeOrder = 0, accent = DashboardAccent.MINT),
                     DashboardWidget(kind = DashboardWidgetKind.VALUE, metrics = listOf(TelemetryMetric.AFR), portraitSpan = 6, landscapeSpan = 3, portraitOrder = 2, accent = DashboardAccent.MINT),
@@ -79,7 +82,8 @@ data class DashboardTemplate(
                     DashboardWidget(kind = DashboardWidgetKind.COMPACT, metrics = listOf(TelemetryMetric.INJECTOR_DUTY), portraitSpan = 3, landscapeSpan = 2, portraitOrder = 4, landscapeOrder = 7, accent = DashboardAccent.ORANGE),
                     DashboardWidget(kind = DashboardWidgetKind.COMPACT, metrics = listOf(TelemetryMetric.INTAKE), portraitSpan = 3, landscapeSpan = 2, portraitOrder = 6, landscapeOrder = 8, accent = DashboardAccent.BLUE),
                     DashboardWidget(kind = DashboardWidgetKind.COMPACT, metrics = listOf(TelemetryMetric.FUEL_PRESSURE), portraitSpan = 3, landscapeSpan = 2, portraitOrder = 7, landscapeOrder = 9, accent = DashboardAccent.MINT)
-                )
+                ),
+                pageOrder = 0
             ),
             modifiedAt = 1_785_890_400_000
         )

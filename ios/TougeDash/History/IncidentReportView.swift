@@ -14,8 +14,32 @@ struct IncidentReportView: View {
     @State private var showingNoteComposer = false
     @State private var showingShare = false
 
-    private var samples: [CapturedTelemetryPoint] { incident.samples }
-    private var chartSamples: [CapturedTelemetryPoint] { samples.downsampled(maxPoints: 500) }
+    private let samples: [CapturedTelemetryPoint]
+    private let chartSamples: [CapturedTelemetryPoint]
+    private let containsLocation: Bool
+
+    init(
+        incident: DriveIncident,
+        cloudAccount: CloudAccountService,
+        cloudSync: CloudSyncManager
+    ) {
+        self.incident = incident
+        _cloudAccount = ObservedObject(wrappedValue: cloudAccount)
+        _cloudSync = ObservedObject(wrappedValue: cloudSync)
+
+        // `DriveIncident.samples` decodes JSON. Keep one decoded copy for the whole
+        // report instead of doing the same work for every card and every redraw.
+        let decoded = incident.samples.sorted { $0.timestamp < $1.timestamp }
+        samples = decoded
+        chartSamples = decoded.downsampled(maxPoints: 140)
+        containsLocation = decoded.contains { $0.latitude != nil && $0.longitude != nil }
+        let initialIndex = decoded.indices.min {
+            abs(decoded[$0].timestamp.timeIntervalSince(incident.triggeredAt)) <
+                abs(decoded[$1].timestamp.timeIntervalSince(incident.triggeredAt))
+        } ?? 0
+        _selectedIndex = State(initialValue: initialIndex)
+    }
+
     private var selectedSample: CapturedTelemetryPoint? {
         guard !samples.isEmpty else { return nil }
         return samples[min(max(0, selectedIndex), samples.count - 1)]
@@ -97,7 +121,7 @@ struct IncidentReportView: View {
                         ]
                     )
 
-                    if samples.contains(where: { $0.latitude != nil && $0.longitude != nil }) {
+                    if containsLocation {
                         IncidentMapCard(samples: samples, triggerAt: incident.triggeredAt)
                     }
 
@@ -137,14 +161,6 @@ struct IncidentReportView: View {
         }
         .sheet(isPresented: $showingShare) {
             IncidentShareView(incident: incident, account: cloudAccount, cloudSync: cloudSync)
-        }
-        .onAppear {
-            if let triggerIndex = samples.indices.min(by: {
-                abs(samples[$0].timestamp.timeIntervalSince(incident.triggeredAt)) <
-                    abs(samples[$1].timestamp.timeIntervalSince(incident.triggeredAt))
-            }) {
-                selectedIndex = triggerIndex
-            }
         }
     }
 }
@@ -430,22 +446,23 @@ private struct IncidentChartCard: View {
 }
 
 private struct IncidentMapCard: View {
-    let samples: [CapturedTelemetryPoint]
-    let triggerAt: Date
     @State private var camera: MapCameraPosition = .automatic
+    private let coordinates: [CLLocationCoordinate2D]
+    private let triggerCoordinate: CLLocationCoordinate2D?
 
-    private var coordinates: [CLLocationCoordinate2D] {
-        samples.downsampled(maxPoints: 1_500).compactMap {
+    init(samples: [CapturedTelemetryPoint], triggerAt: Date) {
+        coordinates = samples.downsampled(maxPoints: 600).compactMap {
             guard let latitude = $0.latitude, let longitude = $0.longitude else { return nil }
             return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         }
-    }
-    private var triggerCoordinate: CLLocationCoordinate2D? {
         let located = samples.filter { $0.latitude != nil && $0.longitude != nil }
-        guard let sample = located.min(by: {
+        if let sample = located.min(by: {
             abs($0.timestamp.timeIntervalSince(triggerAt)) < abs($1.timestamp.timeIntervalSince(triggerAt))
-        }), let latitude = sample.latitude, let longitude = sample.longitude else { return nil }
-        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        }), let latitude = sample.latitude, let longitude = sample.longitude {
+            triggerCoordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        } else {
+            triggerCoordinate = nil
+        }
     }
 
     var body: some View {

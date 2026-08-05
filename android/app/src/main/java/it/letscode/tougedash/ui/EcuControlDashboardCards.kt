@@ -48,7 +48,7 @@ internal fun EcuSwitchCard(
     val value = state.displayed?.switchValue(channel)
     val pending = state.pending?.kind == EcuControlKind.SWITCH && state.pending.channel == channel
     val accent = widget.accent.color()
-    TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 112.dp else 145.dp)) {
+    TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 126.dp else 145.dp)) {
         Row(
             Modifier.fillMaxSize()
                 .clickable(enabled = interactionEnabled && state.ready) { toggle(channel) }
@@ -90,7 +90,7 @@ internal fun EcuRotaryCard(
     val pending = state.pending?.kind == EcuControlKind.ROTARY && state.pending.channel == channel
     val accent = widget.accent.color()
     var menu by remember(widget.id) { mutableStateOf(false) }
-    TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 112.dp else 145.dp)) {
+    TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 126.dp else 145.dp)) {
         Box {
             Row(
                 Modifier.fillMaxSize()

@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -111,6 +112,7 @@ fun TougeDashApp(
     var showConnection by remember { mutableStateOf(false) }
     var selectedSessionId by remember { mutableStateOf<String?>(null) }
     var showCamera by remember { mutableStateOf(false) }
+    var dashboardEditing by remember { mutableStateOf(false) }
     var vehicleToName by remember { mutableStateOf<VehicleEntity?>(null) }
     val vehicles by container.dao.vehicles().collectAsState(initial = emptyList())
     val context = LocalContext.current
@@ -189,10 +191,24 @@ fun TougeDashApp(
     ) { padding ->
         DashboardBackdrop(Modifier.padding(padding)) {
             Column(Modifier.fillMaxSize()) {
-                if (landscape) CompactAppHeader(connection, { showConnection = true }, { showCamera = true })
-                else AppHeader(connection, { showConnection = true }, { showCamera = true })
+                if (landscape) CompactAppHeader(
+                    connection,
+                    { showConnection = true },
+                    { showCamera = true },
+                    showDashboardEditor = tab == 0,
+                    dashboardEditing = dashboardEditing,
+                    toggleDashboardEditor = { dashboardEditing = !dashboardEditing }
+                )
+                else AppHeader(
+                    connection,
+                    { showConnection = true },
+                    { showCamera = true },
+                    showDashboardEditor = tab == 0,
+                    dashboardEditing = dashboardEditing,
+                    toggleDashboardEditor = { dashboardEditing = !dashboardEditing }
+                )
                 when (tab) {
-                    0 -> ConfigurableDashboardScreen(container, snapshot, connection.hardwareId)
+                    0 -> ConfigurableDashboardScreen(container, snapshot, connection.hardwareId, dashboardEditing)
                     1 -> HistoryScreen(container, selectedSessionId, { selectedSessionId = it }, { selectedSessionId = null })
                     2 -> AlertsScreen(container, connection.hardwareId)
                     else -> MoreScreen(container)
@@ -211,7 +227,14 @@ fun TougeDashApp(
 }
 
 @Composable
-private fun AppHeader(connection: TelemetryConnection, onConnection: () -> Unit, camera: () -> Unit) {
+private fun AppHeader(
+    connection: TelemetryConnection,
+    onConnection: () -> Unit,
+    camera: () -> Unit,
+    showDashboardEditor: Boolean,
+    dashboardEditing: Boolean,
+    toggleDashboardEditor: () -> Unit
+) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
             Modifier.size(44.dp).background(TougeCyan.copy(alpha = .12f), CutCornerShape(9.dp)).border(1.dp, TougeCyan.copy(alpha = .10f), CutCornerShape(9.dp)),
@@ -223,9 +246,13 @@ private fun AppHeader(connection: TelemetryConnection, onConnection: () -> Unit,
             Text("TOUGE DASH", fontSize = 18.sp, fontWeight = FontWeight.Black, letterSpacing = 2.1.sp)
             Text("EMU BLACK  /  DRIVER DISPLAY", color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp, maxLines = 1)
         }
+        if (showDashboardEditor) IconButton(
+            onClick = toggleDashboardEditor,
+            modifier = Modifier.size(38.dp).background(if (dashboardEditing) TougeCyan else Color.White.copy(alpha = .045f), CutCornerShape(8.dp))
+        ) { Icon(if (dashboardEditing) Icons.Default.Done else Icons.Default.Edit, null, tint = if (dashboardEditing) Color.Black else TougeCyan, modifier = Modifier.size(19.dp)) }
         IconButton(
             onClick = camera,
-            modifier = Modifier.size(38.dp).background(Color.White.copy(alpha = .045f), CutCornerShape(8.dp))
+            modifier = Modifier.padding(start = 6.dp).size(38.dp).background(Color.White.copy(alpha = .045f), CutCornerShape(8.dp))
         ) { Icon(Icons.Default.Videocam, null, tint = TougeMuted, modifier = Modifier.size(20.dp)) }
         Row(Modifier.padding(start = 8.dp).clickable(onClick = onConnection).background(Color.White.copy(alpha = .05f), RoundedCornerShape(22.dp)).border(1.dp, if (connection.state == ConnectionState.Connected) TougeMint.copy(alpha = .32f) else Color.White.copy(alpha = .09f), RoundedCornerShape(22.dp)).padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
@@ -235,12 +262,22 @@ private fun AppHeader(connection: TelemetryConnection, onConnection: () -> Unit,
 }
 
 @Composable
-private fun CompactAppHeader(connection: TelemetryConnection, onConnection: () -> Unit, camera: () -> Unit) {
+private fun CompactAppHeader(
+    connection: TelemetryConnection,
+    onConnection: () -> Unit,
+    camera: () -> Unit,
+    showDashboardEditor: Boolean,
+    dashboardEditing: Boolean,
+    toggleDashboardEditor: () -> Unit
+) {
     Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(28.dp).background(TougeCyan.copy(alpha = .12f), CutCornerShape(7.dp)), contentAlignment = Alignment.Center) { DashboardLogoMark(Modifier.size(18.dp)) }
         Text("TOUGE DASH", Modifier.padding(start = 10.dp), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
         Text("  /  EMU BLACK", color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
+        if (showDashboardEditor) IconButton(onClick = toggleDashboardEditor, modifier = Modifier.size(30.dp).background(if (dashboardEditing) TougeCyan else Color.Transparent, CutCornerShape(6.dp))) {
+            Icon(if (dashboardEditing) Icons.Default.Done else Icons.Default.Edit, null, tint = if (dashboardEditing) Color.Black else TougeCyan, modifier = Modifier.size(16.dp))
+        }
         IconButton(onClick = camera, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.Videocam, null, tint = TougeMuted, modifier = Modifier.size(17.dp)) }
         Row(Modifier.clickable(onClick = onConnection).background(Color.White.copy(alpha = .05f), RoundedCornerShape(18.dp)).border(1.dp, Color.White.copy(alpha = .09f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
@@ -269,12 +306,12 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
     val compactLandscape = landscape && LocalConfiguration.current.screenHeightDp < 600
     val height = if (landscape) {
         when (kind) {
-            DashboardWidgetKind.HERO -> if (compactLandscape) 138.dp else 210.dp
-            DashboardWidgetKind.GROUP -> if (compactLandscape) 100.dp else 178.dp
-            DashboardWidgetKind.COMPACT -> if (compactLandscape) 50.dp else 70.dp
-            DashboardWidgetKind.GAUGE -> if (compactLandscape) 82.dp else 180.dp
-            DashboardWidgetKind.PERFORMANCE -> if (compactLandscape) 100.dp else 188.dp
-            else -> if (compactLandscape) 82.dp else 145.dp
+            DashboardWidgetKind.HERO -> if (compactLandscape) 154.dp else 210.dp
+            DashboardWidgetKind.GROUP -> if (compactLandscape) 112.dp else 178.dp
+            DashboardWidgetKind.COMPACT -> if (compactLandscape) 68.dp else 76.dp
+            DashboardWidgetKind.GAUGE -> if (compactLandscape) 110.dp else 180.dp
+            DashboardWidgetKind.PERFORMANCE -> if (compactLandscape) 118.dp else 188.dp
+            else -> if (compactLandscape) 116.dp else 145.dp
         }
     } else {
         when (kind) {

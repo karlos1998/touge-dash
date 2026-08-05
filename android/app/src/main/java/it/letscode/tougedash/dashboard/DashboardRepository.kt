@@ -12,7 +12,9 @@ import kotlinx.serialization.json.Json
 import java.util.UUID
 
 class DashboardRepository(private val dao: TougeDashDao, private val json: Json) {
-    val templates: Flow<List<DashboardTemplate>> = dao.templates().map { values -> values.mapNotNull(::decode) }
+    val templates: Flow<List<DashboardTemplate>> = dao.templates().map { values ->
+        values.mapNotNull(::decode).sortedWith(pageComparator)
+    }
     val selected: Flow<DashboardTemplate> = dao.selectedTemplate().map { decode(it) ?: DashboardTemplate.factory() }
 
     suspend fun select(id: String) = dao.selectTemplate(id)
@@ -28,25 +30,58 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
     }
 
     suspend fun duplicate(template: DashboardTemplate): DashboardTemplate {
-        val copy = template.copy(id = UUID.randomUUID().toString(), name = "${template.name} copy", modifiedAt = System.currentTimeMillis())
+        val copy = template.copy(
+            id = UUID.randomUUID().toString(),
+            name = "${template.name} copy",
+            definition = template.definition.copy(pageOrder = visibleTemplates().size),
+            modifiedAt = System.currentTimeMillis()
+        )
         save(copy, select = true)
         return copy
     }
 
     suspend fun create(name: String = "Dashboard"): DashboardTemplate {
-        val value = DashboardTemplate.factory().copy(id = UUID.randomUUID().toString(), name = name, modifiedAt = System.currentTimeMillis())
+        val value = DashboardTemplate.factory().copy(
+            id = UUID.randomUUID().toString(),
+            name = name,
+            definition = DashboardTemplate.factory().definition.copy(pageOrder = visibleTemplates().size),
+            modifiedAt = System.currentTimeMillis()
+        )
         save(value, select = true)
         return value
     }
 
+    suspend fun createPage(source: DashboardTemplate, atStart: Boolean, name: String): DashboardTemplate {
+        val pages = visibleTemplates()
+        val created = source.copy(
+            id = UUID.randomUUID().toString(),
+            name = name,
+            definition = source.definition.copy(pageOrder = if (atStart) 0 else pages.size),
+            modifiedAt = System.currentTimeMillis(),
+            deletedAt = null
+        )
+        val reordered = pages.toMutableList().apply {
+            add(if (atStart) 0 else size, created)
+        }
+        savePageOrder(reordered)
+        dao.selectTemplate(created.id)
+        return created
+    }
+
     suspend fun delete(template: DashboardTemplate) {
-        if (template.id == DashboardTemplate.FACTORY_ID) return
+        val pages = visibleTemplates()
+        if (pages.size <= 1) return
+        val deletedIndex = pages.indexOfFirst { it.id == template.id }.coerceAtLeast(0)
         save(template.copy(deletedAt = System.currentTimeMillis(), modifiedAt = System.currentTimeMillis()))
-        dao.selectTemplate(DashboardTemplate.FACTORY_ID)
+        val remaining = pages.filterNot { it.id == template.id }
+        savePageOrder(remaining)
+        dao.selectTemplate(remaining[deletedIndex.coerceAtMost(remaining.lastIndex)].id)
     }
 
     suspend fun restoreFactory() {
-        save(DashboardTemplate.factory().copy(modifiedAt = System.currentTimeMillis()), select = true)
+        val existingOrder = visibleTemplates().firstOrNull { it.id == DashboardTemplate.FACTORY_ID }?.definition?.pageOrder ?: 0
+        val factory = DashboardTemplate.factory()
+        save(factory.copy(definition = factory.definition.copy(pageOrder = existingOrder), modifiedAt = System.currentTimeMillis()), select = true)
     }
 
     private fun decode(entity: DashboardTemplateEntity?): DashboardTemplate? = entity?.let {
@@ -87,10 +122,27 @@ class DashboardRepository(private val dao: TougeDashDao, private val json: Json)
         }
         return copy(
             name = name.trim().take(80).ifEmpty { "Dashboard" },
-            definition = DashboardDefinition(normalizedWidgets),
+            definition = DashboardDefinition(normalizedWidgets, definition.pageOrder),
             modifiedAt = System.currentTimeMillis()
         )
     }
+
+    private suspend fun visibleTemplates(): List<DashboardTemplate> = dao.templatesOnce()
+        .mapNotNull(::decode)
+        .filter { it.deletedAt == null }
+        .sortedWith(pageComparator)
+
+    private suspend fun savePageOrder(pages: List<DashboardTemplate>) {
+        val now = System.currentTimeMillis()
+        pages.forEachIndexed { index, page ->
+            save(page.copy(definition = page.definition.copy(pageOrder = index), modifiedAt = now))
+        }
+    }
+
+    private val pageComparator = compareBy<DashboardTemplate>(
+        { it.definition.pageOrder ?: if (it.id == DashboardTemplate.FACTORY_ID) 0 else Int.MAX_VALUE },
+        { it.id }
+    )
 }
 
 internal fun normalizeLegacyDashboardJson(value: String): String {

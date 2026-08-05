@@ -544,3 +544,8 @@
 "Zatwierdzony kanał sterowania ECU: %@" = "Approved ECU control channel: %@";
 "Błąd zapisu sterowania ECU: %@" = "ECU control write error: %@";
 "Bluetooth jest niedostępny." = "Bluetooth is unavailable.";
+"Ekran %d" = "Screen %d";
+"Ekrany dashboardu" = "Dashboard screens";
+"Dodaj ekran z lewej" = "Add screen on the left";
+"Dodaj ekran z prawej" = "Add screen on the right";
+"Zakończ edycję dashboardu" = "Finish editing dashboard";

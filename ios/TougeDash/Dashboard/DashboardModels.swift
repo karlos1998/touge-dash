@@ -318,6 +318,7 @@ struct DashboardWidget: Codable, Hashable, Identifiable, Sendable {
 
 struct DashboardDefinition: Codable, Hashable, Sendable {
     var widgets: [DashboardWidget]
+    var pageOrder: Int? = nil
 }
 
 struct DashboardTemplateRecord: Codable, Hashable, Identifiable, Sendable {
@@ -386,7 +387,7 @@ extension DashboardTemplateRecord {
                 DashboardWidget(kind: .compact, metrics: [.injectorDuty], portraitSpan: .quarter, landscapeSpan: .sixth, portraitOrder: 4, landscapeOrder: 7, accent: .orange),
                 DashboardWidget(kind: .compact, metrics: [.intake], portraitSpan: .quarter, landscapeSpan: .sixth, portraitOrder: 6, landscapeOrder: 8, accent: .blue),
                 DashboardWidget(kind: .compact, metrics: [.fuelPressure], portraitSpan: .quarter, landscapeSpan: .sixth, portraitOrder: 7, landscapeOrder: 9, accent: .mint)
-            ]),
+            ], pageOrder: 0),
             modifiedAt: modifiedAt
         )
     }

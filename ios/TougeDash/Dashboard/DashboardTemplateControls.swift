@@ -10,15 +10,8 @@ struct DashboardTemplateBar: View {
     @State private var showingFactoryResetConfirmation = false
 
     var body: some View {
-        Group {
-            if isEditingDashboard {
-                editingBar
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            } else {
-                regularBar
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
+        editingBar
+            .transition(.move(edge: .top).combined(with: .opacity))
         .animation(.snappy(duration: 0.24), value: isEditingDashboard)
         .sheet(item: $editorDraft) { draft in
             DashboardTemplateEditor(
@@ -52,90 +45,6 @@ struct DashboardTemplateBar: View {
         }
     }
 
-    private var regularBar: some View {
-        HStack(spacing: compact ? 7 : 10) {
-            Menu {
-                Section(localized("Zapisane dashboardy")) {
-                    ForEach(store.templates) { template in
-                        Button {
-                            store.select(template.id)
-                        } label: {
-                            Label(template.name, systemImage: template.id == store.activeTemplateID ? "checkmark.circle.fill" : "circle")
-                        }
-                    }
-                }
-
-                Section {
-                    Button {
-                        editorDraft = DashboardTemplateRecord(
-                            name: localized("Nowy dashboard"),
-                            definition: store.activeTemplate.definition
-                        )
-                    } label: {
-                        Label(localized("Nowy dashboard"), systemImage: "plus")
-                    }
-
-                    Button {
-                        let source = store.activeTemplate
-                        editorDraft = DashboardTemplateRecord(
-                            name: String(format: localized("Kopia %@"), source.name),
-                            definition: source.definition
-                        )
-                    } label: {
-                        Label(localized("Duplikuj bieżący"), systemImage: "square.on.square")
-                    }
-
-                    Button {
-                        showingFactoryResetConfirmation = true
-                    } label: {
-                        Label(localized("Przywróć fabryczny"), systemImage: "arrow.counterclockwise")
-                    }
-                }
-            } label: {
-                HStack(spacing: compact ? 6 : 8) {
-                    Image(systemName: "rectangle.3.group.fill")
-                        .foregroundStyle(Color.tougeCyan)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(store.activeTemplate.name)
-                            .font(.system(size: compact ? 10 : 12, weight: .bold))
-                            .lineLimit(1)
-                        Text(syncLabel)
-                            .font(.system(size: compact ? 6 : 8, weight: .black))
-                            .tracking(0.7)
-                            .foregroundStyle(syncColor)
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: compact ? 8 : 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal, compact ? 10 : 12)
-                .padding(.vertical, compact ? 7 : 9)
-                .background(Color.white.opacity(0.055), in: CutCornerPanel(cut: 8))
-                .overlay(CutCornerPanel(cut: 8).stroke(Color.white.opacity(0.08)))
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                isEditingDashboard = true
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "slider.horizontal.3")
-                    if !compact {
-                        Text(localized("Edytuj dashboard"))
-                    }
-                }
-                    .font(.system(size: compact ? 10 : 12, weight: .bold))
-                    .frame(minWidth: compact ? 34 : 124)
-                    .padding(.horizontal, compact ? 4 : 10)
-                    .padding(.vertical, compact ? 9 : 11)
-                    .foregroundStyle(Color.black)
-                    .background(Color.tougeCyan, in: CutCornerPanel(cut: 8))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
     private var editingBar: some View {
         ViewThatFits(in: .horizontal) {
             editingBarContent(narrow: false)
@@ -150,26 +59,46 @@ struct DashboardTemplateBar: View {
 
     private func editingBarContent(narrow: Bool) -> some View {
         HStack(spacing: compact || narrow ? 7 : 10) {
-            Image(systemName: "square.grid.3x3.topleft.filled")
-                .font(.system(size: compact || narrow ? 13 : 16, weight: .bold))
-                .foregroundStyle(Color.tougeCyan)
-                .frame(width: compact || narrow ? 30 : 38, height: compact || narrow ? 30 : 38)
-                .background(Color.tougeCyan.opacity(0.12), in: Circle())
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(localized("EDYTUJESZ DASHBOARD"))
-                    .font(.system(size: compact || narrow ? 8 : 10, weight: .black))
-                    .tracking(narrow ? 0.65 : 1.05)
-                    .foregroundStyle(Color.tougeCyan)
-                    .lineLimit(narrow ? 2 : 1)
-                if !compact && !narrow {
-                    Text(localized("Przeciągnij kartę na inną, aby zamienić je miejscami."))
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+            Menu {
+                Section(localized("Ekrany dashboardu")) {
+                    ForEach(store.templates) { template in
+                        Button {
+                            store.select(template.id)
+                        } label: {
+                            Label(template.name, systemImage: template.id == store.activeTemplateID ? "checkmark.circle.fill" : "circle")
+                        }
+                    }
                 }
+                Button {
+                    showingFactoryResetConfirmation = true
+                } label: {
+                    Label(localized("Przywróć fabryczny"), systemImage: "arrow.counterclockwise")
+                }
+            } label: {
+                HStack(spacing: 7) {
+                    Image(systemName: "rectangle.3.group.fill")
+                        .foregroundStyle(Color.tougeCyan)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(store.activeTemplate.name)
+                            .font(.system(size: compact || narrow ? 9 : 11, weight: .black))
+                            .lineLimit(1)
+                        if !narrow {
+                            Text(syncLabel)
+                                .font(.system(size: compact ? 6 : 7, weight: .black))
+                                .tracking(0.6)
+                                .foregroundStyle(syncColor)
+                        }
+                    }
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .black))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, compact ? 9 : 11)
+                .frame(height: compact ? 30 : 38)
+                .background(Color.white.opacity(0.06), in: CutCornerPanel(cut: 7))
+                .overlay(CutCornerPanel(cut: 7).stroke(Color.white.opacity(0.1)))
             }
+            .buttonStyle(.plain)
 
             Spacer(minLength: 2)
 
@@ -198,29 +127,6 @@ struct DashboardTemplateBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel(localized("Edycja zaawansowana dashboardu"))
 
-            Button {
-                isEditingDashboard = false
-            } label: {
-                Group {
-                    if narrow {
-                        VStack(spacing: 2) {
-                            Image(systemName: "checkmark")
-                            Text(localized("Gotowe"))
-                                .font(.system(size: 7, weight: .black))
-                                .lineLimit(1)
-                        }
-                    } else {
-                        Label(localized("Gotowe"), systemImage: "checkmark")
-                    }
-                }
-                    .font(.system(size: compact || narrow ? 11 : 12, weight: .black))
-                    .frame(width: narrow ? 54 : nil)
-                    .padding(.horizontal, compact ? 10 : (narrow ? 0 : 14))
-                    .padding(.vertical, compact || narrow ? 7 : 10)
-                    .foregroundStyle(Color.black)
-                    .background(Color.tougeCyan, in: CutCornerPanel(cut: 7))
-            }
-            .buttonStyle(.plain)
         }
     }
 

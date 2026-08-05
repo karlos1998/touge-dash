@@ -10,6 +10,7 @@ struct ContentView: View {
     @State private var isEditingDashboard = false
     @State private var quickEditorWidget: DashboardWidget?
     @State private var widgetPendingDeletion: DashboardWidget?
+    @State private var pageDirection = 1
 
     var body: some View {
         ZStack {
@@ -22,13 +23,35 @@ struct ContentView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: isCompactWide ? 8 : 16) {
-                        DashboardHeader(controller: controller, compact: isCompactWide)
-                        DashboardTemplateBar(
-                            store: templates,
-                            isEditingDashboard: $isEditingDashboard,
+                        DashboardHeader(
+                            controller: controller,
                             compact: isCompactWide,
-                            onTemplateChanged: onTemplateChanged
+                            isEditingDashboard: isEditingDashboard,
+                            onToggleDashboardEditing: {
+                                withAnimation(.snappy(duration: 0.24)) {
+                                    isEditingDashboard.toggle()
+                                }
+                            }
                         )
+                        if isEditingDashboard {
+                            DashboardTemplateBar(
+                                store: templates,
+                                isEditingDashboard: $isEditingDashboard,
+                                compact: isCompactWide,
+                                onTemplateChanged: onTemplateChanged
+                            )
+                        }
+                        if templates.templates.count > 1 || isEditingDashboard {
+                            DashboardPageIndicator(
+                                pages: templates.templates,
+                                activeID: templates.activeTemplateID,
+                                isEditing: isEditingDashboard,
+                                compact: isCompactWide,
+                                onSelect: selectPage,
+                                onAddLeading: { addPage(atStart: true) },
+                                onAddTrailing: { addPage(atStart: false) }
+                            )
+                        }
                         ConfigurableDashboardView(
                             template: templates.activeTemplate,
                             snapshot: controller.snapshot,
@@ -51,6 +74,12 @@ struct ContentView: View {
                                 }
                             }
                         )
+                        .id(templates.activeTemplateID)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: pageDirection > 0 ? .trailing : .leading).combined(with: .opacity),
+                            removal: .move(edge: pageDirection > 0 ? .leading : .trailing).combined(with: .opacity)
+                        ))
+                        .simultaneousGesture(pageSwipeGesture)
                         .transaction { transaction in
                             if controller.videoRecorder.isRecording {
                                 transaction.animation = nil
@@ -112,6 +141,97 @@ struct ContentView: View {
             #endif
         }
     }
+
+    private var pageSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .local)
+            .onEnded { value in
+                guard !isEditingDashboard else { return }
+                let horizontal = value.predictedEndTranslation.width
+                let vertical = value.predictedEndTranslation.height
+                guard abs(horizontal) > abs(vertical) * 1.25, abs(horizontal) > 64 else { return }
+                let offset = horizontal < 0 ? 1 : -1
+                pageDirection = offset
+                withAnimation(.snappy(duration: 0.28)) {
+                    _ = templates.selectAdjacentPage(offset: offset)
+                }
+            }
+    }
+
+    private func selectPage(_ id: UUID) {
+        guard let destination = templates.templates.firstIndex(where: { $0.id == id }) else { return }
+        pageDirection = destination >= templates.activePageIndex ? 1 : -1
+        withAnimation(.snappy(duration: 0.28)) {
+            templates.select(id)
+        }
+    }
+
+    private func addPage(atStart: Bool) {
+        pageDirection = atStart ? -1 : 1
+        withAnimation(.snappy(duration: 0.3)) {
+            _ = templates.createPage(atStart: atStart)
+        }
+        onTemplateChanged()
+    }
+}
+
+private struct DashboardPageIndicator: View {
+    let pages: [DashboardTemplateRecord]
+    let activeID: UUID
+    let isEditing: Bool
+    let compact: Bool
+    let onSelect: (UUID) -> Void
+    let onAddLeading: () -> Void
+    let onAddTrailing: () -> Void
+
+    var body: some View {
+        HStack(spacing: compact ? 8 : 11) {
+            if isEditing {
+                addButton(action: onAddLeading, label: localized("Dodaj ekran z lewej"))
+            }
+
+            HStack(spacing: compact ? 7 : 9) {
+                ForEach(pages) { page in
+                    Button {
+                        onSelect(page.id)
+                    } label: {
+                        Circle()
+                            .fill(page.id == activeID ? Color.white : Color.white.opacity(0.38))
+                            .frame(
+                                width: page.id == activeID ? (compact ? 8 : 10) : (compact ? 6 : 8),
+                                height: page.id == activeID ? (compact ? 8 : 10) : (compact ? 6 : 8)
+                            )
+                            .shadow(color: page.id == activeID ? .white.opacity(0.35) : .clear, radius: 4)
+                            .frame(width: compact ? 18 : 22, height: compact ? 18 : 22)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(page.name)
+                }
+            }
+            .padding(.horizontal, compact ? 12 : 16)
+            .frame(height: compact ? 24 : 30)
+            .background(.ultraThinMaterial, in: Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.08)))
+
+            if isEditing {
+                addButton(action: onAddTrailing, label: localized("Dodaj ekran z prawej"))
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .animation(.snappy(duration: 0.22), value: activeID)
+        .animation(.snappy(duration: 0.22), value: pages.count)
+    }
+
+    private func addButton(action: @escaping () -> Void, label: String) -> some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: compact ? 10 : 12, weight: .black))
+                .frame(width: compact ? 26 : 32, height: compact ? 26 : 32)
+                .foregroundStyle(Color.black)
+                .background(Color.tougeCyan, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
 }
 
 struct DashboardViewport: Equatable {
@@ -159,6 +279,8 @@ struct ProductCreditFooter: View {
 private struct DashboardHeader: View {
     @ObservedObject var controller: TelemetryController
     let compact: Bool
+    let isEditingDashboard: Bool
+    let onToggleDashboardEditing: () -> Void
 
     var body: some View {
         HStack(spacing: compact ? 9 : 12) {
@@ -185,6 +307,20 @@ private struct DashboardHeader: View {
             }
 
             Spacer()
+
+            Button(action: onToggleDashboardEditing) {
+                Image(systemName: isEditingDashboard ? "checkmark" : "slider.horizontal.3")
+                    .font(.system(size: compact ? 13 : 15, weight: .black))
+                    .frame(width: compact ? 30 : 36, height: compact ? 30 : 36)
+                    .foregroundStyle(isEditingDashboard ? Color.black : Color.tougeCyan)
+                    .background(
+                        isEditingDashboard ? Color.tougeCyan : Color.white.opacity(0.055),
+                        in: CutCornerPanel(cut: 7)
+                    )
+                    .overlay(CutCornerPanel(cut: 7).stroke(Color.white.opacity(0.09)))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isEditingDashboard ? localized("Zakończ edycję dashboardu") : localized("Edytuj dashboard"))
 
             Button {
                 controller.showBluetoothDetails()
