@@ -109,6 +109,8 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     private var attemptedAutomaticConnection = false
     private var hasTriedRememberedPeripheral = false
     private var connectionTimeoutTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+    private var retryDelayAfterRequestedDisconnect: Duration?
     private var totalPacketCount = 0
     private var totalByteCount = 0
     private var lastCounterPublishAt = Date.distantPast
@@ -129,7 +131,10 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
             queue: .main,
             options: [
                 CBCentralManagerOptionShowPowerAlertKey: true,
-                CBCentralManagerOptionRestoreIdentifierKey: "it.letscode.touge-dash.central"
+                // v3 drops the stale restoration and pending connection records
+                // created while the desktop simulator advertised the real logger
+                // name and while the Mac/iPhone pairing keys were being repaired.
+                CBCentralManagerOptionRestoreIdentifierKey: "it.letscode.touge-dash.central.v3"
             ]
         )
     }
@@ -144,6 +149,16 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     private func resumeScanning() {
         guard shouldScan else { return }
         beginScanning(tryRememberedPeripheral: false)
+    }
+
+    private func resumeScanning(after delay: Duration) {
+        reconnectTask?.cancel()
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self else { return }
+            self.reconnectTask = nil
+            self.resumeScanning()
+        }
     }
 
     private func beginScanning(tryRememberedPeripheral: Bool) {
@@ -165,18 +180,27 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
            let storedIdentifier = UserDefaults.standard.string(forKey: lastPeripheralKey),
            let identifier = UUID(uuidString: storedIdentifier),
            let peripheral = central.retrievePeripherals(withIdentifiers: [identifier]).first {
-            let remembered = DiscoveredTelemetryDevice(
-                id: peripheral.identifier,
-                name: peripheral.name ?? "ECUMaster",
-                rssi: 0,
-                isLikelyEMU: true
-            )
-            peripherals[peripheral.identifier] = peripheral
-            devices = [remembered]
-            attemptedAutomaticConnection = true
-            appendDiagnostic(localized("Connecting to remembered ECUMaster interface"))
-            connect(to: remembered)
-            return
+            let rememberedName = peripheral.name ?? "ECUMaster"
+            if Self.isMacHostPeripheralName(rememberedName) {
+                // A previous simulator build advertised the exact real-logger
+                // name, so iOS persisted the Mac itself as the last ECU. Never
+                // restore that stale host identity as a vehicle interface.
+                UserDefaults.standard.removeObject(forKey: lastPeripheralKey)
+                appendDiagnostic(localized("Removed stale Mac simulator Bluetooth identity"))
+            } else {
+                let remembered = DiscoveredTelemetryDevice(
+                    id: peripheral.identifier,
+                    name: rememberedName,
+                    rssi: 0,
+                    isLikelyEMU: true
+                )
+                peripherals[peripheral.identifier] = peripheral
+                devices = [remembered]
+                attemptedAutomaticConnection = true
+                appendDiagnostic(localized("Connecting to remembered ECUMaster interface"))
+                connect(to: remembered)
+                return
+            }
         }
 
         setState(.scanning)
@@ -186,12 +210,16 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
 
     func stopScanning() {
         shouldScan = false
+        reconnectTask?.cancel()
+        reconnectTask = nil
         central.stopScan()
         if !state.isConnected { setState(.ready) }
     }
 
     func connect(to device: DiscoveredTelemetryDevice) {
         guard let peripheral = peripherals[device.id] else { return }
+        reconnectTask?.cancel()
+        reconnectTask = nil
         bluetoothDebugLog("connect requested name=\(device.name) state=\(peripheral.state.rawValue)")
         shouldScan = true
         central.stopScan()
@@ -217,6 +245,8 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     func disconnect() {
         connectionTimeoutTask?.cancel()
         connectionTimeoutTask = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
         if let connectedPeripheral {
             central.cancelPeripheralConnection(connectedPeripheral)
         }
@@ -307,15 +337,17 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         connectionTimeoutTask?.cancel()
         let identifier = peripheral.identifier
         connectionTimeoutTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(6))
+            // CoreBluetooth may need several seconds to recover after either
+            // side has removed an obsolete BLE bond. Cancelling at six seconds
+            // caused a permanent connect/scan loop even though the peripheral
+            // was healthy and advertising.
+            try? await Task.sleep(for: .seconds(45))
             guard !Task.isCancelled, let self,
                   self.connectedPeripheral?.identifier == identifier,
                   !self.state.isConnected else { return }
             self.appendDiagnostic(localized("Connection timed out; continuing scan"))
+            self.retryDelayAfterRequestedDisconnect = .seconds(3)
             self.central.cancelPeripheralConnection(peripheral)
-            self.connectedPeripheral = nil
-            self.setState(.disconnected(localized("Connection timed out")))
-            self.resumeScanning()
         }
     }
 
@@ -341,6 +373,20 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     private static func isSimulatorName(_ name: String) -> Bool {
         let normalized = name.lowercased()
         return normalized.contains("emulogger sim") || normalized.contains("touge dash simulator")
+    }
+
+    private static func isMacHostPeripheralName(_ name: String) -> Bool {
+        let normalized = name.lowercased()
+        return normalized.contains("macbook")
+            || normalized.contains("mac mini")
+            || normalized.contains("mac studio")
+            || normalized.contains("imac")
+    }
+
+    private static func requiresPairingRecoveryDelay(_ error: Error?) -> Bool {
+        guard let error = error as NSError?, error.domain == CBErrorDomain else { return false }
+        return error.code == CBError.peerRemovedPairingInformation.rawValue
+            || error.code == CBError.encryptionTimedOut.rawValue
     }
 
     private static func isECUMasterAdvertisement(name: String, advertisementData: [String: Any]) -> Bool {
@@ -458,7 +504,12 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         connectedIdentifier = nil
         connectedIsSimulator = false
         resetControlTransport(error: error ?? ECUControlTransportError.disconnected)
-        resumeScanning()
+        if Self.requiresPairingRecoveryDelay(error) {
+            appendDiagnostic(localized("Bluetooth pairing changed; retrying after recovery delay"))
+            resumeScanning(after: .seconds(8))
+        } else {
+            resumeScanning()
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
@@ -474,12 +525,28 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         connectedIdentifier = nil
         connectedIsSimulator = false
         resetControlTransport(error: error ?? ECUControlTransportError.disconnected)
-        resumeScanning()
+        let requestedRetryDelay = retryDelayAfterRequestedDisconnect
+        retryDelayAfterRequestedDisconnect = nil
+        if Self.requiresPairingRecoveryDelay(error) {
+            appendDiagnostic(localized("Bluetooth pairing changed; retrying after recovery delay"))
+            resumeScanning(after: .seconds(8))
+        } else if let requestedRetryDelay {
+            resumeScanning(after: requestedRetryDelay)
+        } else {
+            resumeScanning()
+        }
     }
 
     func centralManager(_ central: CBCentralManager, willRestoreState dict: [String: Any]) {
         guard let restored = dict[CBCentralManagerRestoredStatePeripheralsKey] as? [CBPeripheral],
               let peripheral = restored.first else { return }
+        let restoredName = peripheral.name ?? ""
+        if Self.isMacHostPeripheralName(restoredName) {
+            UserDefaults.standard.removeObject(forKey: lastPeripheralKey)
+            central.cancelPeripheralConnection(peripheral)
+            appendDiagnostic(localized("Ignored stale restored Mac simulator connection"))
+            return
+        }
         connectedPeripheral = peripheral
         peripheral.delegate = self
         peripherals[peripheral.identifier] = peripheral

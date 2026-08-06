@@ -242,6 +242,9 @@
 "Poprzednia zmiana nadal jest wysyłana." = "Poprzednia zmiana nadal jest wysyłana.";
 "Bluetooth odrzucił ramkę sterującą." = "Bluetooth odrzucił ramkę sterującą.";
 "Połączenie Bluetooth zostało przerwane." = "Połączenie Bluetooth zostało przerwane.";
+"Removed stale Mac simulator Bluetooth identity" = "Usunięto nieaktualny zapis Bluetooth symulatora na Macu";
+"Ignored stale restored Mac simulator connection" = "Pominięto nieaktualne przywrócone połączenie z symulatorem na Macu";
+"Bluetooth pairing changed; retrying after recovery delay" = "Zmieniono parowanie Bluetooth; ponowna próba po krótkiej przerwie";
 "Zatwierdzony kanał sterowania ECU: %@" = "Zatwierdzony kanał sterowania ECU: %@";
 "Błąd zapisu sterowania ECU: %@" = "Błąd zapisu sterowania ECU: %@";
 "Bluetooth jest niedostępny." = "Bluetooth jest niedostępny.";
