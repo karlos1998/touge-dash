@@ -60,6 +60,7 @@ struct TougeDashRootView: View {
                 cloudSync: cloudSync,
                 videoRecorder: videoRecorder,
                 videoOverlays: videoOverlays,
+                activeSessionID: controller.historyRecorder.activeSessionID,
                 canSplitActiveDrive: controller.isConnected && controller.historyRecorder.activeSessionID != nil,
                 onSplitActiveDrive: controller.splitActiveDrive,
                 onShowDashboard: compactLandscape ? { selection = 0 } : nil

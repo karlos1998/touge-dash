@@ -30,6 +30,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         vehicleID = LocalVehicleIdentity.resolve()
         self.locationTracker = locationTracker
         restoreRecentSession()
+        try? HistoryLocalStore.enforceRetention(in: context, keepingActiveSessionID: activeSession?.id)
     }
 
     struct RecordingChange: Equatable, Sendable {
@@ -167,6 +168,8 @@ final class TelemetryHistoryRecorder: ObservableObject {
         let session = DriveSession(vehicleID: vehicleID, startedAt: timestamp)
         context.insert(session)
         activeSession = session
+        try? context.save()
+        try? HistoryLocalStore.enforceRetention(in: context, keepingActiveSessionID: session.id)
         defaults.removeObject(forKey: manuallyClosedSessionKey)
         lastDistanceLocation = nil
         return session

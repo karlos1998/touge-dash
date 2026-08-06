@@ -443,6 +443,40 @@ final class CloudSyncManager: ObservableObject {
         return .queued
     }
 
+    func deleteRemote(session: DriveSession) async throws {
+        guard account.isAuthenticated else { throw CloudAPIError.unauthorized }
+        guard let vehicleID = remoteVehicleID(for: session.vehicleID) else {
+            throw CloudAPIError.server(status: 409, message: localized("Auto nie jest połączone z chmurą."))
+        }
+        do {
+            try await account.delete(
+                endpoint: "/api/v1/vehicles/\(vehicleID.uuidString)/sessions/\(session.id.uuidString)"
+            )
+        } catch CloudAPIError.server(let status, _) where status == 404 {
+            // Treat an already missing cloud record as a successful deletion.
+        }
+        sessionStatuses.removeValue(forKey: session.id)
+    }
+
+    func deleteRemote(incident: DriveIncident) async throws {
+        guard account.isAuthenticated else { throw CloudAPIError.unauthorized }
+        guard let vehicleID = remoteVehicleID(for: incident.vehicleID) else {
+            throw CloudAPIError.server(status: 409, message: localized("Auto nie jest połączone z chmurą."))
+        }
+        do {
+            try await account.delete(
+                endpoint: "/api/v1/vehicles/\(vehicleID.uuidString)/incidents/\(incident.id.uuidString)"
+            )
+        } catch CloudAPIError.server(let status, _) where status == 404 {
+            // Treat an already missing cloud record as a successful deletion.
+        }
+        incidentStatuses.removeValue(forKey: incident.id)
+    }
+
+    func localHistoryDidChange() {
+        updatePendingCount()
+    }
+
     func retrySynchronization() async {
         await syncNow()
     }

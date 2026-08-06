@@ -313,6 +313,7 @@ final class TelemetryIncidentRecorder: ObservableObject {
         }
         if !completed.isEmpty {
             try? context.save()
+            try? HistoryLocalStore.enforceRetention(in: context)
             refreshPendingCount()
             completed.forEach { onIncidentStored?($0.samples.count) }
         }

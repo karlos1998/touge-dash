@@ -8,6 +8,60 @@ enum HistoryPresentationPolicy {
     static let maximumVisibleVideoRecords = 40
 }
 
+@MainActor
+enum HistoryLocalStore {
+    static func enforceRetention(in context: ModelContext, keepingActiveSessionID: UUID? = nil) throws {
+        let sessions = try context.fetch(FetchDescriptor<DriveSession>(
+            sortBy: [SortDescriptor(\DriveSession.startedAt, order: .reverse)]
+        ))
+        let retainedSessionIDs = Set(sessions.prefix(HistoryPresentationPolicy.maximumVisibleSessions).map(\.id))
+        for session in sessions where !retainedSessionIDs.contains(session.id) && session.id != keepingActiveSessionID {
+            delete(session: session, in: context)
+        }
+
+        let incidents = try context.fetch(FetchDescriptor<DriveIncident>(
+            sortBy: [SortDescriptor(\DriveIncident.triggeredAt, order: .reverse)]
+        ))
+        for incident in incidents.dropFirst(HistoryPresentationPolicy.maximumVisibleIncidents) {
+            delete(incident: incident, in: context)
+        }
+        try context.save()
+    }
+
+    static func delete(session: DriveSession, in context: ModelContext) {
+        let sessionID = session.id
+        let videos = (try? context.fetch(FetchDescriptor<DriveVideoRecording>(
+            predicate: #Predicate { $0.sessionID == sessionID }
+        ))) ?? []
+        for video in videos {
+            try? DriveVideoFileStore.delete(video)
+            context.delete(video)
+        }
+        let incidents = (try? context.fetch(FetchDescriptor<DriveIncident>(
+            predicate: #Predicate { $0.sessionID == sessionID }
+        ))) ?? []
+        incidents.forEach(context.delete)
+        let attempts = (try? context.fetch(FetchDescriptor<AccelerationAttempt>(
+            predicate: #Predicate { $0.sessionID == sessionID }
+        ))) ?? []
+        attempts.forEach(context.delete)
+        let annotations = (try? context.fetch(FetchDescriptor<TimelineAnnotation>(
+            predicate: #Predicate { $0.sessionID == sessionID }
+        ))) ?? []
+        annotations.forEach(context.delete)
+        context.delete(session)
+    }
+
+    static func delete(incident: DriveIncident, in context: ModelContext) {
+        let incidentID = incident.id
+        let annotations = (try? context.fetch(FetchDescriptor<TimelineAnnotation>(
+            predicate: #Predicate { $0.incidentID == incidentID }
+        ))) ?? []
+        annotations.forEach(context.delete)
+        context.delete(incident)
+    }
+}
+
 enum HistorySyncState: String, Codable, Sendable {
     case local
     case pendingUpload

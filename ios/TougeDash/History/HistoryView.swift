@@ -14,11 +14,14 @@ struct HistoryView: View {
     let cloudSync: CloudSyncManager
     let videoRecorder: DriveVideoRecorder
     let videoOverlays: VideoOverlayTemplateStore
+    let activeSessionID: UUID?
     let canSplitActiveDrive: Bool
     let onSplitActiveDrive: () -> Bool
     let onShowDashboard: (() -> Void)?
     @State private var showingSplitConfirmation = false
     @State private var splitFeedback = 0
+    @State private var pendingDeletion: HistoryDeletionCandidate?
+    @State private var deletionError: String?
 
     init(
         locationTracker: LocationTrackingService,
@@ -26,6 +29,7 @@ struct HistoryView: View {
         cloudSync: CloudSyncManager,
         videoRecorder: DriveVideoRecorder,
         videoOverlays: VideoOverlayTemplateStore,
+        activeSessionID: UUID?,
         canSplitActiveDrive: Bool,
         onSplitActiveDrive: @escaping () -> Bool,
         onShowDashboard: (() -> Void)?
@@ -53,6 +57,7 @@ struct HistoryView: View {
         self.cloudSync = cloudSync
         self.videoRecorder = videoRecorder
         self.videoOverlays = videoOverlays
+        self.activeSessionID = activeSessionID
         self.canSplitActiveDrive = canSplitActiveDrive
         self.onSplitActiveDrive = onSplitActiveDrive
         self.onShowDashboard = onShowDashboard
@@ -91,17 +96,28 @@ struct HistoryView: View {
                             }
                             .padding(.top, 4)
 
-                            ForEach(Array(incidents.prefix(5))) { incident in
-                                NavigationLink {
-                                    IncidentReportView(
-                                        incident: incident,
-                                        cloudAccount: cloudAccount,
-                                        cloudSync: cloudSync
-                                    )
-                                } label: {
-                                    IncidentListRow(incident: incident, cloudSync: cloudSync)
+                            ForEach(incidents) { incident in
+                                SwipeToDeleteRow {
+                                    pendingDeletion = .incident(incident)
+                                } content: {
+                                    NavigationLink {
+                                        IncidentReportView(
+                                            incident: incident,
+                                            cloudAccount: cloudAccount,
+                                            cloudSync: cloudSync
+                                        )
+                                    } label: {
+                                        IncidentListRow(incident: incident, cloudSync: cloudSync)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            pendingDeletion = .incident(incident)
+                                        } label: {
+                                            Label(localized("Usuń raport"), systemImage: "trash")
+                                        }
+                                    }
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
 
@@ -125,26 +141,31 @@ struct HistoryView: View {
                             .padding(.top, 4)
 
                             ForEach(sessions) { session in
-                                NavigationLink {
-                                    DriveSessionDetailView(
-                                        session: session,
-                                        cloudAccount: cloudAccount,
-                                        cloudSync: cloudSync,
-                                        videoOverlays: videoOverlays
-                                    )
-                                } label: {
-                                    DriveSessionRow(
-                                        session: session,
-                                        recordings: videos.filter { $0.sessionID == session.id },
-                                        cloudSync: cloudSync
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        delete(session)
+                                SwipeToDeleteRow(isEnabled: session.id != activeSessionID) {
+                                    pendingDeletion = .session(session)
+                                } content: {
+                                    NavigationLink {
+                                        DriveSessionDetailView(
+                                            session: session,
+                                            cloudAccount: cloudAccount,
+                                            cloudSync: cloudSync,
+                                            videoOverlays: videoOverlays
+                                        )
                                     } label: {
-                                        Label("Usuń przejazd", systemImage: "trash")
+                                        DriveSessionRow(
+                                            session: session,
+                                            recordings: videos.filter { $0.sessionID == session.id },
+                                            cloudSync: cloudSync
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            pendingDeletion = .session(session)
+                                        } label: {
+                                            Label(localized("Usuń przejazd"), systemImage: "trash")
+                                        }
+                                        .disabled(session.id == activeSessionID)
                                     }
                                 }
                             }
@@ -169,6 +190,39 @@ struct HistoryView: View {
             } message: {
                 Text(localized("Dotychczasowe dane pozostaną w pierwszym przejeździe. Bluetooth pozostanie połączony, a kolejne próbki trafią do nowego przejazdu. Aktywne nagranie i trwający pomiar zostaną rozdzielone w tym samym miejscu."))
             }
+            .confirmationDialog(
+                localized("Usunąć ten element?"),
+                isPresented: deletionDialogBinding,
+                titleVisibility: .visible,
+                presenting: pendingDeletion
+            ) { candidate in
+                if candidate.isStoredInCloud {
+                    Button(localized("Usuń z iPhone’a i chmury"), role: .destructive) {
+                        Task { await delete(candidate, includingCloud: true) }
+                    }
+                    Button(localized("Usuń tylko z iPhone’a"), role: .destructive) {
+                        Task { await delete(candidate, includingCloud: false) }
+                    }
+                } else {
+                    Button(localized("Usuń z iPhone’a"), role: .destructive) {
+                        Task { await delete(candidate, includingCloud: false) }
+                    }
+                }
+                Button(localized("Anuluj"), role: .cancel) {}
+            } message: { candidate in
+                Text(candidate.deletionMessage)
+            }
+            .alert(
+                localized("Nie udało się usunąć danych"),
+                isPresented: Binding(
+                    get: { deletionError != nil },
+                    set: { if !$0 { deletionError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) { deletionError = nil }
+            } message: {
+                Text(deletionError ?? "")
+            }
             .sensoryFeedback(.success, trigger: splitFeedback)
             .toolbar {
                 if let onShowDashboard {
@@ -182,29 +236,128 @@ struct HistoryView: View {
         }
     }
 
-    private func delete(_ session: DriveSession) {
-        let sessionID = session.id
-        let matchingVideos = (try? modelContext.fetch(FetchDescriptor<DriveVideoRecording>(
-            predicate: #Predicate { $0.sessionID == sessionID }
-        ))) ?? []
-        for video in matchingVideos {
-            try? DriveVideoFileStore.delete(video)
-            modelContext.delete(video)
+    private var deletionDialogBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeletion != nil },
+            set: { if !$0 { pendingDeletion = nil } }
+        )
+    }
+
+    @MainActor
+    private func delete(_ candidate: HistoryDeletionCandidate, includingCloud: Bool) async {
+        do {
+            if includingCloud {
+                switch candidate {
+                case .session(let session): try await cloudSync.deleteRemote(session: session)
+                case .incident(let incident): try await cloudSync.deleteRemote(incident: incident)
+                }
+            }
+            switch candidate {
+            case .session(let session): HistoryLocalStore.delete(session: session, in: modelContext)
+            case .incident(let incident): HistoryLocalStore.delete(incident: incident, in: modelContext)
+            }
+            try modelContext.save()
+            cloudSync.localHistoryDidChange()
+            pendingDeletion = nil
+        } catch {
+            deletionError = error.localizedDescription
         }
-        let matchingIncidents = (try? modelContext.fetch(FetchDescriptor<DriveIncident>(
-            predicate: #Predicate { $0.sessionID == sessionID }
-        ))) ?? []
-        matchingIncidents.forEach(modelContext.delete)
-        let matchingAttempts = (try? modelContext.fetch(FetchDescriptor<AccelerationAttempt>(
-            predicate: #Predicate { $0.sessionID == sessionID }
-        ))) ?? []
-        matchingAttempts.forEach(modelContext.delete)
-        let annotations = (try? modelContext.fetch(FetchDescriptor<TimelineAnnotation>(
-            predicate: #Predicate { $0.sessionID == sessionID }
-        ))) ?? []
-        annotations.forEach(modelContext.delete)
-        modelContext.delete(session)
-        try? modelContext.save()
+    }
+}
+
+private enum HistoryDeletionCandidate {
+    case session(DriveSession)
+    case incident(DriveIncident)
+
+    var isStoredInCloud: Bool {
+        switch self {
+        case .session(let session): session.remoteID != nil || session.syncState == .synced
+        case .incident(let incident): incident.remoteID != nil || incident.syncState == .synced
+        }
+    }
+
+    var deletionMessage: String {
+        switch self {
+        case .session:
+            localized("Usunięcie przejazdu z iPhone’a skasuje także jego próbki, raporty, notatki i lokalne nagrania wideo.")
+        case .incident:
+            localized("Usunięcie raportu skasuje jego zapisane próbki i powiązane notatki.")
+        }
+    }
+}
+
+private struct SwipeToDeleteRow<Content: View>: View {
+    private let actionWidth: CGFloat = 82
+    let isEnabled: Bool
+    let action: () -> Void
+    let content: Content
+    @State private var offset: CGFloat = 0
+    @State private var isRevealed = false
+
+    init(
+        isEnabled: Bool = true,
+        action: @escaping () -> Void,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.isEnabled = isEnabled
+        self.action = action
+        self.content = content()
+    }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            if isEnabled {
+                Button(role: .destructive) {
+                    close()
+                    action()
+                } label: {
+                    VStack(spacing: 5) {
+                        Image(systemName: "trash.fill")
+                            .font(.headline)
+                        Text(localized("Usuń"))
+                            .font(.caption2.weight(.black))
+                    }
+                    .frame(width: actionWidth)
+                    .frame(maxHeight: .infinity)
+                    .foregroundStyle(.white)
+                    .background(Color.tougeRed, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .buttonStyle(.plain)
+            }
+
+            content
+                .offset(x: offset)
+                .contentShape(Rectangle())
+                .simultaneousGesture(dragGesture)
+        }
+        .clipped()
+        .accessibilityAction(named: localized("Usuń")) {
+            guard isEnabled else { return }
+            action()
+        }
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard isEnabled, abs(value.translation.width) > abs(value.translation.height) else { return }
+                let startingOffset = isRevealed ? -actionWidth : 0
+                offset = min(0, max(-actionWidth, startingOffset + value.translation.width))
+            }
+            .onEnded { value in
+                guard isEnabled, abs(value.translation.width) > abs(value.translation.height) else { return }
+                let startingOffset = isRevealed ? -actionWidth : 0
+                let predictedOffset = startingOffset + value.predictedEndTranslation.width
+                isRevealed = predictedOffset < -actionWidth * 0.45
+                withAnimation(.snappy(duration: 0.22)) {
+                    offset = isRevealed ? -actionWidth : 0
+                }
+            }
+    }
+
+    private func close() {
+        isRevealed = false
+        withAnimation(.snappy(duration: 0.18)) { offset = 0 }
     }
 }
 

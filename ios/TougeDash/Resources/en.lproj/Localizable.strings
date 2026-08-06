@@ -552,3 +552,14 @@
 "Dodaj ekran z lewej" = "Add screen on the left";
 "Dodaj ekran z prawej" = "Add screen on the right";
 "Zakończ edycję dashboardu" = "Finish editing dashboard";
+"Zapis trwa · możesz rozpocząć nowy odcinek" = "Recording · you can start a new segment";
+"Usuń" = "Delete";
+"Usuń raport" = "Delete report";
+"Usunąć ten element?" = "Delete this item?";
+"Usuń z iPhone’a i chmury" = "Delete from iPhone and cloud";
+"Usuń tylko z iPhone’a" = "Delete from iPhone only";
+"Usuń z iPhone’a" = "Delete from iPhone";
+"Nie udało się usunąć danych" = "Unable to delete data";
+"Usunięcie przejazdu z iPhone’a skasuje także jego próbki, raporty, notatki i lokalne nagrania wideo." = "Deleting a drive from this iPhone also removes its samples, reports, notes, and local video recordings.";
+"Usunięcie raportu skasuje jego zapisane próbki i powiązane notatki." = "Deleting a report removes its saved samples and related notes.";
+"Auto nie jest połączone z chmurą." = "The vehicle is not linked to the cloud.";

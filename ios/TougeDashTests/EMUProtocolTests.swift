@@ -4,6 +4,92 @@ import XCTest
 @testable import TougeDash
 
 final class EMUProtocolTests: XCTestCase {
+    @MainActor
+    func testLocalHistoryRetentionKeepsTenNewestSessionsAndIncidentsWithTheirChildren() throws {
+        let container = try ModelContainer(
+            for: DriveSession.self,
+            TelemetryHistorySample.self,
+            DriveVideoRecording.self,
+            DriveIncident.self,
+            TimelineAnnotation.self,
+            AccelerationAttempt.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let vehicleID = UUID()
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var newestSessionIDs: [UUID] = []
+        var newestIncidentIDs: [UUID] = []
+
+        for index in 0..<12 {
+            let timestamp = start.addingTimeInterval(Double(index))
+            let session = DriveSession(vehicleID: vehicleID, startedAt: timestamp)
+            let sample = TelemetryHistorySample(
+                snapshot: .preview,
+                timestamp: timestamp,
+                session: session
+            )
+            let incident = DriveIncident(
+                vehicleID: vehicleID,
+                sessionID: session.id,
+                kind: .overboost,
+                severity: .warning,
+                triggeredAt: timestamp,
+                thresholdValue: 1.5,
+                triggerValue: 1.7,
+                triggerUnit: "bar",
+                samples: []
+            )
+            context.insert(session)
+            context.insert(sample)
+            context.insert(incident)
+            context.insert(TimelineAnnotation(
+                vehicleID: vehicleID,
+                sessionID: session.id,
+                incidentID: incident.id,
+                timestamp: timestamp,
+                body: "Test"
+            ))
+            context.insert(AccelerationAttempt(
+                sessionID: session.id,
+                type: .zeroTo100,
+                startedAt: timestamp,
+                endedAt: timestamp.addingTimeInterval(5),
+                durationMillis: 5_000,
+                sampleRateHz: 10,
+                shiftCount: 1,
+                quality: "HIGH"
+            ))
+            context.insert(DriveVideoRecording(
+                sessionID: session.id,
+                fileName: "missing-\(index).mov",
+                startedAt: timestamp,
+                endedAt: timestamp.addingTimeInterval(1),
+                duration: 1,
+                fileSizeBytes: 1,
+                pixelWidth: 1,
+                pixelHeight: 1,
+                framesPerSecond: 30,
+                cameraName: "Test",
+                hasAudio: false
+            ))
+            if index >= 2 {
+                newestSessionIDs.append(session.id)
+                newestIncidentIDs.append(incident.id)
+            }
+        }
+        try context.save()
+
+        try HistoryLocalStore.enforceRetention(in: context)
+
+        XCTAssertEqual(Set(try context.fetch(FetchDescriptor<DriveSession>()).map(\.id)), Set(newestSessionIDs))
+        XCTAssertEqual(Set(try context.fetch(FetchDescriptor<DriveIncident>()).map(\.id)), Set(newestIncidentIDs))
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<TelemetryHistorySample>()), 10)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<TimelineAnnotation>()), 10)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<AccelerationAttempt>()), 10)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<DriveVideoRecording>()), 10)
+    }
+
     func testCloudPendingSamplesPublishInBatchesInsteadOfEveryTelemetrySample() {
         var buffer = CloudPendingSamplePublicationBuffer()
 

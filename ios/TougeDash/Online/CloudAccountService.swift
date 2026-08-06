@@ -159,6 +159,15 @@ final class CloudAccountService: ObservableObject {
         try await sendAuthorized(endpoint: endpoint, method: "GET", body: nil, response: response)
     }
 
+    func delete(endpoint: String) async throws {
+        let _: EmptyCloudResponse = try await sendAuthorized(
+            endpoint: endpoint,
+            method: "DELETE",
+            body: nil,
+            response: EmptyCloudResponse.self
+        )
+    }
+
     private func authenticate<Body: Encodable>(endpoint: String, body: Body) async -> Bool {
         isWorking = true
         lastError = nil
