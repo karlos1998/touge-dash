@@ -2,6 +2,23 @@ import Foundation
 import Network
 import SwiftData
 
+struct CloudPendingSamplePublicationBuffer {
+    static let batchSize = 10
+    private(set) var pendingDelta = 0
+
+    mutating func record(_ count: Int = 1) -> Int? {
+        pendingDelta += count
+        guard pendingDelta >= Self.batchSize else { return nil }
+        return drain()
+    }
+
+    mutating func drain() -> Int? {
+        guard pendingDelta > 0 else { return nil }
+        defer { pendingDelta = 0 }
+        return pendingDelta
+    }
+}
+
 struct CloudSyncProgress: Equatable, Sendable {
     let totalSessions: Int
     let totalIncidents: Int
@@ -82,6 +99,7 @@ final class CloudSyncManager: ObservableObject {
     private var lastLiveUpload = Date.distantPast
     private var periodicTask: Task<Void, Never>?
     private var isSynchronizing = false
+    private var samplePublicationBuffer = CloudPendingSamplePublicationBuffer()
     private static let vehicleLinksKey = "TougeDash.cloud.vehicleLinks"
     private static let lastVehicleIdentifierKey = "TougeDash.cloud.lastVehicleIdentifier"
     private static let estimatedBytesPerSample: Int64 = 420
@@ -336,15 +354,20 @@ final class CloudSyncManager: ObservableObject {
     }
 
     func noteLocalSampleRecorded(sessionID: UUID, sessionBecamePending: Bool) {
-        sessionStatuses.removeValue(forKey: sessionID)
-        pendingSamples += 1
-        estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample
+        if sessionStatuses[sessionID] != nil {
+            sessionStatuses.removeValue(forKey: sessionID)
+        }
+        if let publishedDelta = samplePublicationBuffer.record() {
+            pendingSamples += publishedDelta
+            estimatedPendingBytes += Int64(publishedDelta) * Self.estimatedBytesPerSample
+        }
         if sessionBecamePending {
             pendingSessions += 1
         }
     }
 
     func noteLocalIncidentRecorded(sampleCount: Int) {
+        publishBufferedSampleCount()
         pendingIncidents += 1
         pendingSamples += sampleCount
         estimatedPendingBytes += Int64(sampleCount) * Self.estimatedBytesPerSample
@@ -354,7 +377,9 @@ final class CloudSyncManager: ObservableObject {
     }
 
     func noteLocalAccelerationRecorded(sessionID: UUID) {
-        sessionStatuses.removeValue(forKey: sessionID)
+        if sessionStatuses[sessionID] != nil {
+            sessionStatuses.removeValue(forKey: sessionID)
+        }
         pendingSessions = max(1, pendingSessions)
         estimatedPendingBytes += 256
         if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
@@ -755,6 +780,7 @@ final class CloudSyncManager: ObservableObject {
     }
 
     private func updatePendingCount() {
+        samplePublicationBuffer = CloudPendingSamplePublicationBuffer()
         let descriptor = FetchDescriptor<DriveSession>(predicate: #Predicate { $0.syncStateRaw != "synced" })
         let sessions = (try? context.fetch(descriptor)) ?? []
         let incidents = (try? context.fetch(FetchDescriptor<DriveIncident>(
@@ -779,6 +805,12 @@ final class CloudSyncManager: ObservableObject {
         uploadablePendingItems = uploadableSessions.count + uploadableIncidents.count + uploadableAnnotations.count
         pendingSamples = sessions.reduce(0) { $0 + $1.sampleCount } + incidents.reduce(0) { $0 + $1.sampleCount }
         estimatedPendingBytes = Int64(pendingSamples) * Self.estimatedBytesPerSample + Int64(annotations.count * 512)
+    }
+
+    private func publishBufferedSampleCount() {
+        guard let publishedDelta = samplePublicationBuffer.drain() else { return }
+        pendingSamples += publishedDelta
+        estimatedPendingBytes += Int64(publishedDelta) * Self.estimatedBytesPerSample
     }
 
     private func repairPendingChildVehicleAssignments() {

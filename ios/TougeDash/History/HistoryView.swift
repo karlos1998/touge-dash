@@ -6,21 +6,57 @@ import SwiftUI
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \DriveSession.startedAt, order: .reverse) private var sessions: [DriveSession]
-    @Query(sort: \DriveIncident.triggeredAt, order: .reverse) private var incidents: [DriveIncident]
-    @Query(sort: \DriveVideoRecording.startedAt, order: .reverse) private var videos: [DriveVideoRecording]
-    @Query(sort: \AccelerationAttempt.startedAt, order: .reverse) private var accelerationAttempts: [AccelerationAttempt]
-    @ObservedObject var locationTracker: LocationTrackingService
-    @ObservedObject var cloudAccount: CloudAccountService
-    @ObservedObject var cloudSync: CloudSyncManager
-    @ObservedObject var videoRecorder: DriveVideoRecorder
-    @ObservedObject var videoOverlays: VideoOverlayTemplateStore
+    @Query private var sessions: [DriveSession]
+    @Query private var incidents: [DriveIncident]
+    @Query private var videos: [DriveVideoRecording]
+    let locationTracker: LocationTrackingService
+    let cloudAccount: CloudAccountService
+    let cloudSync: CloudSyncManager
+    let videoRecorder: DriveVideoRecorder
+    let videoOverlays: VideoOverlayTemplateStore
     let canSplitActiveDrive: Bool
-    let activeSessionSampleCount: Int
     let onSplitActiveDrive: () -> Bool
     let onShowDashboard: (() -> Void)?
     @State private var showingSplitConfirmation = false
     @State private var splitFeedback = 0
+
+    init(
+        locationTracker: LocationTrackingService,
+        cloudAccount: CloudAccountService,
+        cloudSync: CloudSyncManager,
+        videoRecorder: DriveVideoRecorder,
+        videoOverlays: VideoOverlayTemplateStore,
+        canSplitActiveDrive: Bool,
+        onSplitActiveDrive: @escaping () -> Bool,
+        onShowDashboard: (() -> Void)?
+    ) {
+        var sessionDescriptor = FetchDescriptor<DriveSession>(
+            sortBy: [SortDescriptor(\DriveSession.startedAt, order: .reverse)]
+        )
+        sessionDescriptor.fetchLimit = HistoryPresentationPolicy.maximumVisibleSessions
+        _sessions = Query(sessionDescriptor)
+
+        var incidentDescriptor = FetchDescriptor<DriveIncident>(
+            sortBy: [SortDescriptor(\DriveIncident.triggeredAt, order: .reverse)]
+        )
+        incidentDescriptor.fetchLimit = HistoryPresentationPolicy.maximumVisibleIncidents
+        _incidents = Query(incidentDescriptor)
+
+        var videoDescriptor = FetchDescriptor<DriveVideoRecording>(
+            sortBy: [SortDescriptor(\DriveVideoRecording.startedAt, order: .reverse)]
+        )
+        videoDescriptor.fetchLimit = HistoryPresentationPolicy.maximumVisibleVideoRecords
+        _videos = Query(videoDescriptor)
+
+        self.locationTracker = locationTracker
+        self.cloudAccount = cloudAccount
+        self.cloudSync = cloudSync
+        self.videoRecorder = videoRecorder
+        self.videoOverlays = videoOverlays
+        self.canSplitActiveDrive = canSplitActiveDrive
+        self.onSplitActiveDrive = onSplitActiveDrive
+        self.onShowDashboard = onShowDashboard
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,7 +67,7 @@ struct HistoryView: View {
                     LazyVStack(spacing: 14) {
                         CloudSyncCard(account: cloudAccount, sync: cloudSync)
                         if canSplitActiveDrive {
-                            ManualSessionSplitCard(sampleCount: activeSessionSampleCount) {
+                            ManualSessionSplitCard {
                                 showingSplitConfirmation = true
                             }
                         }
@@ -147,17 +183,22 @@ struct HistoryView: View {
     }
 
     private func delete(_ session: DriveSession) {
-        for video in videos where video.sessionID == session.id {
+        let sessionID = session.id
+        let matchingVideos = (try? modelContext.fetch(FetchDescriptor<DriveVideoRecording>(
+            predicate: #Predicate { $0.sessionID == sessionID }
+        ))) ?? []
+        for video in matchingVideos {
             try? DriveVideoFileStore.delete(video)
             modelContext.delete(video)
         }
-        for incident in incidents where incident.sessionID == session.id {
-            modelContext.delete(incident)
-        }
-        for attempt in accelerationAttempts where attempt.sessionID == session.id {
-            modelContext.delete(attempt)
-        }
-        let sessionID = session.id
+        let matchingIncidents = (try? modelContext.fetch(FetchDescriptor<DriveIncident>(
+            predicate: #Predicate { $0.sessionID == sessionID }
+        ))) ?? []
+        matchingIncidents.forEach(modelContext.delete)
+        let matchingAttempts = (try? modelContext.fetch(FetchDescriptor<AccelerationAttempt>(
+            predicate: #Predicate { $0.sessionID == sessionID }
+        ))) ?? []
+        matchingAttempts.forEach(modelContext.delete)
         let annotations = (try? modelContext.fetch(FetchDescriptor<TimelineAnnotation>(
             predicate: #Predicate { $0.sessionID == sessionID }
         ))) ?? []
@@ -168,7 +209,6 @@ struct HistoryView: View {
 }
 
 private struct ManualSessionSplitCard: View {
-    let sampleCount: Int
     let action: () -> Void
 
     var body: some View {
@@ -186,7 +226,7 @@ private struct ManualSessionSplitCard: View {
                     Text(localized("BIEŻĄCY PRZEJAZD"))
                         .font(.system(size: 12, weight: .black))
                         .tracking(1)
-                    Text(String(format: localized("%@ próbek · zapis trwa"), sampleCount.formatted()))
+                    Text(localized("Zapis trwa · możesz rozpocząć nowy odcinek"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

@@ -4,6 +4,17 @@ import XCTest
 @testable import TougeDash
 
 final class EMUProtocolTests: XCTestCase {
+    func testCloudPendingSamplesPublishInBatchesInsteadOfEveryTelemetrySample() {
+        var buffer = CloudPendingSamplePublicationBuffer()
+
+        for _ in 0..<(CloudPendingSamplePublicationBuffer.batchSize - 1) {
+            XCTAssertNil(buffer.record())
+        }
+        XCTAssertEqual(buffer.record(), CloudPendingSamplePublicationBuffer.batchSize)
+        XCTAssertEqual(buffer.pendingDelta, 0)
+        XCTAssertNil(buffer.drain())
+    }
+
     func testParsesFrameSplitAcrossBluetoothNotifications() {
         var parser = EMUFrameParser()
         let frame = Array(EMUFrameParser.encode(channel: 1, rawValue: 6_420))

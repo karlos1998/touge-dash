@@ -2,6 +2,12 @@ import Foundation
 import SwiftData
 import Combine
 
+enum HistoryPresentationPolicy {
+    static let maximumVisibleSessions = 10
+    static let maximumVisibleIncidents = 10
+    static let maximumVisibleVideoRecords = 40
+}
+
 enum HistorySyncState: String, Codable, Sendable {
     case local
     case pendingUpload
