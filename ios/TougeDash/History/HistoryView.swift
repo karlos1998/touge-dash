@@ -3,6 +3,7 @@ import CoreLocation
 import MapKit
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
@@ -370,41 +371,88 @@ private struct SwipeToDeleteRow<Content: View>: View {
                     .background(Color.tougeRed, in: RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
+                .mask(alignment: .trailing) {
+                    Rectangle()
+                        .frame(width: max(0, -offset))
+                }
+                .allowsHitTesting(isRevealed)
             }
 
             content
                 .offset(x: offset)
                 .contentShape(Rectangle())
-                .simultaneousGesture(dragGesture)
         }
         .clipped()
+        .gesture(
+            HorizontalSwipeGesture(
+                onChanged: updateOffset,
+                onEnded: finishSwipe
+            )
+        )
         .accessibilityAction(named: localized("Usuń")) {
             guard isEnabled else { return }
             action()
         }
     }
 
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { value in
-                guard isEnabled, abs(value.translation.width) > abs(value.translation.height) else { return }
-                let startingOffset = isRevealed ? -actionWidth : 0
-                offset = min(0, max(-actionWidth, startingOffset + value.translation.width))
-            }
-            .onEnded { value in
-                guard isEnabled, abs(value.translation.width) > abs(value.translation.height) else { return }
-                let startingOffset = isRevealed ? -actionWidth : 0
-                let predictedOffset = startingOffset + value.predictedEndTranslation.width
-                isRevealed = predictedOffset < -actionWidth * 0.45
-                withAnimation(.snappy(duration: 0.22)) {
-                    offset = isRevealed ? -actionWidth : 0
-                }
-            }
+    private func updateOffset(_ translation: CGFloat) {
+        guard isEnabled else { return }
+        let startingOffset = isRevealed ? -actionWidth : 0
+        offset = min(0, max(-actionWidth, startingOffset + translation))
+    }
+
+    private func finishSwipe(_ translation: CGFloat, velocity: CGFloat) {
+        guard isEnabled else { return }
+        let startingOffset = isRevealed ? -actionWidth : 0
+        let projectedOffset = startingOffset + translation + velocity * 0.12
+        isRevealed = projectedOffset < -actionWidth * 0.45
+        withAnimation(.snappy(duration: 0.22)) {
+            offset = isRevealed ? -actionWidth : 0
+        }
     }
 
     private func close() {
         isRevealed = false
         withAnimation(.snappy(duration: 0.18)) { offset = 0 }
+    }
+}
+
+private struct HorizontalSwipeGesture: UIGestureRecognizerRepresentable {
+    let onChanged: (CGFloat) -> Void
+    let onEnded: (CGFloat, CGFloat) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
+        Coordinator()
+    }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let recognizer = UIPanGestureRecognizer()
+        recognizer.delegate = context.coordinator
+        recognizer.maximumNumberOfTouches = 1
+        recognizer.cancelsTouchesInView = true
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        let translation = context.converter.localTranslation?.x ?? 0
+        switch recognizer.state {
+        case .began, .changed:
+            onChanged(translation)
+        case .ended:
+            onEnded(translation, context.converter.localVelocity?.x ?? 0)
+        case .cancelled, .failed:
+            onEnded(translation, 0)
+        default:
+            break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return false }
+            let velocity = pan.velocity(in: pan.view)
+            return abs(velocity.x) > abs(velocity.y) * 1.15
+        }
     }
 }
 
