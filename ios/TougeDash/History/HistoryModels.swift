@@ -8,6 +8,39 @@ enum HistoryPresentationPolicy {
     static let maximumVisibleVideoRecords = 40
 }
 
+enum DriveSegmentLength: Int, CaseIterable, Identifiable, Sendable {
+    case fifteenMinutes = 15
+    case thirtyMinutes = 30
+    case oneHour = 60
+
+    var id: Int { rawValue }
+    var duration: TimeInterval { TimeInterval(rawValue * 60) }
+
+    var title: String {
+        switch self {
+        case .fifteenMinutes: localized("15 min")
+        case .thirtyMinutes: localized("30 min")
+        case .oneHour: localized("1 godz.")
+        }
+    }
+}
+
+@MainActor
+final class DriveSegmentSettingsStore: ObservableObject {
+    private static let defaultsKey = "TougeDash.history.segmentLengthMinutes"
+
+    @Published var length: DriveSegmentLength {
+        didSet { defaults.set(length.rawValue, forKey: Self.defaultsKey) }
+    }
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        length = DriveSegmentLength(rawValue: defaults.integer(forKey: Self.defaultsKey)) ?? .thirtyMinutes
+    }
+}
+
 @MainActor
 enum HistoryLocalStore {
     static func enforceRetention(in context: ModelContext, keepingActiveSessionID: UUID? = nil) throws {

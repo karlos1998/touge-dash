@@ -14,6 +14,7 @@ struct HistoryView: View {
     let cloudSync: CloudSyncManager
     let videoRecorder: DriveVideoRecorder
     let videoOverlays: VideoOverlayTemplateStore
+    let segmentSettings: DriveSegmentSettingsStore
     let activeSessionID: UUID?
     let canSplitActiveDrive: Bool
     let onSplitActiveDrive: () -> Bool
@@ -29,6 +30,7 @@ struct HistoryView: View {
         cloudSync: CloudSyncManager,
         videoRecorder: DriveVideoRecorder,
         videoOverlays: VideoOverlayTemplateStore,
+        segmentSettings: DriveSegmentSettingsStore,
         activeSessionID: UUID?,
         canSplitActiveDrive: Bool,
         onSplitActiveDrive: @escaping () -> Bool,
@@ -57,6 +59,7 @@ struct HistoryView: View {
         self.cloudSync = cloudSync
         self.videoRecorder = videoRecorder
         self.videoOverlays = videoOverlays
+        self.segmentSettings = segmentSettings
         self.activeSessionID = activeSessionID
         self.canSplitActiveDrive = canSplitActiveDrive
         self.onSplitActiveDrive = onSplitActiveDrive
@@ -76,6 +79,7 @@ struct HistoryView: View {
                                 showingSplitConfirmation = true
                             }
                         }
+                        DriveSegmentationCard(settings: segmentSettings)
                         LocationRecordingCard(locationTracker: locationTracker)
                         DriveVideoRecordingCard(recorder: videoRecorder)
 
@@ -262,6 +266,49 @@ struct HistoryView: View {
         } catch {
             deletionError = error.localizedDescription
         }
+    }
+}
+
+private struct DriveSegmentationCard: View {
+    @ObservedObject var settings: DriveSegmentSettingsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(spacing: 12) {
+                ZStack {
+                    CutCornerPanel(cut: 9)
+                        .fill(Color.tougeYellow.opacity(0.13))
+                    Image(systemName: "rectangle.split.3x1.fill")
+                        .foregroundStyle(Color.tougeYellow)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localized("DŁUGOŚĆ ODCINKA"))
+                        .font(.system(size: 12, weight: .black))
+                        .tracking(1)
+                    Text(localized("Automatyczne dzielenie przejazdu"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "repeat")
+                    .foregroundStyle(Color.tougeYellow)
+            }
+
+            Picker(localized("Maksymalna długość przejazdu"), selection: $settings.length) {
+                ForEach(DriveSegmentLength.allCases) { length in
+                    Text(length.title).tag(length)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(localized("Po osiągnięciu limitu Touge Dash zapisze odcinek i bez rozłączania rozpocznie następny. Telemetria i film są cięte na tej samej osi czasu."))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(16)
+        .cardSurface(accent: .tougeYellow)
     }
 }
 

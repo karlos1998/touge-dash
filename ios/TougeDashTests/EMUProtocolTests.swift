@@ -273,6 +273,61 @@ final class EMUProtocolTests: XCTestCase {
     }
 
     @MainActor
+    func testHistoryRecorderAutomaticallyStartsANewSegmentAtConfiguredBoundary() throws {
+        let suite = "TougeDashTests.driveSegments.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = DriveSegmentSettingsStore(defaults: defaults)
+        settings.length = .fifteenMinutes
+        let container = try ModelContainer(
+            for: DriveSession.self,
+            TelemetryHistorySample.self,
+            DriveIncident.self,
+            TimelineAnnotation.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let recorder = TelemetryHistoryRecorder(
+            container: container,
+            locationTracker: LocationTrackingService(),
+            segmentSettings: settings,
+            defaults: defaults
+        )
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+        let first = try XCTUnwrap(recorder.record(.preview, at: start))
+        for seconds in stride(from: 60.0, through: 840.0, by: 60.0) {
+            _ = recorder.record(.preview, at: start.addingTimeInterval(seconds))
+        }
+        let lastInFirst = try XCTUnwrap(recorder.record(.preview, at: start.addingTimeInterval(899.9)))
+        let firstInSecond = try XCTUnwrap(recorder.record(.preview, at: start.addingTimeInterval(900)))
+        recorder.saveNow()
+
+        XCTAssertEqual(first.sessionID, lastInFirst.sessionID)
+        XCTAssertNotEqual(first.sessionID, firstInSecond.sessionID)
+        XCTAssertEqual(firstInSecond.previousSessionID, first.sessionID)
+        XCTAssertEqual(firstInSecond.boundaryAt, start.addingTimeInterval(900))
+        let sessions = try container.mainContext.fetch(FetchDescriptor<DriveSession>(
+            sortBy: [SortDescriptor(\.startedAt)]
+        ))
+        XCTAssertEqual(sessions.count, 2)
+        XCTAssertEqual(sessions[0].endedAt, start.addingTimeInterval(899.9))
+        XCTAssertEqual(sessions[1].startedAt, start.addingTimeInterval(900))
+    }
+
+    @MainActor
+    func testDriveSegmentLengthDefaultsToThirtyMinutesAndPersists() throws {
+        let suite = "TougeDashTests.driveSegmentSettings.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let settings = DriveSegmentSettingsStore(defaults: defaults)
+        XCTAssertEqual(settings.length, .thirtyMinutes)
+        settings.length = .oneHour
+
+        XCTAssertEqual(DriveSegmentSettingsStore(defaults: defaults).length, .oneHour)
+    }
+
+    @MainActor
     func testHistoryRecorderNeverResumesAnotherLoggersRecentSession() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(

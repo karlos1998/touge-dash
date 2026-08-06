@@ -459,3 +459,9 @@
 "Usunięcie przejazdu z iPhone’a skasuje także jego próbki, raporty, notatki i lokalne nagrania wideo." = "Usunięcie przejazdu z iPhone’a skasuje także jego próbki, raporty, notatki i lokalne nagrania wideo.";
 "Usunięcie raportu skasuje jego zapisane próbki i powiązane notatki." = "Usunięcie raportu skasuje jego zapisane próbki i powiązane notatki.";
 "Auto nie jest połączone z chmurą." = "Auto nie jest połączone z chmurą.";
+"DŁUGOŚĆ ODCINKA" = "DŁUGOŚĆ ODCINKA";
+"Automatyczne dzielenie przejazdu" = "Automatyczne dzielenie przejazdu";
+"Maksymalna długość przejazdu" = "Maksymalna długość przejazdu";
+"1 godz." = "1 godz.";
+"Po osiągnięciu limitu Touge Dash zapisze odcinek i bez rozłączania rozpocznie następny. Telemetria i film są cięte na tej samej osi czasu." = "Po osiągnięciu limitu Touge Dash zapisze odcinek i bez rozłączania rozpocznie następny. Telemetria i film są cięte na tej samej osi czasu.";
+"Film rozpoczyna się z pierwszą próbką, jest dzielony razem z przejazdem i kończy po rozłączeniu. Pliki nie są wysyłane do Touge Dash Cloud." = "Film rozpoczyna się z pierwszą próbką, jest dzielony razem z przejazdem i kończy po rozłączeniu. Pliki nie są wysyłane do Touge Dash Cloud.";

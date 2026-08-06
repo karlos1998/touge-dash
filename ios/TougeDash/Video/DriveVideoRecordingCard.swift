@@ -82,7 +82,7 @@ struct DriveVideoRecordingCard: View {
             .font(.system(size: 9, weight: .black))
             .tracking(0.6)
 
-            Text(localized("Film rozpoczyna się automatycznie z pierwszą próbką przejazdu i kończy po rozłączeniu. Pliki nie są wysyłane do Touge Dash Cloud."))
+            Text(localized("Film rozpoczyna się z pierwszą próbką, jest dzielony razem z przejazdem i kończy po rozłączeniu. Pliki nie są wysyłane do Touge Dash Cloud."))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 

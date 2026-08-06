@@ -563,3 +563,9 @@
 "Usunięcie przejazdu z iPhone’a skasuje także jego próbki, raporty, notatki i lokalne nagrania wideo." = "Deleting a drive from this iPhone also removes its samples, reports, notes, and local video recordings.";
 "Usunięcie raportu skasuje jego zapisane próbki i powiązane notatki." = "Deleting a report removes its saved samples and related notes.";
 "Auto nie jest połączone z chmurą." = "The vehicle is not linked to the cloud.";
+"DŁUGOŚĆ ODCINKA" = "SEGMENT LENGTH";
+"Automatyczne dzielenie przejazdu" = "Automatic drive segmentation";
+"Maksymalna długość przejazdu" = "Maximum drive length";
+"1 godz." = "1 hr";
+"Po osiągnięciu limitu Touge Dash zapisze odcinek i bez rozłączania rozpocznie następny. Telemetria i film są cięte na tej samej osi czasu." = "At the limit, Touge Dash saves the segment and starts the next one without disconnecting. Telemetry and video are split on the same timeline.";
+"Film rozpoczyna się z pierwszą próbką, jest dzielony razem z przejazdem i kończy po rozłączeniu. Pliki nie są wysyłane do Touge Dash Cloud." = "Video starts with the first sample, is split together with the drive, and ends after disconnecting. Files are never uploaded to Touge Dash Cloud.";

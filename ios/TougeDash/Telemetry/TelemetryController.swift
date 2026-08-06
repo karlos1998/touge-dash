@@ -214,10 +214,11 @@ final class TelemetryController: ObservableObject {
     @discardableResult
     func splitActiveDrive() -> Bool {
         guard isConnected, let sessionID = historyRecorder.activeSessionID else { return false }
+        let boundaryAt = Date.now
         incidentRecorder.finish(sessionID: sessionID)
-        guard historyRecorder.finishActiveSessionForManualSplit() != nil else { return false }
+        guard historyRecorder.finishActiveSessionForManualSplit(at: boundaryAt) != nil else { return false }
         accelerationEngine.reset()
-        videoRecorder.telemetrySessionDidEnd()
+        videoRecorder.telemetrySessionDidEnd(at: boundaryAt)
         lastVideoSessionID = nil
         lastVideoHeartbeat = .distantPast
         Task { await cloudSync.syncNow() }
@@ -285,11 +286,20 @@ final class TelemetryController: ObservableObject {
         if !alertEvaluation.triggered.isEmpty {
             watchBridge.sendAlertEvents(alertEvaluation.triggered, snapshot: value)
         }
-        if let change = historyRecorder.record(value) {
+        if let change = historyRecorder.record(value, at: now) {
             cloudSync.noteLocalSampleRecorded(
                 sessionID: change.sessionID,
                 sessionBecamePending: change.sessionBecamePending
             )
+            if let previousSessionID = change.previousSessionID,
+               let boundaryAt = change.boundaryAt {
+                incidentRecorder.finish(sessionID: previousSessionID)
+                accelerationEngine.reset()
+                videoRecorder.handleTelemetry(sessionID: change.sessionID, at: boundaryAt)
+                lastVideoSessionID = change.sessionID
+                lastVideoHeartbeat = boundaryAt
+                Task { await cloudSync.syncNow() }
+            }
         }
         if let sessionID = historyRecorder.activeSessionID {
             if let attempt = accelerationEngine.sample(value, at: now, sessionID: sessionID) {
@@ -297,7 +307,7 @@ final class TelemetryController: ObservableObject {
                 cloudSync.noteLocalAccelerationRecorded(sessionID: sessionID)
             }
             if sessionID != lastVideoSessionID || now.timeIntervalSince(lastVideoHeartbeat) >= 1 {
-                videoRecorder.handleTelemetry(sessionID: sessionID)
+                videoRecorder.handleTelemetry(sessionID: sessionID, at: now)
                 lastVideoSessionID = sessionID
                 lastVideoHeartbeat = now
             }

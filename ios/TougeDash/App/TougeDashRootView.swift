@@ -60,6 +60,7 @@ struct TougeDashRootView: View {
                 cloudSync: cloudSync,
                 videoRecorder: videoRecorder,
                 videoOverlays: videoOverlays,
+                segmentSettings: controller.historyRecorder.segmentSettings,
                 activeSessionID: controller.historyRecorder.activeSessionID,
                 canSplitActiveDrive: controller.isConnected && controller.historyRecorder.activeSessionID != nil,
                 onSplitActiveDrive: controller.splitActiveDrive,

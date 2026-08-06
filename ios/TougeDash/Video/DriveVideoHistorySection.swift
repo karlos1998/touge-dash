@@ -655,6 +655,15 @@ private struct DriveVideoSynchronizedPlayer: View {
 
         while !Task.isCancelled, player === newPlayer {
             let seconds = newPlayer.currentTime().seconds
+            if seconds.isFinite, seconds > alignment.videoEndSeconds + 0.05 {
+                newPlayer.pause()
+                await newPlayer.seek(
+                    to: CMTime(seconds: alignment.videoEndSeconds, preferredTimescale: 600),
+                    toleranceBefore: .zero,
+                    toleranceAfter: .zero
+                )
+                continue
+            }
             if seconds.isFinite,
                seconds >= alignment.videoStartSeconds,
                seconds <= alignment.videoEndSeconds + 0.15 {

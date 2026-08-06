@@ -98,6 +98,30 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(restored.telemetryStartDate(session: session), startedAt.addingTimeInterval(20))
     }
 
+    func testAutomaticSplitClipsVideoAndTelemetryAtTheSameWallClockBoundary() {
+        let videoStartedAt = Date(timeIntervalSince1970: 1_800_000_010)
+        let telemetryBoundary = Date(timeIntervalSince1970: 1_800_000_900)
+
+        XCTAssertEqual(
+            DriveVideoTimelineSynchronization.clippedDuration(
+                videoStartedAt: videoStartedAt,
+                videoDuration: 900,
+                telemetryBoundaryAt: telemetryBoundary
+            ),
+            890,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            DriveVideoTimelineSynchronization.clippedDuration(
+                videoStartedAt: videoStartedAt,
+                videoDuration: 880,
+                telemetryBoundaryAt: telemetryBoundary
+            ),
+            880,
+            accuracy: 0.001
+        )
+    }
+
     func testLegacyOverlayMigratesToFreeformLayout() throws {
         let templateID = UUID()
         let firstID = UUID()

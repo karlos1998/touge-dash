@@ -16,6 +16,18 @@ enum DriveVideoSourceKind: String, Codable, Sendable {
     }
 }
 
+enum DriveVideoTimelineSynchronization {
+    static func clippedDuration(
+        videoStartedAt: Date,
+        videoDuration: TimeInterval,
+        telemetryBoundaryAt: Date?
+    ) -> TimeInterval {
+        let safeVideoDuration = max(0, videoDuration)
+        guard let telemetryBoundaryAt else { return safeVideoDuration }
+        return min(safeVideoDuration, max(0, telemetryBoundaryAt.timeIntervalSince(videoStartedAt)))
+    }
+}
+
 struct DriveVideoTimelineAlignment: Equatable, Sendable {
     var videoStartSeconds: Double
     var telemetryStartSeconds: Double

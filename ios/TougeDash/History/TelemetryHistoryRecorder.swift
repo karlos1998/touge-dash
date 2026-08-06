@@ -9,6 +9,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
     private static let manuallyClosedSessionKeyPrefix = "TougeDash.history.manuallyClosedSession"
 
     let locationTracker: LocationTrackingService
+    let segmentSettings: DriveSegmentSettingsStore
 
     private let context: ModelContext
     private let defaults: UserDefaults
@@ -22,11 +23,13 @@ final class TelemetryHistoryRecorder: ObservableObject {
     init(
         container: ModelContainer,
         locationTracker: LocationTrackingService,
+        segmentSettings: DriveSegmentSettingsStore? = nil,
         defaults: UserDefaults = .standard
     ) {
         context = ModelContext(container)
         context.autosaveEnabled = true
         self.defaults = defaults
+        self.segmentSettings = segmentSettings ?? DriveSegmentSettingsStore(defaults: defaults)
         vehicleID = LocalVehicleIdentity.resolve()
         self.locationTracker = locationTracker
         restoreRecentSession()
@@ -36,6 +39,8 @@ final class TelemetryHistoryRecorder: ObservableObject {
     struct RecordingChange: Equatable, Sendable {
         let sessionBecamePending: Bool
         let sessionID: UUID
+        let previousSessionID: UUID?
+        let boundaryAt: Date?
     }
 
     @discardableResult
@@ -65,17 +70,22 @@ final class TelemetryHistoryRecorder: ObservableObject {
             try? context.save()
             lastSavedAt = timestamp
         }
-        return RecordingChange(sessionBecamePending: isNewSession || !wasPending, sessionID: session.id)
+        return RecordingChange(
+            sessionBecamePending: isNewSession || !wasPending,
+            sessionID: session.id,
+            previousSessionID: isNewSession ? previousSessionID : nil,
+            boundaryAt: isNewSession && previousSessionID != nil ? timestamp : nil
+        )
     }
 
     var activeSessionID: UUID? { activeSession?.id }
     var activeSessionSampleCount: Int { activeSession?.sampleCount ?? 0 }
 
     @discardableResult
-    func finishActiveSessionForManualSplit() -> UUID? {
+    func finishActiveSessionForManualSplit(at timestamp: Date = .now) -> UUID? {
         guard let session = activeSession else { return nil }
         defaults.set(session.id.uuidString, forKey: manuallyClosedSessionKey)
-        session.modifiedAt = .now
+        session.modifiedAt = timestamp
         session.syncState = session.remoteID == nil ? .local : .changedAfterSync
         session.revision += 1
         saveNow()
@@ -161,7 +171,8 @@ final class TelemetryHistoryRecorder: ObservableObject {
 
     private func resolveSession(at timestamp: Date) -> DriveSession {
         if let activeSession,
-           timestamp.timeIntervalSince(activeSession.endedAt) <= Self.newSessionGap {
+           timestamp.timeIntervalSince(activeSession.endedAt) <= Self.newSessionGap,
+           timestamp.timeIntervalSince(activeSession.startedAt) < segmentSettings.length.duration {
             return activeSession
         }
 

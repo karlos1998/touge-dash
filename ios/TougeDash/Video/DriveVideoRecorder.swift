@@ -28,6 +28,7 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
     private var currentSessionID: UUID?
     private var currentURL: URL?
     private var currentStartedAt: Date?
+    private var currentTelemetryEndAt: Date?
     private var currentCameraName = ""
     private var currentHasAudio = false
     private var permissionRequestID = UUID()
@@ -41,6 +42,11 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         context.autosaveEnabled = true
         state = settings.isEnabled ? .ready : .disabled
         super.init()
+        captureEngine.onStarted = { [weak self] url, startedAt in
+            Task { @MainActor [weak self] in
+                self?.captureDidStart(url: url, at: startedAt)
+            }
+        }
         captureEngine.onFinished = { [weak self] url, error in
             Task { @MainActor [weak self] in
                 await self?.finishRecording(url: url, error: error)
@@ -150,16 +156,16 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         }
     }
 
-    func handleTelemetry(sessionID: UUID) {
+    func handleTelemetry(sessionID: UUID, at timestamp: Date = .now) {
         latestTelemetrySessionID = sessionID
-        latestTelemetryAt = .now
+        latestTelemetryAt = timestamp
         guard settings.isEnabled, isApplicationActive else { return }
         switch state {
         case .recording(let current, _) where current == sessionID:
             return
         case .recording:
             pendingSessionID = sessionID
-            stopRecording()
+            stopRecording(telemetryEndAt: timestamp)
         case .stopping:
             pendingSessionID = sessionID
         case .requestingPermission, .preparing:
@@ -174,12 +180,12 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         telemetrySessionDidEnd()
     }
 
-    func telemetrySessionDidEnd() {
+    func telemetrySessionDidEnd(at timestamp: Date = .now) {
         latestTelemetrySessionID = nil
         latestTelemetryAt = .distantPast
         pendingSessionID = nil
         if isRecording {
-            stopRecording()
+            stopRecording(telemetryEndAt: timestamp)
         } else if settings.isEnabled {
             stopCaptureSession()
             state = .ready
@@ -246,6 +252,9 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         do {
             guard settings.isEnabled, pendingSessionID == sessionID else {
                 state = settings.isEnabled ? .ready : .disabled
+                if let nextSessionID = pendingSessionID, settings.isEnabled {
+                    Task { await prepareAndStart(sessionID: nextSessionID) }
+                }
                 return
             }
             try await startRecording(
@@ -287,7 +296,8 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         let url = try DriveVideoFileStore.newRecordingURL()
         currentSessionID = sessionID
         currentURL = url
-        currentStartedAt = .now
+        currentStartedAt = nil
+        currentTelemetryEndAt = nil
 
         let result = try await captureEngine.configureAndStart(
             cameraID: selectedCamera.id,
@@ -310,11 +320,14 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         state = .recording(sessionID: sessionID, startedAt: currentStartedAt ?? .now)
     }
 
-    private func stopRecording() {
+    private func stopRecording(telemetryEndAt: Date? = nil) {
         guard isRecording else {
             stopCaptureSession()
             state = settings.isEnabled ? .ready : .disabled
             return
+        }
+        if let telemetryEndAt {
+            currentTelemetryEndAt = telemetryEndAt
         }
         state = .stopping
         captureEngine.stopRecording()
@@ -328,9 +341,11 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
         stopCaptureSession()
         let sessionID = currentSessionID
         let startedAt = currentStartedAt
+        let telemetryEndAt = currentTelemetryEndAt
         currentSessionID = nil
         currentURL = nil
         currentStartedAt = nil
+        currentTelemetryEndAt = nil
 
         if let error, !isSuccessfulFinishError(error) {
             try? FileManager.default.removeItem(at: url)
@@ -345,6 +360,11 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
 
         do {
             let metadata = try await metadata(for: url)
+            let synchronizedDuration = DriveVideoTimelineSynchronization.clippedDuration(
+                videoStartedAt: startedAt,
+                videoDuration: metadata.duration,
+                telemetryBoundaryAt: telemetryEndAt
+            )
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             let bytes = (attributes[.size] as? NSNumber)?.int64Value ?? 0
             let recording = DriveVideoRecording(
@@ -358,7 +378,8 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
                 pixelHeight: metadata.height,
                 framesPerSecond: metadata.framesPerSecond,
                 cameraName: currentCameraName,
-                hasAudio: currentHasAudio
+                hasAudio: currentHasAudio,
+                exportDurationSeconds: synchronizedDuration
             )
             context.insert(recording)
             try context.save()
@@ -372,6 +393,14 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
             }
         } catch {
             fail(error.localizedDescription)
+        }
+    }
+
+    private func captureDidStart(url: URL, at startedAt: Date) {
+        guard currentURL == url, let sessionID = currentSessionID else { return }
+        currentStartedAt = startedAt
+        if case .recording(let stateSessionID, _) = state, stateSessionID == sessionID {
+            state = .recording(sessionID: sessionID, startedAt: startedAt)
         }
     }
 

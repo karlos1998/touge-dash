@@ -10,8 +10,10 @@ struct DriveVideoCaptureStartResult: Sendable {
 /// AVCaptureSession.startRunning/stopRunning must never compete with SwiftUI's
 /// main thread while live telemetry is updating the dashboard.
 final class DriveVideoCaptureEngine: NSObject, @unchecked Sendable {
+    typealias StartHandler = @Sendable (URL, Date) -> Void
     typealias FinishHandler = @Sendable (URL, Error?) -> Void
 
+    var onStarted: StartHandler?
     var onFinished: FinishHandler?
 
     private let queue = DispatchQueue(
@@ -160,6 +162,14 @@ final class DriveVideoCaptureEngine: NSObject, @unchecked Sendable {
 }
 
 extension DriveVideoCaptureEngine: AVCaptureFileOutputRecordingDelegate {
+    nonisolated func fileOutput(
+        _ output: AVCaptureFileOutput,
+        didStartRecordingTo outputFileURL: URL,
+        from connections: [AVCaptureConnection]
+    ) {
+        onStarted?(outputFileURL, .now)
+    }
+
     nonisolated func fileOutput(
         _ output: AVCaptureFileOutput,
         didFinishRecordingTo outputFileURL: URL,
