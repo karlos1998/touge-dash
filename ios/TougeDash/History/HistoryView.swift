@@ -376,6 +376,7 @@ private struct SwipeToDeleteRow<Content: View>: View {
                         .frame(width: max(0, -offset))
                 }
                 .allowsHitTesting(isRevealed)
+                .zIndex(1)
             }
 
             content
