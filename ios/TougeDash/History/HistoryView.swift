@@ -381,14 +381,14 @@ private struct SwipeToDeleteRow<Content: View>: View {
             content
                 .offset(x: offset)
                 .contentShape(Rectangle())
+                .gesture(
+                    HorizontalSwipeGesture(
+                        onChanged: updateOffset,
+                        onEnded: finishSwipe
+                    )
+                )
         }
         .clipped()
-        .gesture(
-            HorizontalSwipeGesture(
-                onChanged: updateOffset,
-                onEnded: finishSwipe
-            )
-        )
         .accessibilityAction(named: localized("Usuń")) {
             guard isEnabled else { return }
             action()
