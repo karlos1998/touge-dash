@@ -11,11 +11,10 @@ struct SimulatorBLEDiagnostics: Equatable, Sendable {
 final class BLEPeripheralSimulator: NSObject, ObservableObject {
     static let serviceUUID = CBUUID(string: "FFE0")
     static let characteristicUUID = CBUUID(string: "FFE1")
-    /// eDash applies an exact-name allow list before connecting. Keep this
-    /// identical to the real logger; CoreBluetooth still assigns the Mac a
-    /// distinct peripheral identifier, so Touge Dash stores it as a separate
-    /// vehicle instead of merging it with the logger in the car.
-    static let advertisedName = "EMULOGGER"
+    /// Keep the development peripheral visibly separate from a real logger.
+    /// Advertising the exact `EMULOGGER` name makes iOS persist the Mac's
+    /// physical Bluetooth identity as if it were the car interface.
+    static let advertisedName = "EMULOGGER SIM"
 
     @Published private(set) var bluetoothState = CBManagerState.unknown
     @Published private(set) var isAdvertising = false

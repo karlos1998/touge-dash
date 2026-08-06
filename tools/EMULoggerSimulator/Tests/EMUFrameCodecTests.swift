@@ -2,6 +2,12 @@ import XCTest
 @testable import EMULoggerSimulator
 
 final class EMUFrameCodecTests: XCTestCase {
+    @MainActor
+    func testDesktopSimulatorNeverImpersonatesPhysicalLogger() {
+        XCTAssertEqual(BLEPeripheralSimulator.advertisedName, "EMULOGGER SIM")
+        XCTAssertNotEqual(BLEPeripheralSimulator.advertisedName, "EMULOGGER")
+    }
+
     func testFrameUsesProtocolMarkerAndChecksum() {
         let frame = Array(EMUFrameCodec.encode(channel: 1, rawValue: 6_400))
 

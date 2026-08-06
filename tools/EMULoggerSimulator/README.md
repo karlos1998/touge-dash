@@ -11,10 +11,9 @@ wysłane z telefonu i pozwala ręcznie zasymulować zmianę po stronie loggera. 
 komunikuje się z prawdziwym ECU.
 
 To jest urządzenie **Bluetooth Low Energy GATT**, a nie klasyczny port szeregowy
-Bluetooth SPP/RFCOMM. Reklamuje dokładną nazwę `EMULOGGER`, ponieważ bieżący
-eDash filtruje znalezione urządzenia po nazwie jeszcze przed połączeniem.
-Mac ma jednak własny identyfikator Bluetooth, dlatego Touge Dash widzi symulator
-jako osobny interfejs i może przypisać mu osobne auto testowe.
+Bluetooth SPP/RFCOMM. Reklamuje nazwę `EMULOGGER SIM`, dzięki czemu Touge Dash
+nie zapisuje fizycznego interfejsu Bluetooth Maca jako prawdziwego loggera z
+samochodu.
 
 ## Użycie
 
@@ -32,12 +31,15 @@ osobne auto testowe; jego przejazdy mogą wtedy przechodzić zwykłą synchroniz
 
 ## Oryginalny eDash
 
-Bieżący eDash na Androidzie wykrywa nazwę `EMULOGGER`, paruje się z Makiem i
-łączy w trybie BLE. Nie oznacza to jednak pełnej zgodności strumienia. macOS
-udostępnia w swojej współdzielonej bazie GATT również własne usługi systemowe,
-a eDash wybiera pierwszą znalezioną charakterystykę z notyfikacjami zamiast
-ograniczyć wyszukiwanie do `FFE0/FFE1`. W efekcie może wyświetlić „Connected via
-BLE”, ale nie zasubskrybować telemetrii symulatora.
+Bieżący eDash filtruje urządzenia po dokładnej nazwie `EMULOGGER`, ale używanie
+tej nazwy przez aplikację działającą na Macu powoduje, że telefony mogą zapisać
+fizyczny interfejs Bluetooth komputera jak prawdziwy logger. Dlatego tryb ten
+nie jest oferowany przez symulator desktopowy.
+
+Sama zgodność nazwy i status „Connected via BLE” nie oznaczają pełnej zgodności
+strumienia. macOS udostępnia w swojej współdzielonej bazie GATT również własne
+usługi systemowe, a eDash może wybrać inną charakterystykę z notyfikacjami
+zamiast ograniczyć wyszukiwanie do `FFE0/FFE1`.
 
 CoreBluetooth pozwala aplikacji usunąć wyłącznie usługi opublikowane przez tę
 aplikację, więc symulator nie może bezpiecznie ukryć systemowych usług macOS.
