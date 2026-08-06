@@ -23,6 +23,9 @@ struct HistoryView: View {
     @State private var showingSplitConfirmation = false
     @State private var splitFeedback = 0
     @State private var pendingDeletion: HistoryDeletionCandidate?
+    @State private var deletingItems: Set<HistoryDeletionKey> = []
+    @State private var deletedItems: Set<HistoryDeletionKey> = []
+    @State private var deletionToast: HistoryDeletionToast?
     @State private var deletionError: String?
 
     init(
@@ -101,8 +104,9 @@ struct HistoryView: View {
                             }
                             .padding(.top, 4)
 
-                            ForEach(incidents) { incident in
-                                SwipeToDeleteRow {
+                            ForEach(incidents.filter { !deletedItems.contains(.incident($0.id)) }) { incident in
+                                let isDeleting = deletingItems.contains(.incident(incident.id))
+                                SwipeToDeleteRow(isEnabled: !isDeleting) {
                                     pendingDeletion = .incident(incident)
                                 } content: {
                                     NavigationLink {
@@ -115,6 +119,11 @@ struct HistoryView: View {
                                         IncidentListRow(incident: incident, cloudSync: cloudSync)
                                     }
                                     .buttonStyle(.plain)
+                                    .disabled(isDeleting)
+                                    .opacity(isDeleting ? 0.42 : 1)
+                                    .overlay {
+                                        if isDeleting { HistoryDeletingOverlay() }
+                                    }
                                     .contextMenu {
                                         Button(role: .destructive) {
                                             pendingDeletion = .incident(incident)
@@ -145,8 +154,9 @@ struct HistoryView: View {
                             }
                             .padding(.top, 4)
 
-                            ForEach(sessions) { session in
-                                SwipeToDeleteRow(isEnabled: session.id != activeSessionID) {
+                            ForEach(sessions.filter { !deletedItems.contains(.session($0.id)) }) { session in
+                                let isDeleting = deletingItems.contains(.session(session.id))
+                                SwipeToDeleteRow(isEnabled: session.id != activeSessionID && !isDeleting) {
                                     pendingDeletion = .session(session)
                                 } content: {
                                     NavigationLink {
@@ -164,6 +174,11 @@ struct HistoryView: View {
                                         )
                                     }
                                     .buttonStyle(.plain)
+                                    .disabled(isDeleting)
+                                    .opacity(isDeleting ? 0.42 : 1)
+                                    .overlay {
+                                        if isDeleting { HistoryDeletingOverlay() }
+                                    }
                                     .contextMenu {
                                         Button(role: .destructive) {
                                             pendingDeletion = .session(session)
@@ -183,6 +198,16 @@ struct HistoryView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
+                }
+
+                if let deletionToast {
+                    HistoryDeletionToastView(message: deletionToast.message)
+                        .padding(.horizontal, 22)
+                        .padding(.top, 10)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .allowsHitTesting(false)
+                        .zIndex(20)
                 }
             }
             .navigationTitle("Historia")
@@ -229,6 +254,12 @@ struct HistoryView: View {
                 Text(deletionError ?? "")
             }
             .sensoryFeedback(.success, trigger: splitFeedback)
+            .task(id: deletionToast?.id) {
+                guard let toastID = deletionToast?.id else { return }
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled, deletionToast?.id == toastID else { return }
+                withAnimation(.easeOut(duration: 0.2)) { deletionToast = nil }
+            }
             .toolbar {
                 if let onShowDashboard {
                     ToolbarItem(placement: .topBarLeading) {
@@ -250,6 +281,13 @@ struct HistoryView: View {
 
     @MainActor
     private func delete(_ candidate: HistoryDeletionCandidate, includingCloud: Bool) async {
+        let key = candidate.key
+        let successMessage = candidate.successMessage
+        pendingDeletion = nil
+        withAnimation(.easeOut(duration: 0.18)) {
+            deletingItems.insert(key)
+        }
+
         do {
             if includingCloud {
                 switch candidate {
@@ -257,14 +295,21 @@ struct HistoryView: View {
                 case .incident(let incident): try await cloudSync.deleteRemote(incident: incident)
                 }
             }
-            switch candidate {
-            case .session(let session): HistoryLocalStore.delete(session: session, in: modelContext)
-            case .incident(let incident): HistoryLocalStore.delete(incident: incident, in: modelContext)
+            let worker = HistoryDeletionWorker(modelContainer: modelContext.container)
+            switch key {
+            case .session(let id): try await worker.deleteSession(id: id)
+            case .incident(let id): try await worker.deleteIncident(id: id)
             }
-            try modelContext.save()
             cloudSync.localHistoryDidChange()
-            pendingDeletion = nil
+            withAnimation(.easeOut(duration: 0.2)) {
+                deletingItems.remove(key)
+                deletedItems.insert(key)
+                deletionToast = HistoryDeletionToast(message: successMessage)
+            }
         } catch {
+            withAnimation(.easeOut(duration: 0.2)) {
+                deletingItems.remove(key)
+            }
             deletionError = error.localizedDescription
         }
     }
@@ -324,6 +369,29 @@ private enum HistoryDeletionCandidate {
         }
     }
 
+    var key: HistoryDeletionKey {
+        switch self {
+        case .session(let session): .session(session.id)
+        case .incident(let incident): .incident(incident.id)
+        }
+    }
+
+    var successMessage: String {
+        switch self {
+        case .session(let session):
+            String(
+                format: localized("Usunięto: Przejazd · %@"),
+                session.startedAt.formatted(date: .abbreviated, time: .shortened)
+            )
+        case .incident(let incident):
+            String(
+                format: localized("Usunięto: %@ · %@"),
+                incident.kind.title,
+                incident.triggeredAt.formatted(date: .abbreviated, time: .shortened)
+            )
+        }
+    }
+
     var deletionMessage: String {
         switch self {
         case .session:
@@ -331,6 +399,52 @@ private enum HistoryDeletionCandidate {
         case .incident:
             localized("Usunięcie raportu skasuje jego zapisane próbki i powiązane notatki.")
         }
+    }
+}
+
+private enum HistoryDeletionKey: Hashable, Sendable {
+    case session(UUID)
+    case incident(UUID)
+}
+
+private struct HistoryDeletionToast: Identifiable {
+    let id = UUID()
+    let message: String
+}
+
+private struct HistoryDeletingOverlay: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+                .tint(.white)
+            Text(localized("Usuwanie…"))
+                .font(.caption.weight(.bold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.black.opacity(0.72), in: Capsule())
+    }
+}
+
+private struct HistoryDeletionToastView: View {
+    let message: String
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.subheadline)
+            Text(message)
+                .font(.caption.weight(.bold))
+                .lineLimit(2)
+        }
+        .foregroundStyle(Color.black)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 10)
+        .background(Color.tougeMint, in: Capsule())
+        .shadow(color: Color.black.opacity(0.2), radius: 10, y: 5)
+        .accessibilityElement(children: .combine)
     }
 }
 

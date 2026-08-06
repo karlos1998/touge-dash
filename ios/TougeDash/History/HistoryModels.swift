@@ -41,7 +41,6 @@ final class DriveSegmentSettingsStore: ObservableObject {
     }
 }
 
-@MainActor
 enum HistoryLocalStore {
     static func enforceRetention(in context: ModelContext, keepingActiveSessionID: UUID? = nil) throws {
         let sessions = try context.fetch(FetchDescriptor<DriveSession>(
@@ -92,6 +91,42 @@ enum HistoryLocalStore {
         ))) ?? []
         annotations.forEach(context.delete)
         context.delete(incident)
+    }
+}
+
+@ModelActor
+actor HistoryDeletionWorker {
+    func deleteSession(id: UUID) async throws {
+        try await pauseForUITestIfRequested()
+        var descriptor = FetchDescriptor<DriveSession>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        guard let session = try modelContext.fetch(descriptor).first else { return }
+
+        HistoryLocalStore.delete(session: session, in: modelContext)
+        try modelContext.save()
+    }
+
+    func deleteIncident(id: UUID) async throws {
+        try await pauseForUITestIfRequested()
+        var descriptor = FetchDescriptor<DriveIncident>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        guard let incident = try modelContext.fetch(descriptor).first else { return }
+
+        HistoryLocalStore.delete(incident: incident, in: modelContext)
+        try modelContext.save()
+    }
+
+    private func pauseForUITestIfRequested() async throws {
+        #if DEBUG
+        guard let rawValue = ProcessInfo.processInfo.environment["TOUGE_DASH_DELETE_PREVIEW_DELAY_MS"],
+              let milliseconds = Int(rawValue),
+              milliseconds > 0 else { return }
+        try await Task.sleep(for: .milliseconds(milliseconds))
+        #endif
     }
 }
 

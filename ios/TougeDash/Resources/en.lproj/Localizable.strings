@@ -559,6 +559,9 @@
 "Usuń z iPhone’a i chmury" = "Delete from iPhone and cloud";
 "Usuń tylko z iPhone’a" = "Delete from iPhone only";
 "Usuń z iPhone’a" = "Delete from iPhone";
+"Usuwanie…" = "Deleting…";
+"Usunięto: Przejazd · %@" = "Deleted: Drive · %@";
+"Usunięto: %@ · %@" = "Deleted: %@ · %@";
 "Nie udało się usunąć danych" = "Unable to delete data";
 "Usunięcie przejazdu z iPhone’a skasuje także jego próbki, raporty, notatki i lokalne nagrania wideo." = "Deleting a drive from this iPhone also removes its samples, reports, notes, and local video recordings.";
 "Usunięcie raportu skasuje jego zapisane próbki i powiązane notatki." = "Deleting a report removes its saved samples and related notes.";

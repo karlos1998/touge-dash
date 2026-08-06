@@ -90,6 +90,91 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<DriveVideoRecording>()), 10)
     }
 
+    @MainActor
+    func testBackgroundHistoryDeletionRemovesDriveDataAndVideoFile() async throws {
+        let container = try ModelContainer(
+            for: DriveSession.self,
+            TelemetryHistorySample.self,
+            DriveVideoRecording.self,
+            DriveIncident.self,
+            TimelineAnnotation.self,
+            AccelerationAttempt.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let session = DriveSession(vehicleID: UUID(), startedAt: .now)
+        let videoURL = try DriveVideoFileStore.newRecordingURL()
+        try Data(repeating: 0xA5, count: 4_096).write(to: videoURL)
+        defer { try? FileManager.default.removeItem(at: videoURL) }
+
+        context.insert(session)
+        context.insert(TelemetryHistorySample(snapshot: .preview, timestamp: .now, session: session))
+        context.insert(DriveVideoRecording(
+            sessionID: session.id,
+            fileName: videoURL.lastPathComponent,
+            startedAt: .now,
+            endedAt: .now.addingTimeInterval(1),
+            duration: 1,
+            fileSizeBytes: 4_096,
+            pixelWidth: 1,
+            pixelHeight: 1,
+            framesPerSecond: 30,
+            cameraName: "Test",
+            hasAudio: false
+        ))
+        try context.save()
+
+        let worker = HistoryDeletionWorker(modelContainer: container)
+        try await worker.deleteSession(id: session.id)
+
+        let verificationContext = ModelContext(container)
+        XCTAssertEqual(try verificationContext.fetchCount(FetchDescriptor<DriveSession>()), 0)
+        XCTAssertEqual(try verificationContext.fetchCount(FetchDescriptor<TelemetryHistorySample>()), 0)
+        XCTAssertEqual(try verificationContext.fetchCount(FetchDescriptor<DriveVideoRecording>()), 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: videoURL.path))
+    }
+
+    @MainActor
+    func testBackgroundHistoryDeletionRemovesIncidentAndItsAnnotations() async throws {
+        let container = try ModelContainer(
+            for: DriveSession.self,
+            TelemetryHistorySample.self,
+            DriveVideoRecording.self,
+            DriveIncident.self,
+            TimelineAnnotation.self,
+            AccelerationAttempt.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = ModelContext(container)
+        let incident = DriveIncident(
+            vehicleID: UUID(),
+            sessionID: UUID(),
+            kind: .overboost,
+            severity: .warning,
+            triggeredAt: .now,
+            thresholdValue: 1.5,
+            triggerValue: 1.8,
+            triggerUnit: "bar",
+            samples: []
+        )
+        context.insert(incident)
+        context.insert(TimelineAnnotation(
+            vehicleID: incident.vehicleID,
+            sessionID: incident.sessionID,
+            incidentID: incident.id,
+            timestamp: incident.triggeredAt,
+            body: "Test"
+        ))
+        try context.save()
+
+        let worker = HistoryDeletionWorker(modelContainer: container)
+        try await worker.deleteIncident(id: incident.id)
+
+        let verificationContext = ModelContext(container)
+        XCTAssertEqual(try verificationContext.fetchCount(FetchDescriptor<DriveIncident>()), 0)
+        XCTAssertEqual(try verificationContext.fetchCount(FetchDescriptor<TimelineAnnotation>()), 0)
+    }
+
     func testCloudPendingSamplesPublishInBatchesInsteadOfEveryTelemetrySample() {
         var buffer = CloudPendingSamplePublicationBuffer()
 
