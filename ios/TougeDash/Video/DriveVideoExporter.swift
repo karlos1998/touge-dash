@@ -491,22 +491,12 @@ private enum VideoOverlayCGRenderer {
 
         let localScale = rect.width / 112
         let titleFont = UIFont.systemFont(ofSize: 6.5 * localScale, weight: .black)
-        let valueFont = UIFont.monospacedDigitSystemFont(ofSize: 22 * localScale, weight: .black)
+        let valueFont = UIFont.monospacedDigitSystemFont(ofSize: 20 * localScale, weight: .black)
         let unitFont = UIFont.systemFont(ofSize: 6 * localScale, weight: .black)
-        drawCentered(element.metric.shortTitle, font: titleFont, color: accent, centerX: rect.midX, y: rect.midY - 17 * localScale)
+        drawCentered(element.metric.shortTitle, font: titleFont, color: accent, centerX: rect.midX, y: rect.midY - 2 * localScale)
         let valueText = value.formatted(.number.precision(.fractionLength(element.metric.precision)))
-        let valueSize = (valueText as NSString).size(withAttributes: [.font: valueFont])
-        let unitSize = (element.metric.unit as NSString).size(withAttributes: [.font: unitFont])
-        let totalWidth = valueSize.width + 3 * localScale + unitSize.width
-        let originX = rect.midX - totalWidth / 2
-        (valueText as NSString).draw(
-            at: CGPoint(x: originX, y: rect.midY - 5 * localScale),
-            withAttributes: [.font: valueFont, .foregroundColor: UIColor.white]
-        )
-        (element.metric.unit as NSString).draw(
-            at: CGPoint(x: originX + valueSize.width + 3 * localScale, y: rect.midY + 8 * localScale),
-            withAttributes: [.font: unitFont, .foregroundColor: UIColor.white.withAlphaComponent(0.65)]
-        )
+        drawCentered(valueText, font: valueFont, color: .white, centerX: rect.midX, y: rect.midY + 8 * localScale)
+        drawCentered(element.metric.unit, font: unitFont, color: UIColor.white.withAlphaComponent(0.65), centerX: rect.midX, y: rect.midY + 31 * localScale)
     }
 
     private static func drawBar(

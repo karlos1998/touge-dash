@@ -57,7 +57,7 @@ struct EditableVideoTelemetryOverlayView: View {
                     x: proxy.size.width * position.x,
                     y: proxy.size.height * position.y
                 )
-                .gesture(
+                .highPriorityGesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .named("video-overlay-canvas"))
                         .onChanged { value in
                             selectedElementID = element.id
@@ -69,20 +69,21 @@ struct EditableVideoTelemetryOverlayView: View {
                                 for: orientation
                             )
                         }
-                        .simultaneously(with:
-                            MagnificationGesture()
-                                .onChanged { value in
-                                    selectedElementID = element.id
-                                    let base = magnificationBases[element.id] ?? element.sizeMultiplier
-                                    if magnificationBases[element.id] == nil {
-                                        magnificationBases[element.id] = base
-                                    }
-                                    element.setSizeMultiplier(base * value)
-                                }
-                                .onEnded { _ in
-                                    magnificationBases[element.id] = nil
-                                }
-                        )
+                )
+                .simultaneousGesture(
+                    MagnifyGesture(minimumScaleDelta: 0.005)
+                        .onChanged { value in
+                            selectedElementID = element.id
+                            let base = magnificationBases[element.id] ?? element.sizeMultiplier
+                            if magnificationBases[element.id] == nil {
+                                magnificationBases[element.id] = base
+                            }
+                            element.setSizeMultiplier(base * value.magnification)
+                        }
+                        .onEnded { _ in
+                            magnificationBases[element.id] = nil
+                        },
+                    including: .all
                 )
             }
         }
@@ -162,22 +163,20 @@ private struct VideoOverlayElementView: View {
         ZStack {
             dialFace(metric: element.metric, value: value, accent: element.accent.color)
 
-            VStack(spacing: 0) {
+            VStack(spacing: -1 * scale) {
                 Text(element.metric.shortTitle)
                     .font(.system(size: 6.5 * scale, weight: .black))
                     .tracking(0.8 * scale)
                     .foregroundStyle(element.accent.color)
-                HStack(alignment: .lastTextBaseline, spacing: 3 * scale) {
-                    Text(value.formatted(.number.precision(.fractionLength(element.metric.precision))))
-                        .font(.system(size: 22 * scale, weight: .black, design: .rounded))
-                        .fontWidth(.expanded)
-                        .monospacedDigit()
-                    Text(element.metric.unit)
-                        .font(.system(size: 6 * scale, weight: .black))
-                        .foregroundStyle(.secondary)
-                }
+                Text(value.formatted(.number.precision(.fractionLength(element.metric.precision))))
+                    .font(.system(size: 20 * scale, weight: .black, design: .rounded))
+                    .fontWidth(.expanded)
+                    .monospacedDigit()
+                Text(element.metric.unit)
+                    .font(.system(size: 6 * scale, weight: .black))
+                    .foregroundStyle(.secondary)
             }
-            .offset(y: 5 * scale)
+            .offset(y: 13 * scale)
         }
         .foregroundStyle(.white)
         .frame(width: 102 * scale, height: 102 * scale)
@@ -231,40 +230,12 @@ private struct VideoOverlayElementView: View {
     }
 
     private func dialFace(metric: DashboardMetric, value: Double, accent: Color) -> some View {
-        let dialProgress = progress(for: metric, value: value)
-        return ZStack {
-            ForEach(0..<25, id: \.self) { index in
-                Capsule()
-                    .fill(index % 4 == 0 ? Color.white.opacity(0.9) : Color.white.opacity(0.32))
-                    .frame(width: max(0.7, scale), height: (index % 4 == 0 ? 7 : 4) * scale)
-                    .offset(y: -42 * scale)
-                    .rotationEffect(.degrees(-120 + Double(index) * 10))
-            }
-            ForEach(0..<7, id: \.self) { index in
-                let range = configuration.range(for: metric)
-                let labelValue = range.lowerBound + (range.upperBound - range.lowerBound) * Double(index) / 6
-                let angle = (-120 + Double(index) * 40) * Double.pi / 180
-                Text(scaleLabel(labelValue, metric: metric))
-                    .font(.system(size: 4.8 * scale, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.72))
-                    .offset(
-                        x: sin(angle) * 31 * scale,
-                        y: -cos(angle) * 31 * scale
-                    )
-            }
-            Circle()
-                .trim(from: 0.165, to: 0.835)
-                .stroke(accent.opacity(0.28), style: StrokeStyle(lineWidth: 2 * scale, lineCap: .round))
-                .rotationEffect(.degrees(60))
-            Capsule()
-                .fill(accent)
-                .frame(width: 2.2 * scale, height: 34 * scale)
-                .offset(y: -17 * scale)
-                .rotationEffect(.degrees(-120 + 240 * dialProgress))
-                .shadow(color: accent.opacity(0.9), radius: 3 * scale)
-            Circle().fill(.white).frame(width: 6 * scale, height: 6 * scale)
-        }
+        RacingDialFace(
+            progress: progress(for: metric, value: value),
+            range: configuration.range(for: metric),
+            metric: metric,
+            accent: accent
+        )
     }
 
     private var boostStrip: some View {
@@ -289,12 +260,6 @@ private struct VideoOverlayElementView: View {
     private func progress(for metric: DashboardMetric, value: Double) -> Double {
         let range = configuration.range(for: metric)
         return min(1, max(0, (value - range.lowerBound) / max(0.0001, range.upperBound - range.lowerBound)))
-    }
-
-    private func scaleLabel(_ value: Double, metric: DashboardMetric) -> String {
-        if metric == .rpm { return "\(Int(value / 1_000))k" }
-        if metric == .boost { return value.formatted(.number.precision(.fractionLength(1))) }
-        return Int(value).formatted()
     }
 
     private var barValue: some View {
@@ -366,6 +331,131 @@ private struct VideoOverlayElementView: View {
         case .minimal:
             RoundedRectangle(cornerRadius: 6 * scale)
                 .fill(Color.black.opacity(0.42))
+        }
+    }
+}
+
+private struct RacingDialFace: View, Equatable {
+    let progress: Double
+    let range: ClosedRange<Double>
+    let metric: DashboardMetric
+    let accent: Color
+
+    var body: some View {
+        Canvas(opaque: false, rendersAsynchronously: true) { context, size in
+            let geometry = DialGeometry(size: size)
+            drawTicks(in: &context, geometry: geometry)
+            drawLabels(in: &context, geometry: geometry)
+            drawAccentArc(in: &context, geometry: geometry)
+            drawNeedle(in: &context, geometry: geometry)
+        }
+    }
+
+    private func drawTicks(in context: inout GraphicsContext, geometry: DialGeometry) {
+        var minorTicks = Path()
+        var majorTicks = Path()
+        for index in 0..<25 {
+            let angle = Self.radians(150 + Double(index) * 10)
+            let length = geometry.dimension * (index.isMultiple(of: 4) ? 0.07 : 0.04)
+            let inner = geometry.point(angle: angle, radius: geometry.radius - length)
+            let outer = geometry.point(angle: angle, radius: geometry.radius)
+            if index.isMultiple(of: 4) {
+                majorTicks.move(to: inner)
+                majorTicks.addLine(to: outer)
+            } else {
+                minorTicks.move(to: inner)
+                minorTicks.addLine(to: outer)
+            }
+        }
+        context.stroke(
+            minorTicks,
+            with: .color(.white.opacity(0.32)),
+            style: .init(lineWidth: max(0.7, geometry.dimension * 0.009), lineCap: .round)
+        )
+        context.stroke(
+            majorTicks,
+            with: .color(.white.opacity(0.9)),
+            style: .init(lineWidth: max(1, geometry.dimension * 0.014), lineCap: .round)
+        )
+    }
+
+    private func drawLabels(in context: inout GraphicsContext, geometry: DialGeometry) {
+        for index in 0..<7 {
+            let angle = Self.radians(150 + Double(index) * 40)
+            let value = range.lowerBound + (range.upperBound - range.lowerBound) * Double(index) / 6
+            let label = context.resolve(
+                Text(scaleLabel(value))
+                    .font(.system(size: geometry.dimension * 0.047, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.72))
+            )
+            context.draw(label, at: geometry.point(angle: angle, radius: geometry.radius * 0.7), anchor: .center)
+        }
+    }
+
+    private func drawAccentArc(in context: inout GraphicsContext, geometry: DialGeometry) {
+        var path = Path()
+        path.addArc(
+            center: geometry.center,
+            radius: geometry.radius + geometry.dimension * 0.035,
+            startAngle: .degrees(150),
+            endAngle: .degrees(150 + 240 * progress),
+            clockwise: false
+        )
+        context.stroke(
+            path,
+            with: .color(accent.opacity(0.48)),
+            style: .init(lineWidth: max(1.5, geometry.dimension * 0.018), lineCap: .round)
+        )
+    }
+
+    private func drawNeedle(in context: inout GraphicsContext, geometry: DialGeometry) {
+        let angle = Self.radians(150 + 240 * progress)
+        var needle = Path()
+        needle.move(to: geometry.center)
+        needle.addLine(to: geometry.point(angle: angle, radius: geometry.radius * 0.72))
+        context.stroke(
+            needle,
+            with: .color(accent),
+            style: .init(lineWidth: max(2, geometry.dimension * 0.022), lineCap: .round)
+        )
+        context.fill(
+            Path(ellipseIn: CGRect(
+                x: geometry.center.x - geometry.dimension * 0.03,
+                y: geometry.center.y - geometry.dimension * 0.03,
+                width: geometry.dimension * 0.06,
+                height: geometry.dimension * 0.06
+            )),
+            with: .color(.white)
+        )
+    }
+
+    private func scaleLabel(_ value: Double) -> String {
+        if metric == .rpm { return "\(Int(value / 1_000))k" }
+        if metric == .boost { return value.formatted(.number.precision(.fractionLength(1))) }
+        return Int(value).formatted()
+    }
+
+    private static func radians(_ degrees: Double) -> Double {
+        degrees * .pi / 180
+    }
+
+    private struct DialGeometry {
+        let dimension: CGFloat
+        let center: CGPoint
+        let radius: CGFloat
+
+        init(size: CGSize) {
+            dimension = min(size.width, size.height)
+            center = CGPoint(x: size.width / 2, y: size.height / 2)
+            radius = dimension * 0.41
+        }
+
+        func point(angle: Double, radius: CGFloat) -> CGPoint {
+            CGPoint(
+                x: center.x + CGFloat(cos(angle)) * radius,
+                y: center.y + CGFloat(sin(angle)) * radius
+            )
         }
     }
 }

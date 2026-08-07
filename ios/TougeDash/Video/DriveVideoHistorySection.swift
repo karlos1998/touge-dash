@@ -760,6 +760,10 @@ private struct DriveVideoExportSheet: View {
             .task(id: recording.id) {
                 await preparePreview()
             }
+            .task(id: showsAdvancedAlignment) {
+                guard showsAdvancedAlignment, thumbnails.isEmpty else { return }
+                await loadTimelineThumbnails()
+            }
             .onDisappear {
                 player?.pause()
             }
@@ -809,7 +813,7 @@ private struct DriveVideoExportSheet: View {
         }
         .overlay(alignment: .topLeading) {
             if addsOverlay {
-                Label(localized("Przeciągnij element, aby zmienić jego pozycję"), systemImage: "hand.draw.fill")
+                Label(localized("Przeciągnij lub uszczypnij element"), systemImage: "hand.draw.fill")
                     .font(.caption2.weight(.black))
                     .padding(.horizontal, 9)
                     .padding(.vertical, 6)
@@ -1048,19 +1052,18 @@ private struct DriveVideoExportSheet: View {
         previewTelemetryTime = alignment.telemetryStartDate(session: session)
         previewRelativeSeconds = 0
         isPreviewPlaying = false
-        thumbnails = await VideoTimelineThumbnailLoader.load(
-            url: url,
-            duration: recording.duration,
-            count: recording.pixelHeight > recording.pixelWidth ? 5 : 7
-        )
-
         while !Task.isCancelled, player === newPlayer {
             let seconds = newPlayer.currentTime().seconds
-            if seconds.isFinite {
+            let playing = newPlayer.timeControlStatus == .playing
+            if isPreviewPlaying != playing {
+                isPreviewPlaying = playing
+            }
+            if playing, seconds.isFinite {
                 let relative = min(max(0, seconds - alignment.videoStartSeconds), alignment.duration)
-                previewRelativeSeconds = relative
-                isPreviewPlaying = newPlayer.timeControlStatus == .playing
-                previewTelemetryTime = session.startedAt.addingTimeInterval(alignment.telemetryStartSeconds + relative)
+                if abs(previewRelativeSeconds - relative) >= 0.1 {
+                    previewRelativeSeconds = relative
+                    previewTelemetryTime = session.startedAt.addingTimeInterval(alignment.telemetryStartSeconds + relative)
+                }
                 if seconds > alignment.videoEndSeconds + 0.05 {
                     newPlayer.pause()
                     await newPlayer.seek(
@@ -1073,8 +1076,21 @@ private struct DriveVideoExportSheet: View {
                     isPreviewPlaying = false
                 }
             }
-            try? await Task.sleep(for: .milliseconds(80))
+            try? await Task.sleep(for: .milliseconds(playing ? 120 : 300))
         }
+    }
+
+    @MainActor
+    private func loadTimelineThumbnails() async {
+        guard let url = try? DriveVideoFileStore.url(for: recording),
+              FileManager.default.fileExists(atPath: url.path) else { return }
+        let loaded = await VideoTimelineThumbnailLoader.load(
+            url: url,
+            duration: recording.duration,
+            count: recording.pixelHeight > recording.pixelWidth ? 5 : 7
+        )
+        guard !Task.isCancelled, showsAdvancedAlignment else { return }
+        thumbnails = loaded
     }
 
     private func seekPreview(to seconds: Double) {
