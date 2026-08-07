@@ -23,13 +23,12 @@ final class ECUControlCoordinator: ObservableObject {
     @Published private(set) var pending: PendingECUControl?
     @Published private(set) var isConnected = false
     @Published private(set) var transportAvailable = false
-    @Published private(set) var hasFreshLoopback = false
+    @Published private(set) var hasSynchronizedLoopback = false
     @Published private(set) var errorMessage: String?
 
     var writer: Writer?
 
     private var loopback = ECUControlLoopbackAccumulator()
-    private var freshnessTask: Task<Void, Never>?
     private var confirmationTask: Task<Void, Never>?
     private var isApplicationActive: Bool
     private let notificationCenter: NotificationCenter
@@ -55,37 +54,24 @@ final class ECUControlCoordinator: ObservableObject {
     }
 
     deinit {
-        freshnessTask?.cancel()
         confirmationTask?.cancel()
         for observer in observers { notificationCenter.removeObserver(observer) }
     }
 
     var isReady: Bool {
-        isConnected && transportAvailable && hasFreshLoopback && isApplicationActive && pending == nil
+        isConnected && transportAvailable && hasSynchronizedLoopback && isApplicationActive && pending == nil
     }
 
     func connectionChanged(isConnected: Bool) {
         self.isConnected = isConnected
         transportAvailable = false
         observedSnapshot = nil
-        hasFreshLoopback = false
+        hasSynchronizedLoopback = false
         pending = nil
         errorMessage = nil
         loopback.reset()
         confirmationTask?.cancel()
         confirmationTask = nil
-        freshnessTask?.cancel()
-        freshnessTask = nil
-
-        if isConnected {
-            freshnessTask = Task { [weak self] in
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(500))
-                    guard !Task.isCancelled, let self else { return }
-                    self.refreshLoopbackState()
-                }
-            }
-        }
     }
 
     func transportAvailabilityChanged(_ available: Bool) {
@@ -97,7 +83,7 @@ final class ECUControlCoordinator: ObservableObject {
 
     func ingest(_ frame: EMUFrame, receivedAt: Date = .now) {
         guard isConnected, loopback.apply(frame, receivedAt: receivedAt) else { return }
-        refreshLoopbackState(now: receivedAt)
+        refreshLoopbackState()
     }
 
     func switchValue(channel: Int) -> Bool? {
@@ -138,7 +124,10 @@ final class ECUControlCoordinator: ObservableObject {
         if !isConnected { return localized("BRAK POŁĄCZENIA") }
         if !transportAvailable { return localized("TYLKO ODCZYT") }
         if !isApplicationActive { return localized("APLIKACJA W TLE") }
-        if !hasFreshLoopback { return localized("SYNCHRONIZACJA ECU") }
+        if !hasSynchronizedLoopback {
+            let channels = loopback.missingChannels.map(String.init).joined(separator: ", ")
+            return String(format: localized("CZEKAM NA KANAŁY %@"), channels)
+        }
         if pending != nil { return localized("OCZEKIWANIE NA EMU") }
         if errorMessage != nil { return localized("BŁĄD STEROWANIA") }
         return localized("POTWIERDZONE PRZEZ EMU")
@@ -179,22 +168,35 @@ final class ECUControlCoordinator: ObservableObject {
         return true
     }
 
-    private func refreshLoopbackState(now: Date = .now) {
-        guard let snapshot = loopback.snapshotIfFresh(at: now) else {
-            hasFreshLoopback = false
+    private func refreshLoopbackState() {
+        guard let snapshot = loopback.synchronizedSnapshot() else {
+            hasSynchronizedLoopback = false
             return
         }
         observedSnapshot = snapshot
-        hasFreshLoopback = true
+        hasSynchronizedLoopback = true
 
         let confirmedSnapshot = pending.flatMap {
-            loopback.snapshotIfFresh(at: now, receivedAfterRevision: $0.loopbackRevisionAtStart)
+            loopback.snapshotConfirming(
+                kind: $0.kind,
+                channel: $0.channel,
+                afterRevision: $0.loopbackRevisionAtStart
+            )
         }
-        if let pending, confirmedSnapshot == pending.targetSnapshot {
+        if let pending, let confirmedSnapshot, confirms(pending, with: confirmedSnapshot) {
             self.pending = nil
             errorMessage = nil
             confirmationTask?.cancel()
             confirmationTask = nil
+        }
+    }
+
+    private func confirms(_ pending: PendingECUControl, with snapshot: ECUControlSnapshot) -> Bool {
+        switch pending.kind {
+        case .switchValue:
+            return snapshot.switchValue(channel: pending.channel) == pending.targetSnapshot.switchValue(channel: pending.channel)
+        case .rotary:
+            return snapshot.rotaryValue(channel: pending.channel) == pending.targetSnapshot.rotaryValue(channel: pending.channel)
         }
     }
 

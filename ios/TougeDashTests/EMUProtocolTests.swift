@@ -515,10 +515,10 @@ final class EMUProtocolTests: XCTestCase {
         loopback.apply(EMUFrame(channel: 253, rawValue: 0x1234), receivedAt: now)
         loopback.apply(EMUFrame(channel: 252, rawValue: 0xABCD), receivedAt: now)
 
-        let state = try XCTUnwrap(loopback.snapshotIfFresh(at: now))
+        let state = try XCTUnwrap(loopback.synchronizedSnapshot())
         XCTAssertEqual(state.switches, [true, false, true, false, false, false, false, false])
         XCTAssertEqual(state.rotaryValues, [1, 2, 3, 4, 10, 11, 12, 13])
-        XCTAssertNil(loopback.snapshotIfFresh(at: now.addingTimeInterval(2.1)))
+        XCTAssertEqual(loopback.synchronizedSnapshot(), state)
     }
 
     func testECUControlRejectsInvalidChannelRangeAndChecksum() {
@@ -571,11 +571,42 @@ final class EMUProtocolTests: XCTestCase {
 
         let confirmationTime = Date.now.addingTimeInterval(0.01)
         coordinator.ingest(EMUFrame(channel: 254, rawValue: 0x80), receivedAt: confirmationTime)
-        XCTAssertNotNil(coordinator.pending)
-        coordinator.ingest(EMUFrame(channel: 253, rawValue: 0), receivedAt: confirmationTime)
-        XCTAssertNotNil(coordinator.pending)
-        coordinator.ingest(EMUFrame(channel: 252, rawValue: 0), receivedAt: confirmationTime)
         XCTAssertEqual(coordinator.switchValue(channel: 1), true)
+        XCTAssertNil(coordinator.pending)
+    }
+
+    @MainActor
+    func testECUControlKeepsSynchronizedStateAcrossSlowLoopbackCycle() {
+        let coordinator = ECUControlCoordinator(notificationCenter: NotificationCenter(), applicationIsActive: true)
+        coordinator.connectionChanged(isConnected: true)
+        coordinator.transportAvailabilityChanged(true)
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+        coordinator.ingest(EMUFrame(channel: 254, rawValue: 0), receivedAt: start)
+        coordinator.ingest(EMUFrame(channel: 253, rawValue: 0), receivedAt: start.addingTimeInterval(3))
+        XCTAssertFalse(coordinator.isReady)
+        coordinator.ingest(EMUFrame(channel: 252, rawValue: 0), receivedAt: start.addingTimeInterval(6))
+
+        XCTAssertTrue(coordinator.isReady)
+        XCTAssertEqual(coordinator.availabilityLabel, localized("POTWIERDZONE PRZEZ EMU"))
+    }
+
+    @MainActor
+    func testECURotaryConfirmationWaitsOnlyForItsLoopbackGroup() {
+        let coordinator = ECUControlCoordinator(notificationCenter: NotificationCenter(), applicationIsActive: true)
+        coordinator.writer = { _, completion in completion(.success(())) }
+        coordinator.connectionChanged(isConnected: true)
+        coordinator.transportAvailabilityChanged(true)
+        coordinator.ingest(EMUFrame(channel: 254, rawValue: 0))
+        coordinator.ingest(EMUFrame(channel: 253, rawValue: 0))
+        coordinator.ingest(EMUFrame(channel: 252, rawValue: 0))
+
+        XCTAssertTrue(coordinator.setRotary(channel: 6, value: 7))
+        coordinator.ingest(EMUFrame(channel: 253, rawValue: 0))
+        XCTAssertNotNil(coordinator.pending)
+        coordinator.ingest(EMUFrame(channel: 252, rawValue: 0x0700))
+
+        XCTAssertEqual(coordinator.rotaryValue(channel: 6), 7)
         XCTAssertNil(coordinator.pending)
     }
 

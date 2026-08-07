@@ -124,7 +124,8 @@ private fun ecuControlStatus(state: EcuControlState, pending: Boolean): String =
     !state.connected -> appText("DISCONNECTED", "BRAK POŁĄCZENIA")
     !state.transportAvailable -> appText("READ ONLY", "TYLKO ODCZYT")
     !state.applicationActive -> appText("APP IN BACKGROUND", "APLIKACJA W TLE")
-    !state.freshLoopback -> appText("SYNCING ECU", "SYNCHRONIZACJA ECU")
+    !state.synchronizedLoopback -> appText("WAITING FOR CHANNELS", "CZEKAM NA KANAŁY") +
+        " " + state.missingLoopbackChannels.joinToString(", ")
     state.error != null -> when (state.error) {
         EcuControlError.WRITE_REJECTED -> appText("WRITE FAILED", "BŁĄD WYSYŁANIA")
         EcuControlError.CONFIRMATION_TIMEOUT -> appText("NO ECU CONFIRMATION", "BRAK POTWIERDZENIA ECU")

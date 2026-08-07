@@ -70,64 +70,75 @@ struct ECUControlLoopbackAccumulator: Sendable {
     private var switchByte: UInt8?
     private var rotary1234: UInt16?
     private var rotary5678: UInt16?
-    private var switchReceivedAt: Date?
-    private var rotary1234ReceivedAt: Date?
-    private var rotary5678ReceivedAt: Date?
     private var revision: UInt64 = 0
     private var switchRevision: UInt64 = 0
     private var rotary1234Revision: UInt64 = 0
     private var rotary5678Revision: UInt64 = 0
 
     var currentRevision: UInt64 { revision }
+    var missingChannels: [UInt8] {
+        var channels: [UInt8] = []
+        if rotary5678 == nil { channels.append(252) }
+        if rotary1234 == nil { channels.append(253) }
+        if switchByte == nil { channels.append(254) }
+        return channels
+    }
 
     mutating func reset() {
         self = ECUControlLoopbackAccumulator()
     }
 
     @discardableResult
-    mutating func apply(_ frame: EMUFrame, receivedAt: Date = .now) -> Bool {
+    mutating func apply(_ frame: EMUFrame, receivedAt _: Date = .now) -> Bool {
         guard frame.channel == 254 || frame.channel == 253 || frame.channel == 252 else { return false }
         revision &+= 1
         switch frame.channel {
         case 254:
             switchByte = UInt8(truncatingIfNeeded: frame.rawValue)
-            switchReceivedAt = receivedAt
             switchRevision = revision
         case 253:
             rotary1234 = frame.rawValue
-            rotary1234ReceivedAt = receivedAt
             rotary1234Revision = revision
         case 252:
             rotary5678 = frame.rawValue
-            rotary5678ReceivedAt = receivedAt
             rotary5678Revision = revision
         default: break
         }
         return true
     }
 
-    func snapshotIfFresh(
-        at now: Date = .now,
-        maximumAge: TimeInterval = 2,
-        receivedAfterRevision: UInt64? = nil
-    ) -> ECUControlSnapshot? {
-        guard let switchByte, let rotary1234, let rotary5678,
-              let switchReceivedAt, let rotary1234ReceivedAt, let rotary5678ReceivedAt,
-              now.timeIntervalSince(switchReceivedAt) <= maximumAge,
-              now.timeIntervalSince(rotary1234ReceivedAt) <= maximumAge,
-              now.timeIntervalSince(rotary5678ReceivedAt) <= maximumAge else {
-            return nil
-        }
-        if let receivedAfterRevision,
-           [switchRevision, rotary1234Revision, rotary5678Revision].contains(where: { $0 <= receivedAfterRevision }) {
-            return nil
-        }
+    /// eDash accumulates the three loopback channels over the lifetime of a
+    /// connection. They are not guaranteed to arrive in one two-second window.
+    func synchronizedSnapshot() -> ECUControlSnapshot? {
+        guard let switchByte, let rotary1234, let rotary5678 else { return nil }
 
         let switches = (0..<8).map { index in
             (switchByte & UInt8(1 << (7 - index))) != 0
         }
         let rotaryValues = unpack(rotary1234) + unpack(rotary5678)
         return ECUControlSnapshot(switches: switches, rotaryValues: rotaryValues)
+    }
+
+    /// A status write contains the whole state, but its acknowledgement only
+    /// needs a new loopback value for the group containing the edited control.
+    /// Requiring all three channels to be repeated made valid EDL-1 responses
+    /// time out even though the changed switch had already been confirmed.
+    func snapshotConfirming(
+        kind: ECUControlKind,
+        channel: Int,
+        afterRevision: UInt64
+    ) -> ECUControlSnapshot? {
+        guard ECUControlSnapshot.channelRange.contains(channel),
+              let snapshot = synchronizedSnapshot() else { return nil }
+
+        let relevantRevision: UInt64
+        switch kind {
+        case .switchValue:
+            relevantRevision = switchRevision
+        case .rotary:
+            relevantRevision = channel <= 4 ? rotary1234Revision : rotary5678Revision
+        }
+        return relevantRevision > afterRevision ? snapshot : nil
     }
 
     private func unpack(_ value: UInt16) -> [UInt8] {

@@ -48,56 +48,57 @@ internal class EcuControlLoopbackAccumulator {
     private var switchByte: Int? = null
     private var rotary1234: Int? = null
     private var rotary5678: Int? = null
-    private var switchAt = 0L
-    private var rotary1234At = 0L
-    private var rotary5678At = 0L
     private var revision = 0L
     private var switchRevision = 0L
     private var rotary1234Revision = 0L
     private var rotary5678Revision = 0L
 
     val currentRevision: Long get() = revision
+    val missingChannels: List<Int> get() = buildList {
+        if (rotary5678 == null) add(252)
+        if (rotary1234 == null) add(253)
+        if (switchByte == null) add(254)
+    }
 
     fun reset() {
         switchByte = null
         rotary1234 = null
         rotary5678 = null
-        switchAt = 0
-        rotary1234At = 0
-        rotary5678At = 0
         revision = 0
         switchRevision = 0
         rotary1234Revision = 0
         rotary5678Revision = 0
     }
 
-    fun apply(frame: EmuFrame, receivedAt: Long): Boolean {
+    fun apply(frame: EmuFrame, @Suppress("UNUSED_PARAMETER") receivedAt: Long): Boolean {
         if (frame.channel != 254 && frame.channel != 253 && frame.channel != 252) return false
         revision++
         return when (frame.channel) {
-            254 -> { switchByte = frame.rawValue and 0xff; switchAt = receivedAt; switchRevision = revision; true }
-            253 -> { rotary1234 = frame.rawValue and 0xffff; rotary1234At = receivedAt; rotary1234Revision = revision; true }
-            252 -> { rotary5678 = frame.rawValue and 0xffff; rotary5678At = receivedAt; rotary5678Revision = revision; true }
+            254 -> { switchByte = frame.rawValue and 0xff; switchRevision = revision; true }
+            253 -> { rotary1234 = frame.rawValue and 0xffff; rotary1234Revision = revision; true }
+            252 -> { rotary5678 = frame.rawValue and 0xffff; rotary5678Revision = revision; true }
             else -> false
         }
     }
 
-    fun freshSnapshot(
-        now: Long,
-        maximumAgeMillis: Long = 2_000,
-        receivedAfterRevision: Long? = null
-    ): EcuControlSnapshot? {
+    fun synchronizedSnapshot(): EcuControlSnapshot? {
         val switchesRaw = switchByte ?: return null
         val firstRotary = rotary1234 ?: return null
         val secondRotary = rotary5678 ?: return null
-        if (now - switchAt > maximumAgeMillis || now - rotary1234At > maximumAgeMillis || now - rotary5678At > maximumAgeMillis) return null
-        if (receivedAfterRevision != null &&
-            (switchRevision <= receivedAfterRevision || rotary1234Revision <= receivedAfterRevision || rotary5678Revision <= receivedAfterRevision)
-        ) return null
         return EcuControlSnapshot(
             switches = List(8) { index -> switchesRaw and (1 shl (7 - index)) != 0 },
             rotaryValues = unpack(firstRotary) + unpack(secondRotary)
         )
+    }
+
+    fun snapshotConfirming(kind: EcuControlKind, channel: Int, afterRevision: Long): EcuControlSnapshot? {
+        if (channel !in EcuControlSnapshot.CHANNEL_RANGE) return null
+        val snapshot = synchronizedSnapshot() ?: return null
+        val relevantRevision = when (kind) {
+            EcuControlKind.SWITCH -> switchRevision
+            EcuControlKind.ROTARY -> if (channel <= 4) rotary1234Revision else rotary5678Revision
+        }
+        return snapshot.takeIf { relevantRevision > afterRevision }
     }
 
     private fun unpack(value: Int) = listOf(12, 8, 4, 0).map { shift -> (value shr shift) and 0x0f }

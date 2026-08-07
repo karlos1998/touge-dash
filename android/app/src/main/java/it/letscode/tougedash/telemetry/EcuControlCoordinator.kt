@@ -5,7 +5,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 enum class EcuControlKind { SWITCH, ROTARY }
@@ -25,11 +24,12 @@ data class EcuControlState(
     val pending: PendingEcuControl? = null,
     val connected: Boolean = false,
     val transportAvailable: Boolean = false,
-    val freshLoopback: Boolean = false,
+    val synchronizedLoopback: Boolean = false,
+    val missingLoopbackChannels: List<Int> = listOf(252, 253, 254),
     val applicationActive: Boolean = true,
     val error: EcuControlError? = null
 ) {
-    val ready: Boolean get() = connected && transportAvailable && freshLoopback && applicationActive && pending == null
+    val ready: Boolean get() = connected && transportAvailable && synchronizedLoopback && applicationActive && pending == null
 }
 
 class EcuControlCoordinator(private val scope: CoroutineScope) {
@@ -38,15 +38,6 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
     val state = mutableState.asStateFlow()
     private var writer: ((ByteArray) -> Boolean)? = null
     private var confirmationJob: Job? = null
-
-    init {
-        scope.launch {
-            while (isActive) {
-                delay(500)
-                synchronized(this@EcuControlCoordinator) { refresh(System.currentTimeMillis()) }
-            }
-        }
-    }
 
     @Synchronized
     fun connectionChanged(connected: Boolean) {
@@ -79,13 +70,13 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
             displayed = if (active) current.displayed else current.observed,
             error = if (!active && current.pending != null) EcuControlError.BACKGROUND else current.error
         )
-        if (active) refresh(System.currentTimeMillis())
+        if (active) refresh()
     }
 
     @Synchronized
     fun ingest(frame: EmuFrame, receivedAt: Long = System.currentTimeMillis()) {
         if (!mutableState.value.connected || !loopback.apply(frame, receivedAt)) return
-        refresh(receivedAt)
+        refresh()
     }
 
     @Synchronized
@@ -137,15 +128,22 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
         return true
     }
 
-    private fun refresh(now: Long) {
-        val snapshot = loopback.freshSnapshot(now)
+    private fun refresh() {
+        val snapshot = loopback.synchronizedSnapshot()
         val current = mutableState.value
         if (snapshot == null) {
-            mutableState.value = current.copy(freshLoopback = false)
+            mutableState.value = current.copy(
+                synchronizedLoopback = false,
+                missingLoopbackChannels = loopback.missingChannels
+            )
             return
         }
         val confirmed = current.pending?.takeIf {
-            loopback.freshSnapshot(now, receivedAfterRevision = it.loopbackRevisionAtStart) == it.target
+            val confirmation = loopback.snapshotConfirming(it.kind, it.channel, it.loopbackRevisionAtStart)
+            when (it.kind) {
+                EcuControlKind.SWITCH -> confirmation?.switchValue(it.channel) == it.target.switchValue(it.channel)
+                EcuControlKind.ROTARY -> confirmation?.rotaryValue(it.channel) == it.target.rotaryValue(it.channel)
+            }
         }
         if (confirmed != null) {
             confirmationJob?.cancel()
@@ -155,7 +153,8 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
             observed = snapshot,
             displayed = if (confirmed != null || current.pending == null) snapshot else current.displayed,
             pending = if (confirmed != null) null else current.pending,
-            freshLoopback = true,
+            synchronizedLoopback = true,
+            missingLoopbackChannels = emptyList(),
             error = if (confirmed != null) null else current.error
         )
     }

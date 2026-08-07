@@ -67,16 +67,16 @@ class EmuProtocolTest {
         assertTrue(EcuControlSnapshot.isValidStatusFrame(frame))
     }
 
-    @Test fun ecuControlLoopbackDecodesAllChannelsAndExpires() {
+    @Test fun ecuControlLoopbackDecodesAndRetainsSynchronizedState() {
         val accumulator = EcuControlLoopbackAccumulator()
         accumulator.apply(EmuFrame(254, 0xA0), 1_000)
         accumulator.apply(EmuFrame(253, 0x1234), 1_000)
         accumulator.apply(EmuFrame(252, 0xABCD), 1_000)
 
-        val state = accumulator.freshSnapshot(1_000)!!
+        val state = accumulator.synchronizedSnapshot()!!
         assertEquals(listOf(true, false, true, false, false, false, false, false), state.switches)
         assertEquals(listOf(1, 2, 3, 4, 10, 11, 12, 13), state.rotaryValues)
-        assertEquals(null, accumulator.freshSnapshot(3_001))
+        assertEquals(state, accumulator.synchronizedSnapshot())
     }
 
     @Test fun coordinatorNeverWritesBeforeFreshLoopbackAndConfirmsFromEmu() = runTest {
@@ -98,11 +98,38 @@ class EmuProtocolTest {
 
         val confirmationAt = System.currentTimeMillis() + 1
         coordinator.ingest(EmuFrame(254, 0x80), confirmationAt)
-        assertTrue(coordinator.state.value.pending != null)
-        coordinator.ingest(EmuFrame(253, 0), confirmationAt)
-        assertTrue(coordinator.state.value.pending != null)
-        coordinator.ingest(EmuFrame(252, 0), confirmationAt)
         assertEquals(true, coordinator.state.value.observed?.switchValue(1))
+        assertEquals(null, coordinator.state.value.pending)
+    }
+
+    @Test fun coordinatorAcceptsLoopbackChannelsArrivingInSlowCycle() = runTest {
+        val coordinator = EcuControlCoordinator(backgroundScope)
+        coordinator.connectionChanged(true)
+        coordinator.transportChanged(true) { true }
+
+        coordinator.ingest(EmuFrame(254, 0), 1_000)
+        coordinator.ingest(EmuFrame(253, 0), 4_000)
+        assertFalse(coordinator.state.value.ready)
+        coordinator.ingest(EmuFrame(252, 0), 7_000)
+
+        assertTrue(coordinator.state.value.ready)
+        assertTrue(coordinator.state.value.missingLoopbackChannels.isEmpty())
+    }
+
+    @Test fun rotaryConfirmationWaitsOnlyForItsLoopbackGroup() = runTest {
+        val coordinator = EcuControlCoordinator(backgroundScope)
+        coordinator.connectionChanged(true)
+        coordinator.transportChanged(true) { true }
+        coordinator.ingest(EmuFrame(254, 0))
+        coordinator.ingest(EmuFrame(253, 0))
+        coordinator.ingest(EmuFrame(252, 0))
+
+        assertTrue(coordinator.setRotary(6, 7))
+        coordinator.ingest(EmuFrame(253, 0))
+        assertTrue(coordinator.state.value.pending != null)
+        coordinator.ingest(EmuFrame(252, 0x0700))
+
+        assertEquals(7, coordinator.state.value.observed?.rotaryValue(6))
         assertEquals(null, coordinator.state.value.pending)
     }
 }
