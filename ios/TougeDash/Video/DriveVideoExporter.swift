@@ -350,7 +350,6 @@ final class VideoExportBackgroundCoordinator {
     static let shared = VideoExportBackgroundCoordinator()
     static let permittedIdentifier = "it.letscode.touge-dash.video-export.*"
 
-    private var isRegistered = false
     private var pendingOperation: Operation?
     private var expirationHandler: (@MainActor () -> Void)?
     private var completion: CheckedContinuation<Void, Error>?
@@ -359,22 +358,6 @@ final class VideoExportBackgroundCoordinator {
     private var executionTask: Task<Void, Never>?
 
     private init() {}
-
-    func register() {
-        guard !isRegistered else { return }
-        isRegistered = BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: Self.permittedIdentifier,
-            using: nil
-        ) { [weak self] task in
-            guard let continuedTask = task as? BGContinuedProcessingTask else {
-                task.setTaskCompleted(success: false)
-                return
-            }
-            Task { @MainActor in
-                self?.begin(continuedTask)
-            }
-        }
-    }
 
     func run(
         title: String,
@@ -392,6 +375,26 @@ final class VideoExportBackgroundCoordinator {
             expirationHandler = onExpiration
             completion = continuation
             submittedIdentifier = String(identifier)
+
+            let registered = BGTaskScheduler.shared.register(
+                forTaskWithIdentifier: String(identifier),
+                using: nil
+            ) { [weak self] task in
+                guard let continuedTask = task as? BGContinuedProcessingTask else {
+                    task.setTaskCompleted(success: false)
+                    return
+                }
+                Task { @MainActor in
+                    self?.begin(continuedTask)
+                }
+            }
+            guard registered else {
+                clearPendingRequest()
+                continuation.resume(throwing: VideoExportBackgroundSubmissionError(
+                    underlyingDescription: localized("System nie pozwolił uruchomić eksportu w tle.")
+                ))
+                return
+            }
 
             let request = BGContinuedProcessingTaskRequest(
                 identifier: String(identifier),

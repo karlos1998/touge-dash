@@ -389,6 +389,7 @@
 "Renderowanie filmu…" = "Rendering video…";
 "Przygotowywanie eksportu…" = "Preparing export…";
 "Inny eksport filmu jest już w toku." = "Another video export is already in progress.";
+"System nie pozwolił uruchomić eksportu w tle." = "The system did not allow the background export to start.";
 "Anuluj eksport" = "Cancel export";
 "Zapisywanie w aplikacji Zdjęcia…" = "Saving to Photos…";
 "Film został zapisany w aplikacji Zdjęcia." = "Video saved to Photos.";

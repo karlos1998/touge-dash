@@ -331,6 +331,7 @@
 "Renderowanie filmu…" = "Renderowanie filmu…";
 "Przygotowywanie eksportu…" = "Przygotowywanie eksportu…";
 "Inny eksport filmu jest już w toku." = "Inny eksport filmu jest już w toku.";
+"System nie pozwolił uruchomić eksportu w tle." = "System nie pozwolił uruchomić eksportu w tle.";
 "Anuluj eksport" = "Anuluj eksport";
 "Zapisywanie w aplikacji Zdjęcia…" = "Zapisywanie w aplikacji Zdjęcia…";
 "Film został zapisany w aplikacji Zdjęcia." = "Film został zapisany w aplikacji Zdjęcia.";

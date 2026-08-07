@@ -14,7 +14,6 @@ struct TougeDashApp: App {
     @StateObject private var videoOverlays: VideoOverlayTemplateStore
 
     init() {
-        VideoExportBackgroundCoordinator.shared.register()
         do {
             let container = try ModelContainer(
                 for: DriveSession.self,
