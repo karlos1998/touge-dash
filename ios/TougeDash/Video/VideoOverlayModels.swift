@@ -22,6 +22,8 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
     case digital
     case gauge
     case bar
+    case speedCluster
+    case oilCluster
 
     var id: String { rawValue }
 
@@ -30,6 +32,8 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
         case .digital: localized("Wartość cyfrowa")
         case .gauge: localized("Zegar")
         case .bar: localized("Pasek")
+        case .speedCluster: localized("Zegar prędkości + boost + RPM")
+        case .oilCluster: localized("Zegar oleju + ciśnienie")
         }
     }
 
@@ -38,6 +42,25 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
         case .digital: "number"
         case .gauge: "gauge.with.dots.needle.67percent"
         case .bar: "chart.bar.fill"
+        case .speedCluster: "speedometer"
+        case .oilCluster: "oilcan.fill"
+        }
+    }
+}
+
+struct VideoOverlayGaugeConfiguration: Codable, Hashable, Sendable {
+    var maximumSpeedKPH: Double = 300
+    var maximumOilTemperatureCelsius: Double = 140
+    var maximumRPM: Double = 8_000
+    var maximumBoostBar: Double = 2
+
+    func range(for metric: DashboardMetric) -> ClosedRange<Double> {
+        switch metric {
+        case .speed: 0...max(100, maximumSpeedKPH)
+        case .oilTemperature: 0...max(80, maximumOilTemperatureCelsius)
+        case .rpm: 0...max(4_000, maximumRPM)
+        case .boost: metric.defaultRange.lowerBound...max(0.5, maximumBoostBar)
+        default: metric.defaultRange
         }
     }
 }
@@ -203,6 +226,7 @@ struct VideoOverlayTemplate: Codable, Hashable, Identifiable, Sendable {
     var name: String
     var style: VideoOverlayStyle
     var elements: [VideoOverlayElement]
+    var gaugeConfiguration: VideoOverlayGaugeConfiguration
     var modifiedAt: Date
     var layoutVersion: Int
 
@@ -211,6 +235,7 @@ struct VideoOverlayTemplate: Codable, Hashable, Identifiable, Sendable {
         name: String,
         style: VideoOverlayStyle,
         elements: [VideoOverlayElement],
+        gaugeConfiguration: VideoOverlayGaugeConfiguration = .init(),
         modifiedAt: Date = .now,
         layoutVersion: Int = 2
     ) {
@@ -218,12 +243,13 @@ struct VideoOverlayTemplate: Codable, Hashable, Identifiable, Sendable {
         self.name = name
         self.style = style
         self.elements = elements
+        self.gaugeConfiguration = gaugeConfiguration
         self.modifiedAt = modifiedAt
         self.layoutVersion = layoutVersion
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, style, elements, modifiedAt, layoutVersion
+        case id, name, style, elements, gaugeConfiguration, modifiedAt, layoutVersion
     }
 
     init(from decoder: Decoder) throws {
@@ -232,6 +258,7 @@ struct VideoOverlayTemplate: Codable, Hashable, Identifiable, Sendable {
         name = try container.decode(String.self, forKey: .name)
         style = try container.decode(VideoOverlayStyle.self, forKey: .style)
         elements = try container.decode([VideoOverlayElement].self, forKey: .elements)
+        gaugeConfiguration = try container.decodeIfPresent(VideoOverlayGaugeConfiguration.self, forKey: .gaugeConfiguration) ?? .init()
         modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
         layoutVersion = try container.decodeIfPresent(Int.self, forKey: .layoutVersion) ?? 1
     }
@@ -444,7 +471,34 @@ extension VideoOverlayTemplate {
         modifiedAt: Date(timeIntervalSince1970: 1_735_689_600)
     )
 
-    static let factoryTemplates: [VideoOverlayTemplate] = [.racing, .arcade, .minimal, .portrait]
+    static let streetLegends = VideoOverlayTemplate(
+        id: UUID(uuidString: "4DC93C91-E785-4D73-959B-3CC5A1DC02D9")!,
+        name: localized("Street Legends"),
+        style: .arcade,
+        elements: [
+            VideoOverlayElement(
+                metric: .speed,
+                slot: .bottomLeading,
+                scale: .extraLarge,
+                accent: .cyan,
+                kind: .speedCluster,
+                landscapePosition: .init(x: 0.2, y: 0.72),
+                portraitPosition: .init(x: 0.5, y: 0.73)
+            ),
+            VideoOverlayElement(
+                metric: .oilTemperature,
+                slot: .bottomTrailing,
+                scale: .large,
+                accent: .orange,
+                kind: .oilCluster,
+                landscapePosition: .init(x: 0.8, y: 0.72),
+                portraitPosition: .init(x: 0.5, y: 0.38)
+            )
+        ],
+        modifiedAt: Date(timeIntervalSince1970: 1_785_890_400)
+    )
+
+    static let factoryTemplates: [VideoOverlayTemplate] = [.racing, .arcade, .minimal, .portrait, .streetLegends]
 
     func migratedToFreeformLayout() -> VideoOverlayTemplate {
         guard layoutVersion < 2 else { return self }
@@ -490,7 +544,9 @@ final class VideoOverlayTemplateStore: ObservableObject {
         if let data = defaults.data(forKey: templatesKey),
            let decoded = try? JSONDecoder.tougeDashCloud().decode([VideoOverlayTemplate].self, from: data),
            !decoded.isEmpty {
-            storedTemplates = decoded.map { $0.migratedToFreeformLayout() }
+            let migrated = decoded.map { $0.migratedToFreeformLayout() }
+            let existingIDs = Set(migrated.map(\.id))
+            storedTemplates = migrated + VideoOverlayTemplate.factoryTemplates.filter { !existingIDs.contains($0.id) }
         } else {
             storedTemplates = VideoOverlayTemplate.factoryTemplates
         }
@@ -546,7 +602,8 @@ final class VideoOverlayTemplateStore: ObservableObject {
                     landscapePosition: $0.landscapePosition,
                     portraitPosition: $0.portraitPosition
                 )
-            }
+            },
+            gaugeConfiguration: source.gaugeConfiguration
         )
     }
 

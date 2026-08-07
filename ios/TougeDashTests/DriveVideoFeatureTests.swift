@@ -21,7 +21,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let store = VideoOverlayTemplateStore(defaults: defaults, keyPrefix: suite)
-        XCTAssertEqual(store.templates.count, 4)
+        XCTAssertEqual(store.templates.count, 5)
         XCTAssertEqual(store.selectedTemplate.style, .racing)
 
         let copy = store.createCopy()
@@ -141,6 +141,8 @@ final class DriveVideoFeatureTests: XCTestCase {
         let decoded = try JSONDecoder.tougeDashCloud().decode(VideoOverlayTemplate.self, from: Data(json.utf8))
         XCTAssertEqual(decoded.layoutVersion, 1)
         XCTAssertEqual(decoded.elements.map(\.kind), [.digital, .digital])
+        XCTAssertEqual(decoded.elements.map(\.sizeMultiplier), [1, 1])
+        XCTAssertEqual(decoded.gaugeConfiguration.maximumSpeedKPH, 300)
 
         let migrated = decoded.migratedToFreeformLayout()
         XCTAssertEqual(migrated.layoutVersion, 2)
@@ -148,6 +150,12 @@ final class DriveVideoFeatureTests: XCTestCase {
             migrated.elements[0].position(for: .landscape),
             migrated.elements[1].position(for: .landscape)
         )
+    }
+
+    func testStreetLegendsCombinesSpeedBoostRpmAndOilData() {
+        XCTAssertEqual(VideoOverlayTemplate.streetLegends.elements.map(\.kind), [.speedCluster, .oilCluster])
+        XCTAssertEqual(VideoOverlayTemplate.streetLegends.gaugeConfiguration.range(for: .speed), 0...300)
+        XCTAssertEqual(VideoOverlayTemplate.streetLegends.gaugeConfiguration.range(for: .oilTemperature), 0...140)
     }
 
     func testTelemetryFrameUsesRecordedSampleInsteadOfLiveState() {

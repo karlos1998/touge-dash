@@ -7,7 +7,7 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 @Serializable
-enum class OverlayElementKind { DIGITAL, GAUGE, BAR }
+enum class OverlayElementKind { DIGITAL, GAUGE, BAR, SPEED_CLUSTER, OIL_CLUSTER }
 
 @Serializable
 enum class OverlayElementScale(val multiplier: Float) {
@@ -46,9 +46,20 @@ data class VideoOverlayTemplateDefinition(
     val landscapeX: Float = 0f,
     val landscapeY: Float = -.70f,
     val scale: Float = .92f,
+    val maximumSpeedKph: Float = 300f,
+    val maximumOilTemperatureCelsius: Float = 140f,
+    val maximumRpm: Float = 8_000f,
+    val maximumBoostBar: Float = 2f,
     val elements: List<VideoOverlayElement> = emptyList(),
     val layoutVersion: Int = 2
 ) {
+    fun range(metric: TelemetryMetric): ClosedFloatingPointRange<Double> = when (metric) {
+        TelemetryMetric.SPEED -> 0.0..maximumSpeedKph.coerceAtLeast(100f).toDouble()
+        TelemetryMetric.OIL_TEMPERATURE -> 0.0..maximumOilTemperatureCelsius.coerceAtLeast(80f).toDouble()
+        TelemetryMetric.RPM -> 0.0..maximumRpm.coerceAtLeast(4_000f).toDouble()
+        TelemetryMetric.BOOST -> metric.defaultMin..maximumBoostBar.coerceAtLeast(.5f).toDouble()
+        else -> metric.defaultMin..metric.defaultMax
+    }
     fun x(portrait: Boolean) = if (portrait) portraitX else landscapeX
     fun y(portrait: Boolean) = if (portrait) portraitY else landscapeY
     fun positioned(portrait: Boolean, x: Float, y: Float, scale: Float = this.scale) =
@@ -99,6 +110,14 @@ data class VideoOverlayTemplateDefinition(
                     else -> value
                 }
             }
+        )
+
+        fun streetLegends() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.UNDERGROUND,
+            elements = listOf(
+                element(TelemetryMetric.SPEED, OverlayElementKind.SPEED_CLUSTER, OverlayElementScale.EXTRA_LARGE, DashboardAccent.CYAN, .20f, .72f, .50f, .73f),
+                element(TelemetryMetric.OIL_TEMPERATURE, OverlayElementKind.OIL_CLUSTER, OverlayElementScale.LARGE, DashboardAccent.ORANGE, .80f, .72f, .50f, .38f)
+            )
         )
 
         private fun legacyElements(style: OverlayStyle): List<VideoOverlayElement> = when (style) {

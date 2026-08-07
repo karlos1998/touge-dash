@@ -12,6 +12,7 @@ struct VideoTelemetryOverlayView: View {
                 VideoOverlayElementView(
                     element: element,
                     style: template.style,
+                    configuration: template.gaugeConfiguration,
                     sample: sample,
                     canvasSize: proxy.size
                 )
@@ -40,6 +41,7 @@ struct EditableVideoTelemetryOverlayView: View {
                 VideoOverlayElementView(
                     element: element,
                     style: template.style,
+                    configuration: template.gaugeConfiguration,
                     sample: sample,
                     canvasSize: proxy.size
                 )
@@ -91,6 +93,7 @@ struct EditableVideoTelemetryOverlayView: View {
 private struct VideoOverlayElementView: View {
     let element: VideoOverlayElement
     let style: VideoOverlayStyle
+    let configuration: VideoOverlayGaugeConfiguration
     let sample: TelemetryHistorySample?
     let canvasSize: CGSize
 
@@ -99,7 +102,7 @@ private struct VideoOverlayElementView: View {
         max(0.48, min(canvasSize.width / 390, canvasSize.height / 220)) * CGFloat(element.effectiveScale)
     }
     private var progress: Double {
-        let range = element.metric.defaultRange
+        let range = configuration.range(for: element.metric)
         return min(1, max(0, (value - range.lowerBound) / (range.upperBound - range.lowerBound)))
     }
 
@@ -109,6 +112,8 @@ private struct VideoOverlayElementView: View {
             case .digital: digitalValue
             case .gauge: gaugeValue
             case .bar: barValue
+            case .speedCluster: speedCluster
+            case .oilCluster: oilCluster
             }
         }
         .shadow(color: shadowColor, radius: 5 * scale)
@@ -155,18 +160,7 @@ private struct VideoOverlayElementView: View {
 
     private var gaugeValue: some View {
         ZStack {
-            Circle()
-                .trim(from: 0.12, to: 0.88)
-                .stroke(Color.white.opacity(0.14), style: StrokeStyle(lineWidth: 6 * scale, lineCap: .round))
-                .rotationEffect(.degrees(68))
-            Circle()
-                .trim(from: 0.12, to: 0.12 + 0.76 * progress)
-                .stroke(
-                    element.accent.color,
-                    style: StrokeStyle(lineWidth: 6 * scale, lineCap: .round)
-                )
-                .rotationEffect(.degrees(68))
-                .shadow(color: style == .arcade ? element.accent.color.opacity(0.8) : .clear, radius: 5 * scale)
+            dialFace(metric: element.metric, value: value, accent: element.accent.color)
 
             VStack(spacing: 0) {
                 Text(element.metric.shortTitle)
@@ -190,6 +184,117 @@ private struct VideoOverlayElementView: View {
         .padding(5 * scale)
         .background(Color.black.opacity(style == .minimal ? 0.28 : 0.5), in: Circle())
         .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: max(0.5, scale * 0.6)))
+    }
+
+    private var speedCluster: some View {
+        ZStack {
+            dialFace(metric: .speed, value: metricValue(.speed), accent: element.accent.color)
+            VStack(spacing: 0) {
+                Text("RPM \(Int(metricValue(.rpm)))")
+                    .font(.system(size: 6 * scale, weight: .black, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.72))
+                Text(Int(metricValue(.speed)).formatted())
+                    .font(.system(size: 24 * scale, weight: .black, design: .rounded))
+                    .fontWidth(.expanded)
+                    .monospacedDigit()
+                Text("km/h")
+                    .font(.system(size: 6 * scale, weight: .black))
+                    .foregroundStyle(element.accent.color)
+                boostStrip
+            }
+            .offset(y: 7 * scale)
+        }
+        .frame(width: 126 * scale, height: 126 * scale)
+        .background(Color.black.opacity(0.78), in: Circle())
+        .overlay(Circle().stroke(element.accent.color.opacity(0.55), lineWidth: 1.2 * scale))
+    }
+
+    private var oilCluster: some View {
+        ZStack {
+            dialFace(metric: .oilTemperature, value: metricValue(.oilTemperature), accent: element.accent.color)
+            VStack(spacing: 0) {
+                Text("OIL TEMP")
+                    .font(.system(size: 6 * scale, weight: .black))
+                    .foregroundStyle(element.accent.color)
+                Text("\(Int(metricValue(.oilTemperature)))°")
+                    .font(.system(size: 22 * scale, weight: .black, design: .rounded))
+                    .monospacedDigit()
+                Text("OIL P  \(metricValue(.oilPressure).formatted(.number.precision(.fractionLength(1)))) bar")
+                    .font(.system(size: 6 * scale, weight: .black, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+            .offset(y: 6 * scale)
+        }
+        .frame(width: 116 * scale, height: 116 * scale)
+        .background(Color(red: 0.07, green: 0.025, blue: 0.015).opacity(0.88), in: Circle())
+        .overlay(Circle().stroke(element.accent.color.opacity(0.7), lineWidth: 1.2 * scale))
+    }
+
+    private func dialFace(metric: DashboardMetric, value: Double, accent: Color) -> some View {
+        let dialProgress = progress(for: metric, value: value)
+        return ZStack {
+            ForEach(0..<25, id: \.self) { index in
+                Capsule()
+                    .fill(index % 4 == 0 ? Color.white.opacity(0.9) : Color.white.opacity(0.32))
+                    .frame(width: max(0.7, scale), height: (index % 4 == 0 ? 7 : 4) * scale)
+                    .offset(y: -42 * scale)
+                    .rotationEffect(.degrees(-120 + Double(index) * 10))
+            }
+            ForEach(0..<7, id: \.self) { index in
+                let range = configuration.range(for: metric)
+                let labelValue = range.lowerBound + (range.upperBound - range.lowerBound) * Double(index) / 6
+                let angle = (-120 + Double(index) * 40) * Double.pi / 180
+                Text(scaleLabel(labelValue, metric: metric))
+                    .font(.system(size: 4.8 * scale, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.72))
+                    .offset(
+                        x: sin(angle) * 31 * scale,
+                        y: -cos(angle) * 31 * scale
+                    )
+            }
+            Circle()
+                .trim(from: 0.165, to: 0.835)
+                .stroke(accent.opacity(0.28), style: StrokeStyle(lineWidth: 2 * scale, lineCap: .round))
+                .rotationEffect(.degrees(60))
+            Capsule()
+                .fill(accent)
+                .frame(width: 2.2 * scale, height: 34 * scale)
+                .offset(y: -17 * scale)
+                .rotationEffect(.degrees(-120 + 240 * dialProgress))
+                .shadow(color: accent.opacity(0.9), radius: 3 * scale)
+            Circle().fill(.white).frame(width: 6 * scale, height: 6 * scale)
+        }
+    }
+
+    private var boostStrip: some View {
+        let boostProgress = progress(for: .boost, value: metricValue(.boost))
+        return VStack(spacing: 1 * scale) {
+            Text("BOOST  \(metricValue(.boost).formatted(.number.precision(.fractionLength(1))))")
+                .font(.system(size: 5 * scale, weight: .black, design: .monospaced))
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.16))
+                    Capsule().fill(Color.tougeMint).frame(width: max(2, geometry.size.width * boostProgress))
+                }
+            }
+            .frame(width: 48 * scale, height: 3 * scale)
+        }
+    }
+
+    private func metricValue(_ metric: DashboardMetric) -> Double {
+        sample.map { metric.value(in: $0) } ?? 0
+    }
+
+    private func progress(for metric: DashboardMetric, value: Double) -> Double {
+        let range = configuration.range(for: metric)
+        return min(1, max(0, (value - range.lowerBound) / max(0.0001, range.upperBound - range.lowerBound)))
+    }
+
+    private func scaleLabel(_ value: Double, metric: DashboardMetric) -> String {
+        if metric == .rpm { return "\(Int(value / 1_000))k" }
+        if metric == .boost { return value.formatted(.number.precision(.fractionLength(1))) }
+        return Int(value).formatted()
     }
 
     private var barValue: some View {
@@ -375,6 +480,33 @@ private struct VideoOverlayTemplateEditor: View {
                     }
                 }
 
+                Section(localized("Skale zegarów")) {
+                    Stepper(
+                        "\(localized("Prędkość maks.")): \(Int(draft.gaugeConfiguration.maximumSpeedKPH)) km/h",
+                        value: $draft.gaugeConfiguration.maximumSpeedKPH,
+                        in: 100...450,
+                        step: 10
+                    )
+                    Stepper(
+                        "\(localized("Temperatura oleju maks.")): \(Int(draft.gaugeConfiguration.maximumOilTemperatureCelsius))°C",
+                        value: $draft.gaugeConfiguration.maximumOilTemperatureCelsius,
+                        in: 80...180,
+                        step: 5
+                    )
+                    Stepper(
+                        "RPM maks.: \(Int(draft.gaugeConfiguration.maximumRPM))",
+                        value: $draft.gaugeConfiguration.maximumRPM,
+                        in: 4_000...12_000,
+                        step: 500
+                    )
+                    Stepper(
+                        "Boost maks.: \(draft.gaugeConfiguration.maximumBoostBar.formatted(.number.precision(.fractionLength(1)))) bar",
+                        value: $draft.gaugeConfiguration.maximumBoostBar,
+                        in: 0.5...4,
+                        step: 0.1
+                    )
+                }
+
                 Section {
                     ForEach($draft.elements) { $element in
                         VideoOverlayElementEditor(element: $element)
@@ -392,7 +524,7 @@ private struct VideoOverlayTemplateEditor: View {
                 } header: {
                     Text(localized("Parametry HUD"))
                 } footer: {
-                    Text(localized("Pozycję każdego elementu możesz później dopasować palcem bezpośrednio na podglądzie filmu."))
+                    Text(localized("Przeciągnij element jednym palcem, a dwoma palcami zmień jego rozmiar bezpośrednio na podglądzie filmu."))
                 }
 
                 if canDelete {

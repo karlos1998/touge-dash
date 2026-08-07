@@ -61,9 +61,10 @@ class VideoRepository(
 
     fun ensureOverlayTemplates() {
         scope.launch(Dispatchers.IO) {
-            if (dao.overlayTemplatesOnce().isEmpty()) {
-                defaultTemplates().forEach { dao.upsertOverlayTemplate(it.entity) }
-            }
+            val existingIds = dao.overlayTemplatesOnce().mapTo(mutableSetOf()) { it.id }
+            defaultTemplates()
+                .filterNot { it.entity.id in existingIds }
+                .forEach { dao.upsertOverlayTemplate(it.entity) }
         }
     }
 
@@ -252,7 +253,8 @@ class VideoRepository(
         template("RACE", "Touge Pro", VideoOverlayTemplateDefinition.tougePro()),
         template("UNDERGROUND", "Night Run", VideoOverlayTemplateDefinition.nightRun()),
         template("MINIMAL", "Clean Drive", VideoOverlayTemplateDefinition.cleanDrive()),
-        template("PORTRAIT_RALLY", "Portrait Rally", VideoOverlayTemplateDefinition.portraitRally())
+        template("PORTRAIT_RALLY", "Portrait Rally", VideoOverlayTemplateDefinition.portraitRally()),
+        template("STREET_LEGENDS", "Street Legends", VideoOverlayTemplateDefinition.streetLegends())
     )
 
     private fun template(id: String, name: String, definition: VideoOverlayTemplateDefinition): VideoOverlayTemplate {

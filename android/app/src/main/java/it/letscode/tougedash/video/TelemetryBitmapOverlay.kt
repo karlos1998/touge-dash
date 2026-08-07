@@ -15,6 +15,8 @@ import it.letscode.tougedash.model.DashboardAccent
 import it.letscode.tougedash.model.TelemetryMetric
 import kotlinx.serialization.Serializable
 import kotlin.math.min
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Serializable
 enum class OverlayStyle { MINIMAL, RACE, UNDERGROUND }
@@ -72,6 +74,8 @@ class TelemetryBitmapOverlay(
             OverlayElementKind.DIGITAL -> drawDigital(sample, element, cx, cy, scale)
             OverlayElementKind.GAUGE -> drawGauge(sample, element, cx, cy, scale)
             OverlayElementKind.BAR -> drawBar(sample, element, cx, cy, scale)
+            OverlayElementKind.SPEED_CLUSTER -> drawSpeedCluster(sample, element, cx, cy, scale)
+            OverlayElementKind.OIL_CLUSTER -> drawOilCluster(sample, element, cx, cy, scale)
         }
     }
 
@@ -94,9 +98,10 @@ class TelemetryBitmapOverlay(
         paint.color = 0x44394a53
         canvas.drawArc(rect, 145f, 250f, false, paint)
         val metricValue = element.metric.sampleValue(sample)
-        val progress = ((metricValue - element.metric.defaultMin) / (element.metric.defaultMax - element.metric.defaultMin)).coerceIn(0.0, 1.0).toFloat()
+        val progress = progress(element.metric, metricValue)
         paint.color = element.accent.colorInt()
         canvas.drawArc(rect, 145f, 250f * progress, false, paint)
+        drawDialNeedle(cx, cy, radius * .72f, 145f, 250f, progress, element.metric, element.accent.colorInt(), scale)
         paint.style = Paint.Style.FILL
         centered(format(element.metric, metricValue), cx, cy + 12f * scale, 43f * scale, Color.WHITE)
         centered(element.metric.shortName, cx, cy + 43f * scale, 16f * scale, element.accent.colorInt())
@@ -107,13 +112,98 @@ class TelemetryBitmapOverlay(
         val height = 85f * scale
         panel(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2, 17f * scale)
         val value = element.metric.sampleValue(sample)
-        val progress = ((value - element.metric.defaultMin) / (element.metric.defaultMax - element.metric.defaultMin)).coerceIn(0.0, 1.0).toFloat()
+        val progress = progress(element.metric, value)
         val left = cx - width * .43f
         val right = cx + width * .43f
         pill(left, cy + 12f * scale, right, cy + 29f * scale, 0x55394a53)
         pill(left, cy + 12f * scale, left + (right - left) * progress, cy + 29f * scale, element.accent.colorInt())
         text(element.metric.shortName, left, cy - 7f * scale, 18f * scale, 0xff91a5ae.toInt())
         rightText("${format(element.metric, value)} ${element.metric.unit}", right, cy - 7f * scale, 26f * scale, Color.WHITE)
+    }
+
+    private fun drawSpeedCluster(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
+        val radius = 105f * scale
+        panel(cx - radius, cy - radius, cx + radius, cy + radius, radius)
+        val progress = progress(TelemetryMetric.SPEED, sample.speedKph)
+        drawDialNeedle(cx, cy, radius * .78f, 150f, 240f, progress, TelemetryMetric.SPEED, element.accent.colorInt(), scale)
+        centered("RPM ${sample.rpm.toInt()}", cx, cy - 22f * scale, 14f * scale, 0xbbffffff.toInt())
+        centered(sample.speedKph.toInt().toString(), cx, cy + 21f * scale, 50f * scale, Color.WHITE)
+        centered("km/h", cx, cy + 42f * scale, 13f * scale, element.accent.colorInt())
+        val boost = progress(TelemetryMetric.BOOST, sample.boostBar)
+        val left = cx - 45f * scale
+        val right = cx + 45f * scale
+        centered("BOOST ${"%.1f".format(sample.boostBar)}", cx, cy + 62f * scale, 11f * scale, 0xff43e8a8.toInt())
+        pill(left, cy + 69f * scale, right, cy + 75f * scale, 0x55394a53)
+        pill(left, cy + 69f * scale, left + (right - left) * boost, cy + 75f * scale, 0xff43e8a8.toInt())
+    }
+
+    private fun drawOilCluster(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
+        val radius = 96f * scale
+        panel(cx - radius, cy - radius, cx + radius, cy + radius, radius)
+        val progress = progress(TelemetryMetric.OIL_TEMPERATURE, sample.oilTemperatureCelsius)
+        drawDialNeedle(cx, cy, radius * .76f, 150f, 240f, progress, TelemetryMetric.OIL_TEMPERATURE, element.accent.colorInt(), scale)
+        centered("OIL TEMP", cx, cy - 20f * scale, 14f * scale, element.accent.colorInt())
+        centered("${sample.oilTemperatureCelsius.toInt()}°", cx, cy + 19f * scale, 45f * scale, Color.WHITE)
+        centered("OIL P  ${"%.1f".format(sample.oilPressureBar)} bar", cx, cy + 45f * scale, 13f * scale, 0xddffffff.toInt())
+    }
+
+    private fun drawDialNeedle(
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        start: Float,
+        sweep: Float,
+        progress: Float,
+        metric: TelemetryMetric,
+        accent: Int,
+        scale: Float
+    ) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        for (index in 0..24) {
+            val angle = Math.toRadians((start + sweep * index / 24f).toDouble())
+            val length = (if (index % 4 == 0) 12f else 7f) * scale
+            paint.strokeWidth = (if (index % 4 == 0) 2.6f else 1.4f) * scale
+            paint.color = if (index % 4 == 0) 0xeeffffff.toInt() else 0x66ffffff
+            canvas.drawLine(
+                cx + cos(angle).toFloat() * (radius - length),
+                cy + sin(angle).toFloat() * (radius - length),
+                cx + cos(angle).toFloat() * radius,
+                cy + sin(angle).toFloat() * radius,
+                paint
+            )
+        }
+        val range = definition.range(metric)
+        for (index in 0..6) {
+            val angle = Math.toRadians((start + sweep * index / 6f).toDouble())
+            val labelRadius = radius * .68f
+            val labelValue = range.start + (range.endInclusive - range.start) * index / 6.0
+            centered(
+                scaleLabel(labelValue, metric),
+                cx + cos(angle).toFloat() * labelRadius,
+                cy + sin(angle).toFloat() * labelRadius + 3f * scale,
+                9f * scale,
+                0xbbffffff.toInt()
+            )
+        }
+        val needle = Math.toRadians((start + sweep * progress).toDouble())
+        paint.color = accent
+        paint.strokeWidth = 3.5f * scale
+        canvas.drawLine(cx, cy, cx + cos(needle).toFloat() * radius * .72f, cy + sin(needle).toFloat() * radius * .72f, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = Color.WHITE
+        canvas.drawCircle(cx, cy, 5f * scale, paint)
+    }
+
+    private fun progress(metric: TelemetryMetric, value: Double): Float {
+        val range = definition.range(metric)
+        return ((value - range.start) / (range.endInclusive - range.start).coerceAtLeast(.0001)).coerceIn(0.0, 1.0).toFloat()
+    }
+
+    private fun scaleLabel(value: Double, metric: TelemetryMetric): String = when (metric) {
+        TelemetryMetric.RPM -> "${(value / 1_000).toInt()}k"
+        TelemetryMetric.BOOST -> "%.1f".format(value)
+        else -> value.toInt().toString()
     }
 
     private fun panel(left: Float, top: Float, right: Float, bottom: Float, radius: Float) {

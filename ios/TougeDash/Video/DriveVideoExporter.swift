@@ -356,6 +356,7 @@ private enum VideoOverlayCGRenderer {
                 draw(
                     element: element,
                     style: template.style,
+                    configuration: template.gaugeConfiguration,
                     sample: sample,
                     rect: rect,
                     context: context,
@@ -366,11 +367,13 @@ private enum VideoOverlayCGRenderer {
     }
 
     private static func elementSize(for element: VideoOverlayElement, baseScale: CGFloat) -> CGSize {
-        let scale = baseScale * CGFloat(element.scale.multiplier)
+        let scale = baseScale * CGFloat(element.effectiveScale)
         switch element.kind {
         case .digital: return CGSize(width: 94 * scale, height: 56 * scale)
         case .gauge: return CGSize(width: 112 * scale, height: 112 * scale)
         case .bar: return CGSize(width: 190 * scale, height: 48 * scale)
+        case .speedCluster: return CGSize(width: 126 * scale, height: 126 * scale)
+        case .oilCluster: return CGSize(width: 116 * scale, height: 116 * scale)
         }
     }
 
@@ -389,6 +392,7 @@ private enum VideoOverlayCGRenderer {
     private static func draw(
         element: VideoOverlayElement,
         style: VideoOverlayStyle,
+        configuration: VideoOverlayGaugeConfiguration,
         sample: VideoTelemetryFrame,
         rect: CGRect,
         context: CGContext,
@@ -399,17 +403,22 @@ private enum VideoOverlayCGRenderer {
 
         switch element.kind {
         case .digital:
-            drawDigital(element: element, style: style, sample: sample, rect: rect, context: context, baseScale: baseScale)
+            drawDigital(element: element, style: style, configuration: configuration, sample: sample, rect: rect, context: context, baseScale: baseScale)
         case .gauge:
-            drawGauge(element: element, style: style, sample: sample, rect: rect, context: context, baseScale: baseScale)
+            drawGauge(element: element, style: style, configuration: configuration, sample: sample, rect: rect, context: context, baseScale: baseScale)
         case .bar:
-            drawBar(element: element, style: style, sample: sample, rect: rect, context: context, baseScale: baseScale)
+            drawBar(element: element, style: style, configuration: configuration, sample: sample, rect: rect, context: context, baseScale: baseScale)
+        case .speedCluster:
+            drawSpeedCluster(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
+        case .oilCluster:
+            drawOilCluster(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
         }
     }
 
     private static func drawDigital(
         element: VideoOverlayElement,
         style: VideoOverlayStyle,
+        configuration: VideoOverlayGaugeConfiguration,
         sample: VideoTelemetryFrame,
         rect: CGRect,
         context: CGContext,
@@ -439,7 +448,7 @@ private enum VideoOverlayCGRenderer {
         )
 
         if style != .minimal {
-            let progress = progress(for: element.metric, value: value)
+            let progress = progress(for: element.metric, value: value, configuration: configuration)
             let bar = CGRect(x: rect.minX + padding, y: rect.maxY - 7 * localScale, width: rect.width - padding * 2, height: max(2, 2.5 * localScale))
             context.setFillColor(UIColor.white.withAlphaComponent(0.15).cgColor)
             fillRoundedRect(bar, context: context)
@@ -452,6 +461,7 @@ private enum VideoOverlayCGRenderer {
     private static func drawGauge(
         element: VideoOverlayElement,
         style: VideoOverlayStyle,
+        configuration: VideoOverlayGaugeConfiguration,
         sample: VideoTelemetryFrame,
         rect: CGRect,
         context: CGContext,
@@ -459,7 +469,7 @@ private enum VideoOverlayCGRenderer {
     ) {
         let accent = element.accent.uiColor
         let value = sample.value(for: element.metric)
-        let progress = progress(for: element.metric, value: value)
+        let progress = progress(for: element.metric, value: value, configuration: configuration)
         let lineWidth = max(3, rect.width * 0.054)
         let circleRect = rect.insetBy(dx: lineWidth * 1.25, dy: lineWidth * 1.25)
         let center = CGPoint(x: rect.midX, y: rect.midY)
@@ -477,6 +487,7 @@ private enum VideoOverlayCGRenderer {
         context.setStrokeColor(accent.cgColor)
         context.addArc(center: center, radius: radius, startAngle: start, endAngle: start + sweep * progress, clockwise: false)
         context.strokePath()
+        drawDialNeedle(center: center, radius: radius, start: start, sweep: sweep, progress: progress, metric: element.metric, configuration: configuration, accent: accent, context: context)
 
         let localScale = rect.width / 112
         let titleFont = UIFont.systemFont(ofSize: 6.5 * localScale, weight: .black)
@@ -501,6 +512,7 @@ private enum VideoOverlayCGRenderer {
     private static func drawBar(
         element: VideoOverlayElement,
         style: VideoOverlayStyle,
+        configuration: VideoOverlayGaugeConfiguration,
         sample: VideoTelemetryFrame,
         rect: CGRect,
         context: CGContext,
@@ -508,7 +520,7 @@ private enum VideoOverlayCGRenderer {
     ) {
         let accent = element.accent.uiColor
         let value = sample.value(for: element.metric)
-        let progress = progress(for: element.metric, value: value)
+        let progress = progress(for: element.metric, value: value, configuration: configuration)
         drawBackground(rect: rect, style: style, accent: accent, context: context, baseScale: baseScale)
         let localScale = rect.width / 190
         let padding = 10 * localScale
@@ -561,6 +573,98 @@ private enum VideoOverlayCGRenderer {
         }
     }
 
+    private static func drawSpeedCluster(
+        element: VideoOverlayElement,
+        configuration: VideoOverlayGaugeConfiguration,
+        sample: VideoTelemetryFrame,
+        rect: CGRect,
+        context: CGContext
+    ) {
+        let accent = element.accent.uiColor
+        context.setFillColor(UIColor.black.withAlphaComponent(0.8).cgColor)
+        context.fillEllipse(in: rect)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = rect.width * 0.39
+        let value = sample.value(for: .speed)
+        drawDialNeedle(center: center, radius: radius, start: .pi * 0.83, sweep: .pi * 1.34, progress: progress(for: .speed, value: value, configuration: configuration), metric: .speed, configuration: configuration, accent: accent, context: context)
+        let localScale = rect.width / 126
+        drawCentered("RPM \(Int(sample.value(for: .rpm)))", font: .monospacedSystemFont(ofSize: 6 * localScale, weight: .black), color: UIColor.white.withAlphaComponent(0.72), centerX: rect.midX, y: rect.midY - 22 * localScale)
+        drawCentered(Int(value).formatted(), font: .monospacedDigitSystemFont(ofSize: 25 * localScale, weight: .black), color: .white, centerX: rect.midX, y: rect.midY - 7 * localScale)
+        drawCentered("km/h", font: .systemFont(ofSize: 6 * localScale, weight: .black), color: accent, centerX: rect.midX, y: rect.midY + 19 * localScale)
+        let boost = sample.value(for: .boost)
+        drawCentered("BOOST \(boost.formatted(.number.precision(.fractionLength(1))))", font: .monospacedSystemFont(ofSize: 5.5 * localScale, weight: .black), color: DashboardAccent.mint.uiColor, centerX: rect.midX, y: rect.midY + 32 * localScale)
+        let bar = CGRect(x: rect.midX - 25 * localScale, y: rect.midY + 42 * localScale, width: 50 * localScale, height: 3 * localScale)
+        context.setFillColor(UIColor.white.withAlphaComponent(0.15).cgColor)
+        fillRoundedRect(bar, context: context)
+        context.setFillColor(DashboardAccent.mint.uiColor.cgColor)
+        fillRoundedRect(CGRect(x: bar.minX, y: bar.minY, width: max(2, bar.width * progress(for: .boost, value: boost, configuration: configuration)), height: bar.height), context: context)
+    }
+
+    private static func drawOilCluster(
+        element: VideoOverlayElement,
+        configuration: VideoOverlayGaugeConfiguration,
+        sample: VideoTelemetryFrame,
+        rect: CGRect,
+        context: CGContext
+    ) {
+        let accent = element.accent.uiColor
+        context.setFillColor(UIColor(red: 0.08, green: 0.025, blue: 0.015, alpha: 0.9).cgColor)
+        context.fillEllipse(in: rect)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let radius = rect.width * 0.39
+        let temperature = sample.value(for: .oilTemperature)
+        drawDialNeedle(center: center, radius: radius, start: .pi * 0.83, sweep: .pi * 1.34, progress: progress(for: .oilTemperature, value: temperature, configuration: configuration), metric: .oilTemperature, configuration: configuration, accent: accent, context: context)
+        let localScale = rect.width / 116
+        drawCentered("OIL TEMP", font: .systemFont(ofSize: 6 * localScale, weight: .black), color: accent, centerX: rect.midX, y: rect.midY - 20 * localScale)
+        drawCentered("\(Int(temperature))°", font: .monospacedDigitSystemFont(ofSize: 23 * localScale, weight: .black), color: .white, centerX: rect.midX, y: rect.midY - 5 * localScale)
+        let pressure = sample.value(for: .oilPressure)
+        drawCentered("OIL P  \(pressure.formatted(.number.precision(.fractionLength(1)))) bar", font: .monospacedSystemFont(ofSize: 6 * localScale, weight: .black), color: UIColor.white.withAlphaComponent(0.8), centerX: rect.midX, y: rect.midY + 23 * localScale)
+    }
+
+    private static func drawDialNeedle(
+        center: CGPoint,
+        radius: CGFloat,
+        start: CGFloat,
+        sweep: CGFloat,
+        progress: CGFloat,
+        metric: DashboardMetric,
+        configuration: VideoOverlayGaugeConfiguration,
+        accent: UIColor,
+        context: CGContext
+    ) {
+        context.setLineCap(.round)
+        for index in 0...24 {
+            let angle = start + sweep * CGFloat(index) / 24
+            let length = index.isMultiple(of: 4) ? radius * 0.15 : radius * 0.09
+            context.setStrokeColor(UIColor.white.withAlphaComponent(index.isMultiple(of: 4) ? 0.9 : 0.32).cgColor)
+            context.setLineWidth(index.isMultiple(of: 4) ? max(1.2, radius * 0.025) : max(0.7, radius * 0.014))
+            context.move(to: CGPoint(x: center.x + cos(angle) * (radius - length), y: center.y + sin(angle) * (radius - length)))
+            context.addLine(to: CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius))
+            context.strokePath()
+        }
+        let range = configuration.range(for: metric)
+        for index in 0...6 {
+            let angle = start + sweep * CGFloat(index) / 6
+            let labelRadius = radius * 0.68
+            let labelValue = range.lowerBound + (range.upperBound - range.lowerBound) * Double(index) / 6
+            drawCentered(
+                scaleLabel(labelValue, metric: metric),
+                font: .systemFont(ofSize: max(5, radius * 0.1), weight: .bold),
+                color: UIColor.white.withAlphaComponent(0.72),
+                centerX: center.x + cos(angle) * labelRadius,
+                y: center.y + sin(angle) * labelRadius - max(3, radius * 0.05)
+            )
+        }
+        let angle = start + sweep * progress
+        context.setStrokeColor(accent.cgColor)
+        context.setLineWidth(max(2, radius * 0.035))
+        context.move(to: center)
+        context.addLine(to: CGPoint(x: center.x + cos(angle) * radius * 0.72, y: center.y + sin(angle) * radius * 0.72))
+        context.strokePath()
+        context.setFillColor(UIColor.white.cgColor)
+        context.fillEllipse(in: CGRect(x: center.x - radius * 0.055, y: center.y - radius * 0.055, width: radius * 0.11, height: radius * 0.11))
+    }
+
     private static func drawBackground(
         rect: CGRect,
         style: VideoOverlayStyle,
@@ -583,10 +687,16 @@ private enum VideoOverlayCGRenderer {
         }
     }
 
-    private static func progress(for metric: DashboardMetric, value: Double) -> CGFloat {
-        let range = metric.defaultRange
+    private static func progress(for metric: DashboardMetric, value: Double, configuration: VideoOverlayGaugeConfiguration) -> CGFloat {
+        let range = configuration.range(for: metric)
         let raw = (value - range.lowerBound) / max(0.0001, range.upperBound - range.lowerBound)
         return CGFloat(min(1, max(0, raw)))
+    }
+
+    private static func scaleLabel(_ value: Double, metric: DashboardMetric) -> String {
+        if metric == .rpm { return "\(Int(value / 1_000))k" }
+        if metric == .boost { return value.formatted(.number.precision(.fractionLength(1))) }
+        return Int(value).formatted()
     }
 
     private static func drawCentered(_ text: String, font: UIFont, color: UIColor, centerX: CGFloat, y: CGFloat) {

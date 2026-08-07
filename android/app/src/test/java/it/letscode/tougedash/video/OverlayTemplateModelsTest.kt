@@ -1,5 +1,6 @@
 package it.letscode.tougedash.video
 
+import it.letscode.tougedash.model.TelemetryMetric
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
@@ -41,5 +42,15 @@ class OverlayTemplateModelsTest {
 
         assertEquals(template.elements, restored.elements)
         assertEquals(2, restored.layoutVersion)
+    }
+
+    @Test
+    fun `street legends combines configured performance and oil clusters`() {
+        val template = VideoOverlayTemplateDefinition.streetLegends()
+        val restored = json.decodeFromString<VideoOverlayTemplateDefinition>(json.encodeToString(template))
+
+        assertEquals(listOf(OverlayElementKind.SPEED_CLUSTER, OverlayElementKind.OIL_CLUSTER), restored.elements.map { it.kind })
+        assertEquals(300.0, restored.range(TelemetryMetric.SPEED).endInclusive, 0.0)
+        assertEquals(140.0, restored.range(TelemetryMetric.OIL_TEMPERATURE).endInclusive, 0.0)
     }
 }

@@ -3,6 +3,8 @@
 package it.letscode.tougedash.ui
 
 import android.net.Uri
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Typeface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -60,6 +63,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.onSizeChanged
@@ -92,6 +97,8 @@ import it.letscode.tougedash.video.VideoOverlayTemplate
 import it.letscode.tougedash.video.VideoOverlayTemplateDefinition
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samples: List<TelemetrySampleEntity>, scrubber: Float) {
@@ -225,7 +232,7 @@ private fun VideoAlignmentEditor(
                         )
                     }
                 }
-                Text(appText("Tap and drag individual HUD elements on the preview. Portrait and landscape positions are stored separately.", "Dotknij i przeciągaj pojedyncze elementy HUD na podglądzie. Pozycje pionowe i poziome zapisują się osobno."), color = TougeMuted, fontSize = 10.sp)
+                Text(appText("Drag HUD elements with one finger and pinch with two fingers to resize. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD jednym palcem, a dwoma palcami zmieniaj ich rozmiar. Układ pionowy i poziomy zapisuje się osobno."), color = TougeMuted, fontSize = 10.sp)
                 OutlinedButton(
                     onClick = { templates.firstOrNull { it.entity.id == templateId }?.let { container.videoRepository.updateOverlayTemplate(it.copy(definition = overlayDefinition)) } },
                     modifier = Modifier.fillMaxWidth()
@@ -259,6 +266,20 @@ private fun VideoAlignmentEditor(
 }
 
 @Composable
+private fun GaugeScaleSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    unit: String,
+    step: Float = 5f,
+    changed: (Float) -> Unit
+) {
+    val snapped = { raw: Float -> (raw / step).roundToInt() * step }
+    Text("$label: ${if (step < 1f) "%.1f".format(value) else value.roundToInt()} $unit", color = TougeMuted, fontSize = 10.sp)
+    Slider(value, { changed(snapped(it).coerceIn(range)) }, valueRange = range)
+}
+
+@Composable
 private fun BoxScope.EditableHudPreview(
     sample: TelemetrySampleEntity,
     definition: VideoOverlayTemplateDefinition,
@@ -273,6 +294,7 @@ private fun BoxScope.EditableHudPreview(
         HudElementPreview(
             sample = sample,
             element = element,
+            definition = definition,
             style = definition.style,
             selected = selectedElementId == element.id,
             modifier = Modifier
@@ -299,6 +321,7 @@ private fun BoxScope.EditableHudPreview(
 private fun HudElementPreview(
     sample: TelemetrySampleEntity,
     element: VideoOverlayElement,
+    definition: VideoOverlayTemplateDefinition,
     style: OverlayStyle,
     selected: Boolean,
     modifier: Modifier = Modifier
@@ -317,11 +340,8 @@ private fun HudElementPreview(
             Text(element.metric.unit, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         }
         OverlayElementKind.GAUGE -> Box(shell.size(112.dp), contentAlignment = Alignment.Center) {
-            val progress = ((value - element.metric.defaultMin) / (element.metric.defaultMax - element.metric.defaultMin)).coerceIn(0.0, 1.0).toFloat()
-            Canvas(Modifier.fillMaxSize()) {
-                drawArc(Color.White.copy(alpha = .12f), 150f, 240f, false, style = androidx.compose.ui.graphics.drawscope.Stroke(8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                drawArc(accent, 150f, 240f * progress, false, style = androidx.compose.ui.graphics.drawscope.Stroke(8.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
-            }
+            val progress = definition.progress(element.metric, value)
+            RacingDial(progress, definition.range(element.metric), element.metric, accent, Modifier.fillMaxSize())
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(element.metric.format(value), fontSize = 21.sp, fontWeight = FontWeight.Black)
                 Text(element.metric.shortName, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
@@ -332,12 +352,88 @@ private fun HudElementPreview(
                 Text(element.metric.shortName, color = TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Black)
                 Text("${element.metric.format(value)} ${element.metric.unit}", fontWeight = FontWeight.Black)
             }
-            val progress = ((value - element.metric.defaultMin) / (element.metric.defaultMax - element.metric.defaultMin)).coerceIn(0.0, 1.0).toFloat()
+            val progress = definition.progress(element.metric, value)
             Box(Modifier.fillMaxWidth().height(7.dp).background(Color.White.copy(alpha = .10f), RoundedCornerShape(4.dp))) {
                 Box(Modifier.fillMaxWidth(progress.coerceAtLeast(.01f)).height(7.dp).background(accent, RoundedCornerShape(4.dp)))
             }
         }
+        OverlayElementKind.SPEED_CLUSTER -> Box(shell.size(132.dp), contentAlignment = Alignment.Center) {
+            RacingDial(definition.progress(TelemetryMetric.SPEED, sample.speedKph), definition.range(TelemetryMetric.SPEED), TelemetryMetric.SPEED, accent, Modifier.fillMaxSize())
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 19.dp)) {
+                Text("RPM ${sample.rpm.roundToInt()}", color = Color.White.copy(alpha = .72f), fontSize = 7.sp, fontWeight = FontWeight.Black)
+                Text(sample.speedKph.roundToInt().toString(), color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black)
+                Text("km/h", color = accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                Text("BOOST ${"%.1f".format(sample.boostBar)}", color = TougeMint, fontSize = 6.sp, fontWeight = FontWeight.Black)
+                val boost = definition.progress(TelemetryMetric.BOOST, sample.boostBar)
+                Box(Modifier.width(54.dp).height(4.dp).background(Color.White.copy(alpha = .13f), RoundedCornerShape(3.dp))) {
+                    Box(Modifier.fillMaxWidth(boost.coerceAtLeast(.01f)).height(4.dp).background(TougeMint, RoundedCornerShape(3.dp)))
+                }
+            }
+        }
+        OverlayElementKind.OIL_CLUSTER -> Box(shell.size(120.dp), contentAlignment = Alignment.Center) {
+            RacingDial(definition.progress(TelemetryMetric.OIL_TEMPERATURE, sample.oilTemperatureCelsius), definition.range(TelemetryMetric.OIL_TEMPERATURE), TelemetryMetric.OIL_TEMPERATURE, accent, Modifier.fillMaxSize())
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 14.dp)) {
+                Text("OIL TEMP", color = accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                Text("${sample.oilTemperatureCelsius.roundToInt()}°", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                Text("OIL P  ${"%.1f".format(sample.oilPressureBar)} bar", color = Color.White.copy(alpha = .78f), fontSize = 7.sp, fontWeight = FontWeight.Black)
+            }
+        }
     }
+}
+
+@Composable
+private fun RacingDial(
+    progress: Float,
+    range: ClosedFloatingPointRange<Double>,
+    metric: TelemetryMetric,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier) {
+        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawArc(Color.White.copy(alpha = .1f), 150f, 240f, false, style = stroke)
+        drawArc(accent.copy(alpha = .48f), 150f, 240f * progress, false, style = stroke)
+        val radius = size.minDimension * .43f
+        repeat(25) { index ->
+            val radians = Math.toRadians((150.0 + index * 10.0))
+            val outer = Offset(center.x + cos(radians).toFloat() * radius, center.y + sin(radians).toFloat() * radius)
+            val tick = if (index % 4 == 0) 9.dp.toPx() else 5.dp.toPx()
+            val inner = Offset(center.x + cos(radians).toFloat() * (radius - tick), center.y + sin(radians).toFloat() * (radius - tick))
+            drawLine(Color.White.copy(alpha = if (index % 4 == 0) .9f else .32f), inner, outer, strokeWidth = if (index % 4 == 0) 2.dp.toPx() else 1.dp.toPx())
+        }
+        val labelPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.argb(190, 255, 255, 255)
+            textAlign = AndroidPaint.Align.CENTER
+            textSize = 5.dp.toPx()
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        repeat(7) { index ->
+            val angle = Math.toRadians(150.0 + index * 40.0)
+            val labelRadius = radius * .70f
+            val label = scaleLabel(range.start + (range.endInclusive - range.start) * index / 6.0, metric)
+            drawContext.canvas.nativeCanvas.drawText(
+                label,
+                center.x + cos(angle).toFloat() * labelRadius,
+                center.y + sin(angle).toFloat() * labelRadius + labelPaint.textSize * .35f,
+                labelPaint
+            )
+        }
+        val needleAngle = Math.toRadians((150.0 + 240.0 * progress))
+        val needleEnd = Offset(center.x + cos(needleAngle).toFloat() * radius * .7f, center.y + sin(needleAngle).toFloat() * radius * .7f)
+        drawLine(accent, center, needleEnd, strokeWidth = 2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        drawCircle(Color.White, radius = 3.dp.toPx(), center = center)
+    }
+}
+
+private fun scaleLabel(value: Double, metric: TelemetryMetric): String = when (metric) {
+    TelemetryMetric.RPM -> "${(value / 1_000).roundToInt()}k"
+    TelemetryMetric.BOOST -> "%.1f".format(value)
+    else -> value.roundToInt().toString()
+}
+
+private fun VideoOverlayTemplateDefinition.progress(metric: TelemetryMetric, value: Double): Float {
+    val range = range(metric)
+    return ((value - range.start) / (range.endInclusive - range.start).coerceAtLeast(.0001)).coerceIn(0.0, 1.0).toFloat()
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -361,6 +457,19 @@ private fun HudTemplateEditor(
                 Text(appText("STYLE", "STYL"), color = TougeCyan, fontSize = 9.sp, fontWeight = FontWeight.Black)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     OverlayStyle.entries.forEach { style -> FilterChip(value.definition.style == style, { value = value.copy(definition = value.definition.copy(style = style)) }, label = { Text(style.name.lowercase().replaceFirstChar(Char::uppercase)) }) }
+                }
+                Text(appText("GAUGE SCALES", "SKALE ZEGARÓW"), color = TougeCyan, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                GaugeScaleSlider(appText("Maximum speed", "Prędkość maks."), value.definition.maximumSpeedKph, 100f..450f, "km/h") {
+                    value = value.copy(definition = value.definition.copy(maximumSpeedKph = it))
+                }
+                GaugeScaleSlider(appText("Maximum oil temperature", "Temperatura oleju maks."), value.definition.maximumOilTemperatureCelsius, 80f..180f, "°C") {
+                    value = value.copy(definition = value.definition.copy(maximumOilTemperatureCelsius = it))
+                }
+                GaugeScaleSlider("RPM max", value.definition.maximumRpm, 4_000f..12_000f, "rpm", 500f) {
+                    value = value.copy(definition = value.definition.copy(maximumRpm = it))
+                }
+                GaugeScaleSlider("Boost max", value.definition.maximumBoostBar, .5f..4f, "bar", .1f) {
+                    value = value.copy(definition = value.definition.copy(maximumBoostBar = it))
                 }
                 value.definition.elements.forEachIndexed { index, element ->
                     Card(colors = CardDefaults.cardColors(containerColor = TougePanel)) {
