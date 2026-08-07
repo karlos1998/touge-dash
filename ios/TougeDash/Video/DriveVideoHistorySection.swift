@@ -707,7 +707,7 @@ private struct DriveVideoExportSheet: View {
     @ObservedObject var overlayStore: VideoOverlayTemplateStore
     private let timelineSpeedValues: [Double]
 
-    @StateObject private var exporter = DriveVideoExporter()
+    @ObservedObject private var exporter = DriveVideoExporter.shared
     @State private var addsOverlay = true
     @State private var showingOverlayManager = false
     @State private var alignment: DriveVideoTimelineAlignment
@@ -718,6 +718,7 @@ private struct DriveVideoExportSheet: View {
     @State private var previewTelemetryTime: Date?
     @State private var previewRelativeSeconds = 0.0
     @State private var isPreviewPlaying = false
+    @State private var playsSelectedExportRange = false
     @State private var showsAdvancedAlignment = false
     @State private var thumbnails: [CGImage] = []
     @State private var exportRangeThumbnails: [CGImage] = []
@@ -917,8 +918,7 @@ private struct DriveVideoExportSheet: View {
 
             HStack(spacing: 0) {
                 Button {
-                    previewPositionBinding.wrappedValue = exportRangeStart
-                    togglePreviewPlayback()
+                    toggleExportRangePlayback()
                 } label: {
                     Image(systemName: isPreviewPlaying ? "pause.fill" : "play.fill")
                         .font(.title2.weight(.black))
@@ -958,9 +958,8 @@ private struct DriveVideoExportSheet: View {
     }
 
     private var exportAlignment: DriveVideoTimelineAlignment {
-        DriveVideoTimelineAlignment(
-            videoStartSeconds: alignment.videoStartSeconds + exportRangeStart,
-            telemetryStartSeconds: alignment.telemetryStartSeconds + exportRangeStart,
+        alignment.trimming(
+            relativeStart: exportRangeStart,
             duration: selectedExportDuration,
             videoDuration: recording.duration,
             telemetryDuration: telemetryDuration
@@ -1150,15 +1149,19 @@ private struct DriveVideoExportSheet: View {
                     previewRelativeSeconds = relative
                     previewTelemetryTime = session.startedAt.addingTimeInterval(alignment.telemetryStartSeconds + relative)
                 }
-                if seconds > alignment.videoEndSeconds + 0.05 {
+                let playbackEnd = playsSelectedExportRange ? exportRangeEnd : alignment.duration
+                if relative > playbackEnd + 0.05 {
                     newPlayer.pause()
+                    let restart = playsSelectedExportRange ? exportRangeStart : 0
                     await newPlayer.seek(
-                        to: CMTime(seconds: alignment.videoStartSeconds, preferredTimescale: 600),
+                        to: CMTime(seconds: alignment.videoStartSeconds + restart, preferredTimescale: 600),
                         toleranceBefore: .zero,
                         toleranceAfter: .zero
                     )
-                    previewRelativeSeconds = 0
-                    previewTelemetryTime = alignment.telemetryStartDate(session: session)
+                    previewRelativeSeconds = restart
+                    previewTelemetryTime = session.startedAt.addingTimeInterval(
+                        alignment.telemetryStartSeconds + restart
+                    )
                     isPreviewPlaying = false
                 }
             }
@@ -1194,6 +1197,7 @@ private struct DriveVideoExportSheet: View {
     }
 
     private func scrubExportPreview(to relativeSeconds: Double) {
+        playsSelectedExportRange = false
         previewPositionBinding.wrappedValue = relativeSeconds
     }
 
@@ -1267,6 +1271,20 @@ private struct DriveVideoExportSheet: View {
         if previewRelativeSeconds >= alignment.duration - 0.05 {
             resetPreview()
         }
+        playsSelectedExportRange = false
+        player.play()
+        isPreviewPlaying = true
+    }
+
+    private func toggleExportRangePlayback() {
+        guard let player else { return }
+        if player.timeControlStatus == .playing, playsSelectedExportRange {
+            player.pause()
+            isPreviewPlaying = false
+            return
+        }
+        previewPositionBinding.wrappedValue = exportRangeStart
+        playsSelectedExportRange = true
         player.play()
         isPreviewPlaying = true
     }
@@ -1278,6 +1296,7 @@ private struct DriveVideoExportSheet: View {
     private func resetPreview(seeksVideo: Bool) {
         player?.pause()
         isPreviewPlaying = false
+        playsSelectedExportRange = false
         previewRelativeSeconds = 0
         previewTelemetryTime = alignment.telemetryStartDate(session: session)
         if seeksVideo { seekPreview(to: alignment.videoStartSeconds) }

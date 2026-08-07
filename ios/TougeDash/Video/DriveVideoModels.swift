@@ -83,6 +83,22 @@ struct DriveVideoTimelineAlignment: Equatable, Sendable {
         session.startedAt.addingTimeInterval(telemetryStartSeconds)
     }
 
+    func trimming(
+        relativeStart: Double,
+        duration requestedDuration: Double,
+        videoDuration: Double,
+        telemetryDuration: Double
+    ) -> Self {
+        let safeRelativeStart = min(max(0, relativeStart), duration)
+        return Self(
+            videoStartSeconds: videoStartSeconds + safeRelativeStart,
+            telemetryStartSeconds: telemetryStartSeconds + safeRelativeStart,
+            duration: min(max(0, requestedDuration), duration - safeRelativeStart),
+            videoDuration: videoDuration,
+            telemetryDuration: telemetryDuration
+        )
+    }
+
     func persist(to recording: DriveVideoRecording) {
         recording.videoTrimStartSeconds = videoStartSeconds
         recording.telemetryTrimStartSeconds = telemetryStartSeconds

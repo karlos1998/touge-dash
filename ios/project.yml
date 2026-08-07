@@ -42,6 +42,8 @@ targets:
         CFBundleName: TougeDash
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        BGTaskSchedulerPermittedIdentifiers:
+          - it.letscode.touge-dash.video-export.*
         ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: it.letscode.touge-dash.auth

@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+@preconcurrency import BackgroundTasks
 import CoreImage
 import Foundation
 import Photos
@@ -82,13 +83,24 @@ final class DriveVideoExporter: ObservableObject {
         }
     }
 
+    static let shared = DriveVideoExporter()
+
     @Published private(set) var state: State = .idle
     private var activeExport: AVAssetExportSession?
     private var wasCancelled = false
     private let photoLibrarySaver: PhotoLibrarySaver
+    private let usesContinuedProcessingTask: Bool
 
-    init(photoLibrarySaver: @escaping PhotoLibrarySaver = DriveVideoPhotoLibrarySaver.save) {
+    init() {
+        photoLibrarySaver = { url, creationDate in
+            try await DriveVideoPhotoLibrarySaver.save(url, creationDate: creationDate)
+        }
+        usesContinuedProcessingTask = true
+    }
+
+    init(photoLibrarySaver: @escaping PhotoLibrarySaver) {
         self.photoLibrarySaver = photoLibrarySaver
+        usesContinuedProcessingTask = false
     }
 
     func export(
@@ -100,7 +112,59 @@ final class DriveVideoExporter: ObservableObject {
     ) async {
         guard !state.isWorking else { return }
         wasCancelled = false
+        state = .rendering(0)
+        let operation: @MainActor (BGContinuedProcessingTask?) async throws -> Void = { [self] task in
+            try await performExport(
+                recording: recording,
+                samples: samples,
+                template: template,
+                alignment: alignment,
+                telemetryStartDate: telemetryStartDate,
+                continuedTask: task
+            )
+        }
+
+        do {
+            if usesContinuedProcessingTask {
+                do {
+                    try await VideoExportBackgroundCoordinator.shared.run(
+                        title: localized("Eksport filmu"),
+                        subtitle: localized("Przygotowywanie eksportu…"),
+                        onExpiration: { [weak self] in self?.cancelRendering() },
+                        operation: operation
+                    )
+                } catch is VideoExportBackgroundSubmissionError {
+                    // Background launches may be disabled by the user or unavailable
+                    // on Simulator. Keep foreground export functional in that case.
+                    try await operation(nil)
+                }
+            } else {
+                try await operation(nil)
+            }
+            state = .completed
+        } catch {
+            if wasCancelled || error is CancellationError {
+                state = .idle
+            } else {
+                state = .failed(error.localizedDescription)
+            }
+        }
+        activeExport = nil
+    }
+
+    private func performExport(
+        recording: DriveVideoRecording,
+        samples: [TelemetryHistorySample],
+        template: VideoOverlayTemplate?,
+        alignment: DriveVideoTimelineAlignment?,
+        telemetryStartDate: Date?,
+        continuedTask: BGContinuedProcessingTask?
+    ) async throws {
         var temporaryURL: URL?
+        defer {
+            if let temporaryURL { try? FileManager.default.removeItem(at: temporaryURL) }
+        }
+
         do {
             let sourceURL = try DriveVideoFileStore.url(for: recording)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
@@ -119,33 +183,42 @@ final class DriveVideoExporter: ObservableObject {
                     template: template,
                     videoStartSeconds: alignment?.videoStartSeconds ?? 0,
                     duration: alignment?.duration,
-                    outputURL: renderedURL
+                    outputURL: renderedURL,
+                    progressHandler: { [weak continuedTask] progress in
+                        Self.updateSystemProgress(continuedTask, fraction: progress * 0.94)
+                    }
                 )
             } else {
                 state = .rendering(1)
+                Self.updateSystemProgress(continuedTask, fraction: 0.94)
                 outputURL = sourceURL
             }
 
             state = .savingToPhotos
+            continuedTask?.updateTitle(
+                localized("Eksport filmu"),
+                subtitle: localized("Zapisywanie w aplikacji Zdjęcia…")
+            )
+            Self.updateSystemProgress(continuedTask, fraction: 0.96)
             try await photoLibrarySaver(outputURL, Date())
-            if let temporaryURL { try? FileManager.default.removeItem(at: temporaryURL) }
-            state = .completed
+            Self.updateSystemProgress(continuedTask, fraction: 1)
         } catch {
-            if let temporaryURL { try? FileManager.default.removeItem(at: temporaryURL) }
-            if wasCancelled || (error as? CancellationError) != nil {
-                state = .idle
-            } else {
-                state = .failed(error.localizedDescription)
-            }
+            throw error
         }
-        activeExport = nil
     }
 
     func cancel() {
         wasCancelled = true
+        cancelRendering()
+        if usesContinuedProcessingTask {
+            VideoExportBackgroundCoordinator.shared.cancel()
+        }
+        state = .idle
+    }
+
+    private func cancelRendering() {
         activeExport?.cancelExport()
         activeExport = nil
-        state = .idle
     }
 
     func reset() {
@@ -179,7 +252,8 @@ final class DriveVideoExporter: ObservableObject {
         template: VideoOverlayTemplate?,
         videoStartSeconds: Double,
         duration requestedDuration: Double?,
-        outputURL: URL
+        outputURL: URL,
+        progressHandler: (@MainActor (Double) -> Void)? = nil
     ) async throws -> URL {
         let asset = AVURLAsset(url: sourceURL)
         let assetDuration = try await asset.load(.duration).seconds
@@ -211,6 +285,7 @@ final class DriveVideoExporter: ObservableObject {
         let progressTask = Task { @MainActor [weak self, weak exporter] in
             while let self, let exporter, self.activeExport === exporter {
                 self.state = .rendering(Double(exporter.progress))
+                progressHandler?(Double(exporter.progress))
                 try? await Task.sleep(for: .milliseconds(180))
             }
         }
@@ -218,7 +293,17 @@ final class DriveVideoExporter: ObservableObject {
 
         try await exporter.export(to: outputURL, as: .mp4)
         state = .rendering(1)
+        progressHandler?(1)
         return outputURL
+    }
+
+    private static func updateSystemProgress(
+        _ task: BGContinuedProcessingTask?,
+        fraction: Double
+    ) {
+        guard let task else { return }
+        task.progress.totalUnitCount = 1_000
+        task.progress.completedUnitCount = Int64(min(max(0, fraction), 1) * 1_000)
     }
 
     private func makeVideoComposition(
@@ -246,6 +331,156 @@ final class DriveVideoExporter: ObservableObject {
         )
     }
 
+}
+
+private struct VideoExportBackgroundSubmissionError: LocalizedError {
+    let underlyingDescription: String
+
+    var errorDescription: String? { underlyingDescription }
+}
+
+private struct VideoExportBackgroundBusyError: LocalizedError {
+    var errorDescription: String? { localized("Inny eksport filmu jest już w toku.") }
+}
+
+@MainActor
+final class VideoExportBackgroundCoordinator {
+    typealias Operation = @MainActor (BGContinuedProcessingTask) async throws -> Void
+
+    static let shared = VideoExportBackgroundCoordinator()
+    static let permittedIdentifier = "it.letscode.touge-dash.video-export.*"
+
+    private var isRegistered = false
+    private var pendingOperation: Operation?
+    private var expirationHandler: (@MainActor () -> Void)?
+    private var completion: CheckedContinuation<Void, Error>?
+    private var submittedIdentifier: String?
+    private var activeTask: BGContinuedProcessingTask?
+    private var executionTask: Task<Void, Never>?
+
+    private init() {}
+
+    func register() {
+        guard !isRegistered else { return }
+        isRegistered = BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: Self.permittedIdentifier,
+            using: nil
+        ) { [weak self] task in
+            guard let continuedTask = task as? BGContinuedProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            Task { @MainActor in
+                self?.begin(continuedTask)
+            }
+        }
+    }
+
+    func run(
+        title: String,
+        subtitle: String,
+        onExpiration: @escaping @MainActor () -> Void,
+        operation: @escaping Operation
+    ) async throws {
+        guard pendingOperation == nil, activeTask == nil else {
+            throw VideoExportBackgroundBusyError()
+        }
+
+        try await withCheckedThrowingContinuation { continuation in
+            let identifier = Self.permittedIdentifier.dropLast() + UUID().uuidString
+            pendingOperation = operation
+            expirationHandler = onExpiration
+            completion = continuation
+            submittedIdentifier = String(identifier)
+
+            let request = BGContinuedProcessingTaskRequest(
+                identifier: String(identifier),
+                title: title,
+                subtitle: subtitle
+            )
+            request.strategy = .queue
+            request.requiredResources = []
+
+            do {
+                try BGTaskScheduler.shared.submit(request)
+            } catch {
+                clearPendingRequest()
+                continuation.resume(throwing: VideoExportBackgroundSubmissionError(
+                    underlyingDescription: error.localizedDescription
+                ))
+            }
+        }
+    }
+
+    func cancel() {
+        expirationHandler?()
+        if let submittedIdentifier, activeTask == nil {
+            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: submittedIdentifier)
+            let continuation = completion
+            clearPendingRequest()
+            continuation?.resume(throwing: CancellationError())
+            return
+        }
+        executionTask?.cancel()
+    }
+
+    private func begin(_ task: BGContinuedProcessingTask) {
+        guard let pendingOperation else {
+            task.setTaskCompleted(success: false)
+            return
+        }
+        activeTask = task
+        task.progress.totalUnitCount = 1_000
+        task.progress.completedUnitCount = 0
+        task.expirationHandler = { [weak self, weak task] in
+            guard let task else { return }
+            Task { @MainActor in
+                self?.expire(task)
+            }
+        }
+
+        executionTask = Task { @MainActor [weak self, weak task] in
+            guard let self, let task else { return }
+            do {
+                try await pendingOperation(task)
+                finish(task, success: true, error: nil)
+            } catch {
+                finish(task, success: false, error: error)
+            }
+        }
+    }
+
+    private func expire(_ task: BGContinuedProcessingTask) {
+        guard activeTask === task else { return }
+        expirationHandler?()
+        executionTask?.cancel()
+    }
+
+    private func finish(
+        _ task: BGContinuedProcessingTask,
+        success: Bool,
+        error: Error?
+    ) {
+        guard activeTask === task else { return }
+        task.expirationHandler = nil
+        task.setTaskCompleted(success: success)
+        let continuation = completion
+        clearPendingRequest()
+        if let error {
+            continuation?.resume(throwing: error)
+        } else {
+            continuation?.resume()
+        }
+    }
+
+    private func clearPendingRequest() {
+        pendingOperation = nil
+        expirationHandler = nil
+        completion = nil
+        submittedIdentifier = nil
+        activeTask = nil
+        executionTask = nil
+    }
 }
 
 /// Photos executes its change block on a private queue. Keep the block outside

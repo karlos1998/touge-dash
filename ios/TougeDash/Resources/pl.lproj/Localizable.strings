@@ -329,6 +329,8 @@
 "Koniec eksportu" = "Koniec eksportu";
 "Oryginalny film pozostaje wyłącznie na tym urządzeniu. Eksport tworzy kopię w aplikacji Zdjęcia; Touge Dash nie wysyła nagrania na serwer." = "Oryginalny film pozostaje wyłącznie na tym urządzeniu. Eksport tworzy kopię w aplikacji Zdjęcia; Touge Dash nie wysyła nagrania na serwer.";
 "Renderowanie filmu…" = "Renderowanie filmu…";
+"Przygotowywanie eksportu…" = "Przygotowywanie eksportu…";
+"Inny eksport filmu jest już w toku." = "Inny eksport filmu jest już w toku.";
 "Anuluj eksport" = "Anuluj eksport";
 "Zapisywanie w aplikacji Zdjęcia…" = "Zapisywanie w aplikacji Zdjęcia…";
 "Film został zapisany w aplikacji Zdjęcia." = "Film został zapisany w aplikacji Zdjęcia.";

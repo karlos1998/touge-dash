@@ -98,6 +98,29 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(restored.telemetryStartDate(session: session), startedAt.addingTimeInterval(20))
     }
 
+    func testExportRangeTrimsVideoAndTelemetryByTheSameOffset() {
+        let alignment = DriveVideoTimelineAlignment(
+            videoStartSeconds: 4,
+            telemetryStartSeconds: 19,
+            duration: 100,
+            videoDuration: 140,
+            telemetryDuration: 180
+        )
+
+        let trimmed = alignment.trimming(
+            relativeStart: 12,
+            duration: 35,
+            videoDuration: 140,
+            telemetryDuration: 180
+        )
+
+        XCTAssertEqual(trimmed.videoStartSeconds, 16, accuracy: 0.001)
+        XCTAssertEqual(trimmed.telemetryStartSeconds, 31, accuracy: 0.001)
+        XCTAssertEqual(trimmed.duration, 35, accuracy: 0.001)
+        XCTAssertEqual(trimmed.videoEndSeconds, 51, accuracy: 0.001)
+        XCTAssertEqual(trimmed.telemetryEndSeconds, 66, accuracy: 0.001)
+    }
+
     func testAutomaticSplitClipsVideoAndTelemetryAtTheSameWallClockBoundary() {
         let videoStartedAt = Date(timeIntervalSince1970: 1_800_000_010)
         let telemetryBoundary = Date(timeIntervalSince1970: 1_800_000_900)
