@@ -493,10 +493,10 @@ private enum VideoOverlayCGRenderer {
         let titleFont = UIFont.systemFont(ofSize: 6.5 * localScale, weight: .black)
         let valueFont = UIFont.monospacedDigitSystemFont(ofSize: 20 * localScale, weight: .black)
         let unitFont = UIFont.systemFont(ofSize: 6 * localScale, weight: .black)
-        drawCentered(element.metric.shortTitle, font: titleFont, color: accent, centerX: rect.midX, y: rect.midY - 2 * localScale)
+        drawCentered(element.metric.shortTitle, font: titleFont, color: accent, centerX: rect.midX, y: rect.midY + 7 * localScale)
         let valueText = value.formatted(.number.precision(.fractionLength(element.metric.precision)))
-        drawCentered(valueText, font: valueFont, color: .white, centerX: rect.midX, y: rect.midY + 8 * localScale)
-        drawCentered(element.metric.unit, font: unitFont, color: UIColor.white.withAlphaComponent(0.65), centerX: rect.midX, y: rect.midY + 31 * localScale)
+        drawCentered(valueText, font: valueFont, color: .white, centerX: rect.midX, y: rect.midY + 17 * localScale)
+        drawCentered(element.metric.unit, font: unitFont, color: UIColor.white.withAlphaComponent(0.65), centerX: rect.midX, y: rect.midY + 40 * localScale)
     }
 
     private static func drawBar(

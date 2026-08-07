@@ -31,12 +31,15 @@ struct EditableVideoTelemetryOverlayView: View {
     @Binding var template: VideoOverlayTemplate
     @Binding var selectedElementID: UUID?
     let sample: TelemetryHistorySample?
-    @State private var magnificationBases: [UUID: Double] = [:]
+    @State private var draggingElementID: UUID?
+    @State private var magnifyingElementID: UUID?
+    @State private var magnificationBase = 1.0
 
     var body: some View {
         GeometryReader { proxy in
             let orientation = VideoOverlayCanvasOrientation(size: proxy.size)
-            ForEach($template.elements) { $element in
+            ZStack {
+                ForEach(template.elements) { element in
                 let position = element.position(for: orientation)
                 VideoOverlayElementView(
                     element: element,
@@ -57,37 +60,83 @@ struct EditableVideoTelemetryOverlayView: View {
                     x: proxy.size.width * position.x,
                     y: proxy.size.height * position.y
                 )
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 0, coordinateSpace: .named("video-overlay-canvas"))
-                        .onChanged { value in
-                            selectedElementID = element.id
-                            element.setPosition(
-                                VideoOverlayPosition(
-                                    x: value.location.x / max(1, proxy.size.width),
-                                    y: value.location.y / max(1, proxy.size.height)
-                                ),
-                                for: orientation
-                            )
-                        }
-                )
-                .simultaneousGesture(
-                    MagnifyGesture(minimumScaleDelta: 0.005)
-                        .onChanged { value in
-                            selectedElementID = element.id
-                            let base = magnificationBases[element.id] ?? element.sizeMultiplier
-                            if magnificationBases[element.id] == nil {
-                                magnificationBases[element.id] = base
-                            }
-                            element.setSizeMultiplier(base * value.magnification)
-                        }
-                        .onEnded { _ in
-                            magnificationBases[element.id] = nil
-                        },
-                    including: .all
-                )
+                }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .contentShape(Rectangle())
+            .highPriorityGesture(dragGesture(canvasSize: proxy.size, orientation: orientation))
+            .simultaneousGesture(magnifyGesture(orientation: orientation), including: .all)
         }
         .coordinateSpace(name: "video-overlay-canvas")
+    }
+
+    private func dragGesture(
+        canvasSize: CGSize,
+        orientation: VideoOverlayCanvasOrientation
+    ) -> some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named("video-overlay-canvas"))
+            .onChanged { value in
+                guard magnifyingElementID == nil else { return }
+                let start = normalized(value.startLocation, canvasSize: canvasSize)
+                guard let targetID = draggingElementID ?? nearestElementID(to: start, orientation: orientation),
+                      let index = template.elements.firstIndex(where: { $0.id == targetID }) else { return }
+                if draggingElementID == nil {
+                    draggingElementID = targetID
+                    selectedElementID = targetID
+                }
+                template.elements[index].setPosition(
+                    normalized(value.location, canvasSize: canvasSize),
+                    for: orientation
+                )
+            }
+            .onEnded { _ in
+                draggingElementID = nil
+            }
+    }
+
+    private func magnifyGesture(orientation: VideoOverlayCanvasOrientation) -> some Gesture {
+        MagnifyGesture(minimumScaleDelta: 0.005)
+            .onChanged { value in
+                let anchor = VideoOverlayPosition(
+                    x: Double(value.startAnchor.x),
+                    y: Double(value.startAnchor.y)
+                )
+                guard let targetID = magnifyingElementID ?? nearestElementID(to: anchor, orientation: orientation),
+                      let index = template.elements.firstIndex(where: { $0.id == targetID }) else { return }
+                if magnifyingElementID == nil {
+                    magnifyingElementID = targetID
+                    magnificationBase = template.elements[index].sizeMultiplier
+                    selectedElementID = targetID
+                }
+                template.elements[index].setSizeMultiplier(magnificationBase * value.magnification)
+            }
+            .onEnded { _ in
+                magnifyingElementID = nil
+                magnificationBase = 1
+            }
+    }
+
+    private func nearestElementID(
+        to point: VideoOverlayPosition,
+        orientation: VideoOverlayCanvasOrientation
+    ) -> UUID? {
+        template.elements.min { lhs, rhs in
+            distanceSquared(lhs.position(for: orientation), point) <
+                distanceSquared(rhs.position(for: orientation), point)
+        }?.id
+    }
+
+    private func distanceSquared(_ lhs: VideoOverlayPosition, _ rhs: VideoOverlayPosition) -> Double {
+        let dx = lhs.x - rhs.x
+        let dy = lhs.y - rhs.y
+        return dx * dx + dy * dy
+    }
+
+    private func normalized(_ point: CGPoint, canvasSize: CGSize) -> VideoOverlayPosition {
+        VideoOverlayPosition(
+            x: point.x / max(1, canvasSize.width),
+            y: point.y / max(1, canvasSize.height)
+        )
     }
 }
 
@@ -176,7 +225,7 @@ private struct VideoOverlayElementView: View {
                     .font(.system(size: 6 * scale, weight: .black))
                     .foregroundStyle(.secondary)
             }
-            .offset(y: 13 * scale)
+            .offset(y: 22 * scale)
         }
         .foregroundStyle(.white)
         .frame(width: 102 * scale, height: 102 * scale)
