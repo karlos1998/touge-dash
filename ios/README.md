@@ -153,12 +153,12 @@ dla rozszerzenia widgetów.
 Touge Dash nie udaje pełnej aplikacji CarPlay i nie wymaga entitlementu z kategorii nawigacja/audio. Korzysta z oficjalnych powierzchni systemowych:
 
 - `Touge Dash` jako widget `systemSmall`, który można dodać na ekranie widgetów CarPlay,
-- Live Activity uruchamiana automatycznie razem z aplikacją; system pokazuje ją w CarPlay Dashboard lub jako powiadomienie. Przycisk `Stop card` pozwala ją ręcznie wyłączyć.
+- Live Activity uruchamiana automatycznie razem z aplikacją; system pokazuje ją w CarPlay Dashboard lub jako powiadomienie. Po 15 minutach bez komunikacji z EMULOGGEREM karta, ekran blokady i Dynamic Island są automatycznie wyłączane. Wracają po ponownym połączeniu lub odebraniu telemetrii. Przycisk `Stop card` pozwala ją ręcznie wyłączyć do następnego połączenia.
 
 Live Activity ma układ `ActivityFamily.small` z ciśnieniem i temperaturą oleju,
 boostem, AFR oraz temperaturą płynu chłodniczego. Na iOS 26 aktywność jest
-uruchamiana przed skanowaniem BLE, dzięki czemu CoreBluetooth zachowuje swoje
-uprawnienia również po zablokowaniu telefonu. Elementy na CarPlay są tylko
+żądana przed skanowaniem BLE, dzięki czemu początkowe 15 minut wyszukiwania działa
+również po zablokowaniu telefonu. Elementy na CarPlay są tylko
 informacyjne — system nie uruchomi aplikacji po stuknięciu karty, ponieważ
 projekt nie deklaruje pełnej aplikacji CarPlay.
 

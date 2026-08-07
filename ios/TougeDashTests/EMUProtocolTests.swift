@@ -495,6 +495,23 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertFalse(BluetoothTelemetryAccessPolicy.allowsCharacteristicWrites)
     }
 
+    func testTelemetryActivityExpiresAfterFifteenMinutesWithoutCommunication() {
+        let lastCommunication = Date(timeIntervalSince1970: 1_800_000_000)
+
+        XCTAssertEqual(
+            TelemetryActivityInactivityPolicy.deadline(after: lastCommunication),
+            lastCommunication.addingTimeInterval(15 * 60)
+        )
+        XCTAssertFalse(TelemetryActivityInactivityPolicy.isExpired(
+            lastCommunicationAt: lastCommunication,
+            now: lastCommunication.addingTimeInterval((15 * 60) - 0.001)
+        ))
+        XCTAssertTrue(TelemetryActivityInactivityPolicy.isExpired(
+            lastCommunicationAt: lastCommunication,
+            now: lastCommunication.addingTimeInterval(15 * 60)
+        ))
+    }
+
     func testECUControlFrameEncodesWholeStateAndChecksum() throws {
         var state = ECUControlSnapshot()
         state = try XCTUnwrap(state.settingSwitch(channel: 1, to: true))

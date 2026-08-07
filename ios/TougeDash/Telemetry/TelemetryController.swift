@@ -10,6 +10,18 @@ enum TelemetryUpdateCadence {
     static let diagnosticsInterval: TimeInterval = 0.2
 }
 
+enum TelemetryActivityInactivityPolicy {
+    static let timeout: TimeInterval = 15 * 60
+
+    static func deadline(after lastCommunicationAt: Date) -> Date {
+        lastCommunicationAt.addingTimeInterval(timeout)
+    }
+
+    static func isExpired(lastCommunicationAt: Date, now: Date) -> Bool {
+        now >= deadline(after: lastCommunicationAt)
+    }
+}
+
 @MainActor
 final class TelemetryController: ObservableObject {
     @Published private(set) var snapshot = SharedTelemetryStore.load()
@@ -42,6 +54,11 @@ final class TelemetryController: ObservableObject {
     private var totalReceivedBytes = 0
     private var pendingRawSnapshot: TelemetrySnapshot?
     private var telemetryDrainTask: Task<Void, Never>?
+    private var lastTelemetryCommunication = Date.now
+    private var activityInactivityTask: Task<Void, Never>?
+    private var activityReconciliationTask: Task<Void, Never>?
+    private var activityStateVersion = 0
+    private var activityManuallySuppressed = false
 
     init(
         historyRecorder: TelemetryHistoryRecorder,
@@ -90,6 +107,12 @@ final class TelemetryController: ObservableObject {
             guard let self else { return }
             self.ecuControls.connectionChanged(isConnected: state.isConnected)
             if state.isConnected {
+                let wasManuallySuppressed = self.activityManuallySuppressed
+                self.activityManuallySuppressed = false
+                self.noteTelemetryCommunication(at: .now)
+                if wasManuallySuppressed {
+                    self.activityStateDidChange()
+                }
                 self.ecuControls.transportAvailabilityChanged(self.bluetooth.controlTransportAvailable)
             }
             self.locationTracker.setDriveActive(state.isConnected)
@@ -134,13 +157,12 @@ final class TelemetryController: ObservableObject {
                 await self.activityManager.stop()
             }
             #endif
-            await self.activityManager.start(
-                with: self.snapshot,
-                connectionLabel: self.connectionLabel
-            )
+            self.ensureActivityInactivityMonitor()
+            self.requestActivityReconciliation()
             // On iOS 26 an active Live Activity gives CoreBluetooth the same
             // privileges in the background that it has in the foreground.
-            // Start scanning only after ActivityKit has established it.
+            // Begin scanning after requesting ActivityKit so the initial
+            // 15-minute connection window also works with the phone locked.
             self.bluetooth.startScanning()
         }
         watchBridge.enqueue(snapshot)
@@ -202,12 +224,14 @@ final class TelemetryController: ObservableObject {
     }
 
     func toggleLiveActivity() {
-        Task {
-            if activityManager.isRunning {
-                await activityManager.stop()
-            } else {
-                await activityManager.start(with: snapshot, connectionLabel: connectionLabel)
-            }
+        if activityManager.isRunning {
+            activityManuallySuppressed = true
+            activityInactivityTask?.cancel()
+            activityInactivityTask = nil
+            activityStateDidChange()
+        } else {
+            activityManuallySuppressed = false
+            noteTelemetryCommunication(at: .now)
         }
     }
 
@@ -236,6 +260,7 @@ final class TelemetryController: ObservableObject {
             lastDiagnosticsPublish = now
         }
         guard !frames.isEmpty else { return }
+        noteTelemetryCommunication(at: now)
         for frame in frames {
             ecuControls.ingest(frame, receivedAt: now)
             accumulator.apply(frame)
@@ -324,6 +349,79 @@ final class TelemetryController: ObservableObject {
         }
         if activityManager.isRunning {
             activityManager.enqueueUpdate(value, connectionLabel: connectionLabel)
+        }
+    }
+
+    private var shouldRunTelemetryActivity: Bool {
+        !activityManuallySuppressed && !TelemetryActivityInactivityPolicy.isExpired(
+            lastCommunicationAt: lastTelemetryCommunication,
+            now: .now
+        )
+    }
+
+    private func noteTelemetryCommunication(at date: Date) {
+        let activityNeedsRestart = !activityManuallySuppressed && (
+            !activityManager.isRunning || TelemetryActivityInactivityPolicy.isExpired(
+                lastCommunicationAt: lastTelemetryCommunication,
+                now: date
+            )
+        )
+        lastTelemetryCommunication = date
+        ensureActivityInactivityMonitor()
+        if activityNeedsRestart {
+            activityStateDidChange()
+        }
+    }
+
+    private func ensureActivityInactivityMonitor() {
+        guard !activityManuallySuppressed, activityInactivityTask == nil else { return }
+        activityInactivityTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                let deadline = TelemetryActivityInactivityPolicy.deadline(
+                    after: self.lastTelemetryCommunication
+                )
+                let delay = max(0, deadline.timeIntervalSinceNow)
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled else { return }
+
+                if TelemetryActivityInactivityPolicy.isExpired(
+                    lastCommunicationAt: self.lastTelemetryCommunication,
+                    now: .now
+                ) {
+                    self.activityInactivityTask = nil
+                    self.activityStateDidChange()
+                    return
+                }
+            }
+        }
+    }
+
+    private func activityStateDidChange() {
+        activityStateVersion += 1
+        requestActivityReconciliation()
+    }
+
+    private func requestActivityReconciliation() {
+        guard activityReconciliationTask == nil else { return }
+        activityReconciliationTask = Task { [weak self] in
+            guard let self else { return }
+
+            while true {
+                let reconciledVersion = self.activityStateVersion
+                let shouldRun = self.shouldRunTelemetryActivity
+                if shouldRun, !self.activityManager.isRunning {
+                    await self.activityManager.start(
+                        with: self.snapshot,
+                        connectionLabel: self.connectionLabel
+                    )
+                } else if !shouldRun, self.activityManager.isRunning {
+                    await self.activityManager.stop()
+                }
+
+                guard reconciledVersion != self.activityStateVersion else { break }
+            }
+            self.activityReconciliationTask = nil
         }
     }
 
