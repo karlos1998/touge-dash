@@ -218,20 +218,28 @@ private struct VideoOverlayElementView: View {
                     .tracking(0.8 * scale)
                     .foregroundStyle(element.accent.color)
                 Text(value.formatted(.number.precision(.fractionLength(element.metric.precision))))
-                    .font(.system(size: 20 * scale, weight: .black, design: .rounded))
+                    .font(.system(size: gaugeValueFontSize * scale, weight: .black, design: .rounded))
                     .fontWidth(.expanded)
                     .monospacedDigit()
                 Text(element.metric.unit)
                     .font(.system(size: 6 * scale, weight: .black))
                     .foregroundStyle(.secondary)
             }
-            .offset(y: 22 * scale)
+            .offset(y: 25 * scale)
         }
         .foregroundStyle(.white)
         .frame(width: 102 * scale, height: 102 * scale)
         .padding(5 * scale)
         .background(Color.black.opacity(style == .minimal ? 0.28 : 0.5), in: Circle())
         .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: max(0.5, scale * 0.6)))
+    }
+
+    private var gaugeValueFontSize: CGFloat {
+        switch element.metric {
+        case .speed: 18
+        case .boost: 16
+        default: 20
+        }
     }
 
     private var speedCluster: some View {
