@@ -9,7 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
@@ -191,12 +191,14 @@ private fun VideoAlignmentEditor(
                             canvasSize = previewSize,
                             selectedElementId = selectedElementId,
                             select = { selectedElementId = it },
-                            move = { id, dx, dy ->
+                            transform = { id, dx, dy, zoom ->
                                 overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements.map { element ->
                                     if (element.id != id || previewSize.width == 0 || previewSize.height == 0) element
                                     else {
                                         val old = element.position(portraitVideo)
-                                        element.positioned(portraitVideo, OverlayPosition(old.x + dx / previewSize.width, old.y + dy / previewSize.height))
+                                        element
+                                            .positioned(portraitVideo, OverlayPosition(old.x + dx / previewSize.width, old.y + dy / previewSize.height))
+                                            .resized(zoom)
                                     }
                                 })
                             }
@@ -264,7 +266,7 @@ private fun BoxScope.EditableHudPreview(
     canvasSize: IntSize,
     selectedElementId: String?,
     select: (String) -> Unit,
-    move: (String, Float, Float) -> Unit
+    transform: (String, Float, Float, Float) -> Unit
 ) {
     definition.elements.forEach { element ->
         val position = element.position(portrait)
@@ -278,15 +280,15 @@ private fun BoxScope.EditableHudPreview(
                 .graphicsLayer {
                     translationX = position.x * canvasSize.width - 55.dp.toPx()
                     translationY = position.y * canvasSize.height - 33.dp.toPx()
-                    val previewScale = .45f + element.scale.multiplier * .32f
+                    val previewScale = .45f + element.effectiveScale * .32f
                     scaleX = previewScale
                     scaleY = previewScale
                 }
                 .pointerInput(element.id, canvasSize, portrait) {
-                    detectDragGestures(
-                        onDragStart = { select(element.id) },
-                        onDrag = { change, drag -> change.consume(); move(element.id, drag.x, drag.y) }
-                    )
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        select(element.id)
+                        transform(element.id, pan.x, pan.y, zoom)
+                    }
                 }
                 .clickable { select(element.id) }
         )

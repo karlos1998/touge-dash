@@ -30,6 +30,7 @@ struct EditableVideoTelemetryOverlayView: View {
     @Binding var template: VideoOverlayTemplate
     @Binding var selectedElementID: UUID?
     let sample: TelemetryHistorySample?
+    @State private var magnificationBases: [UUID: Double] = [:]
 
     var body: some View {
         GeometryReader { proxy in
@@ -54,7 +55,7 @@ struct EditableVideoTelemetryOverlayView: View {
                     x: proxy.size.width * position.x,
                     y: proxy.size.height * position.y
                 )
-                .highPriorityGesture(
+                .gesture(
                     DragGesture(minimumDistance: 0, coordinateSpace: .named("video-overlay-canvas"))
                         .onChanged { value in
                             selectedElementID = element.id
@@ -66,6 +67,20 @@ struct EditableVideoTelemetryOverlayView: View {
                                 for: orientation
                             )
                         }
+                        .simultaneously(with:
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    selectedElementID = element.id
+                                    let base = magnificationBases[element.id] ?? element.sizeMultiplier
+                                    if magnificationBases[element.id] == nil {
+                                        magnificationBases[element.id] = base
+                                    }
+                                    element.setSizeMultiplier(base * value)
+                                }
+                                .onEnded { _ in
+                                    magnificationBases[element.id] = nil
+                                }
+                        )
                 )
             }
         }
@@ -81,7 +96,7 @@ private struct VideoOverlayElementView: View {
 
     private var value: Double { sample.map { element.metric.value(in: $0) } ?? 0 }
     private var scale: CGFloat {
-        max(0.48, min(canvasSize.width / 390, canvasSize.height / 220)) * CGFloat(element.scale.multiplier)
+        max(0.48, min(canvasSize.width / 390, canvasSize.height / 220)) * CGFloat(element.effectiveScale)
     }
     private var progress: Double {
         let range = element.metric.defaultRange

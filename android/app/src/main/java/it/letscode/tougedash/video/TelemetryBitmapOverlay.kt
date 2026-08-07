@@ -67,7 +67,7 @@ class TelemetryBitmapOverlay(
         val cx = bitmapWidth * position.x
         val cy = bitmapHeight * position.y
         val base = min(bitmapWidth, bitmapHeight) / 1080f
-        val scale = element.scale.multiplier * base
+        val scale = element.effectiveScale * base
         when (element.kind) {
             OverlayElementKind.DIGITAL -> drawDigital(sample, element, cx, cy, scale)
             OverlayElementKind.GAUGE -> drawGauge(sample, element, cx, cy, scale)

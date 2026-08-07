@@ -25,13 +25,16 @@ data class VideoOverlayElement(
     val metric: TelemetryMetric,
     val kind: OverlayElementKind = OverlayElementKind.DIGITAL,
     val scale: OverlayElementScale = OverlayElementScale.MEDIUM,
+    val sizeMultiplier: Float = 1f,
     val accent: DashboardAccent = DashboardAccent.CYAN,
     val landscapePosition: OverlayPosition,
     val portraitPosition: OverlayPosition = landscapePosition
 ) {
+    val effectiveScale get() = scale.multiplier * sizeMultiplier.coerceIn(.45f, 2.5f)
     fun position(portrait: Boolean) = (if (portrait) portraitPosition else landscapePosition).clamped()
     fun positioned(portrait: Boolean, position: OverlayPosition) =
         if (portrait) copy(portraitPosition = position.clamped()) else copy(landscapePosition = position.clamped())
+    fun resized(zoom: Float) = copy(sizeMultiplier = (sizeMultiplier * zoom).coerceIn(.45f, 2.5f))
 }
 
 @Serializable
