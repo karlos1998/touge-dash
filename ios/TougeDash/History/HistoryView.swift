@@ -27,6 +27,7 @@ struct HistoryView: View {
     @State private var deletedItems: Set<HistoryDeletionKey> = []
     @State private var deletionToast: HistoryDeletionToast?
     @State private var deletionError: String?
+    @State private var localArchiveBytes: Int64 = 0
 
     init(
         locationTracker: LocationTrackingService,
@@ -189,6 +190,8 @@ struct HistoryView: View {
                                     }
                                 }
                             }
+
+                            LocalArchiveStorageFooter(bytes: localArchiveBytes)
                         }
 
                         ProductCreditFooter()
@@ -254,6 +257,11 @@ struct HistoryView: View {
                 Text(deletionError ?? "")
             }
             .sensoryFeedback(.success, trigger: splitFeedback)
+            .task(id: localStorageRevision) {
+                localArchiveBytes = await Task.detached(priority: .utility) {
+                    HistoryLocalStore.storageBytes()
+                }.value
+            }
             .task(id: deletionToast?.id) {
                 guard let toastID = deletionToast?.id else { return }
                 try? await Task.sleep(for: .seconds(3))
@@ -277,6 +285,18 @@ struct HistoryView: View {
             get: { pendingDeletion != nil },
             set: { if !$0 { pendingDeletion = nil } }
         )
+    }
+
+    private var localStorageRevision: Int64 {
+        let sessionRevision = sessions.reduce(Int64(sessions.count)) { partial, session in
+            partial &+ Int64(session.sampleCount) &+ Int64(session.modifiedAt.timeIntervalSince1970)
+        }
+        let incidentRevision = incidents.reduce(Int64(incidents.count)) { partial, incident in
+            partial &+ Int64(incident.encodedSamples.count) &+ Int64(incident.triggeredAt.timeIntervalSince1970)
+        }
+        return videos.reduce(sessionRevision &+ incidentRevision) { partial, video in
+            partial &+ video.fileSizeBytes &+ Int64(video.createdAt.timeIntervalSince1970)
+        }
     }
 
     @MainActor
@@ -688,6 +708,34 @@ private struct HistoryEmptyState: View {
         .padding(.vertical, 64)
         .padding(.horizontal, 24)
         .cardSurface(accent: .tougeCyan)
+    }
+}
+
+private struct LocalArchiveStorageFooter: View {
+    let bytes: Int64
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "internaldrive")
+                .foregroundStyle(Color.tougeCyan)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(localized("LOKALNE ARCHIWUM"))
+                    .font(.system(size: 9, weight: .black))
+                    .tracking(1)
+                Text(localized("Telemetria i filmy z przejazdów na tym urządzeniu"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(DriveVideoFileStore.formattedSize(bytes))
+                .font(.subheadline.monospacedDigit().weight(.black))
+                .foregroundStyle(Color.tougeMint)
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.025), in: CutCornerPanel(cut: 8))
+        .overlay(CutCornerPanel(cut: 8).stroke(Color.white.opacity(0.06)))
+        .accessibilityElement(children: .combine)
     }
 }
 

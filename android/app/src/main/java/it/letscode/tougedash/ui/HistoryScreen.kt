@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -105,6 +106,7 @@ fun HistoryScreen(container: AppContainer, selectedId: String?, select: (String)
 @Composable
 private fun SessionList(container: AppContainer, select: (String) -> Unit) {
     val sessions by container.historyRepository.sessions.collectAsState(initial = emptyList())
+    val localArchiveBytes by container.historyRepository.storageBytes.collectAsState(initial = 0L)
     val activeSession by container.historyRepository.activeSession.collectAsState()
     val connection by container.runtime.connection.collectAsState()
     var deleteSession by remember { mutableStateOf<DriveSessionEntity?>(null) }
@@ -123,6 +125,7 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
             }
         } else LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(sessions, key = { it.id }) { SessionRow(it, select) { deleteSession = it } }
+            item { LocalArchiveStorageFooter(localArchiveBytes) }
         }
     }
     if (showSplitConfirmation) {
@@ -163,6 +166,28 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
             }) { Text(appText("Delete", "Usuń")) } },
             dismissButton = { TextButton(onClick = { deleteSession = null }) { Text(appText("Cancel", "Anuluj")) } }
         )
+    }
+}
+
+@Composable
+private fun LocalArchiveStorageFooter(storageBytes: Long) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.White.copy(alpha = .025f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 15.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Default.Storage, null, tint = TougeCyan, modifier = Modifier.size(20.dp))
+        Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            Text(appText("LOCAL ARCHIVE", "LOKALNE ARCHIWUM"), fontSize = 9.sp, fontWeight = FontWeight.Black)
+            Text(
+                appText("Drive telemetry and videos on this device", "Telemetria i filmy z przejazdów na tym urządzeniu"),
+                color = TougeMuted,
+                fontSize = 10.sp
+            )
+        }
+        Text(bytes(storageBytes), color = TougeMint, fontWeight = FontWeight.Black)
     }
 }
 

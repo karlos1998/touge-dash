@@ -65,7 +65,7 @@ class AppContainer(val application: Application) {
     val dao = database.dao()
     val runtime = TelemetryRuntime
     val ecuControls = EcuControlCoordinator(applicationScope)
-    val historyRepository = HistoryRepository(dao)
+    val historyRepository = HistoryRepository(dao, application)
     val accelerationEngine = AccelerationEngine()
     val alertNotifier = EngineAlertNotifier(application)
     val alertRepository = AlertRepository(dao, json)

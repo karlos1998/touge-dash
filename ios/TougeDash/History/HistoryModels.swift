@@ -42,6 +42,39 @@ final class DriveSegmentSettingsStore: ObservableObject {
 }
 
 enum HistoryLocalStore {
+    static func storageBytes(fileManager: FileManager = .default) -> Int64 {
+        guard let root = try? fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        ) else { return 0 }
+        let keys: Set<URLResourceKey> = [
+            .isRegularFileKey,
+            .totalFileAllocatedSizeKey,
+            .fileAllocatedSizeKey,
+            .fileSizeKey
+        ]
+        guard let files = fileManager.enumerator(
+            at: root,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+
+        var bytes: Int64 = 0
+        for case let fileURL as URL in files {
+            guard let values = try? fileURL.resourceValues(forKeys: keys),
+                  values.isRegularFile == true else { continue }
+            bytes += Int64(
+                values.totalFileAllocatedSize
+                    ?? values.fileAllocatedSize
+                    ?? values.fileSize
+                    ?? 0
+            )
+        }
+        return max(0, bytes)
+    }
+
     static func enforceRetention(in context: ModelContext, keepingActiveSessionID: UUID? = nil) throws {
         let sessions = try context.fetch(FetchDescriptor<DriveSession>(
             sortBy: [SortDescriptor(\DriveSession.startedAt, order: .reverse)]

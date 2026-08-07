@@ -573,3 +573,5 @@
 "1 godz." = "1 hr";
 "Po osiągnięciu limitu Touge Dash zapisze odcinek i bez rozłączania rozpocznie następny. Telemetria i film są cięte na tej samej osi czasu." = "At the limit, Touge Dash saves the segment and starts the next one without disconnecting. Telemetry and video are split on the same timeline.";
 "Film rozpoczyna się z pierwszą próbką, jest dzielony razem z przejazdem i kończy po rozłączeniu. Pliki nie są wysyłane do Touge Dash Cloud." = "Video starts with the first sample, is split together with the drive, and ends after disconnecting. Files are never uploaded to Touge Dash Cloud.";
+"LOKALNE ARCHIWUM" = "LOCAL ARCHIVE";
+"Telemetria i filmy z przejazdów na tym urządzeniu" = "Drive telemetry and videos on this device";

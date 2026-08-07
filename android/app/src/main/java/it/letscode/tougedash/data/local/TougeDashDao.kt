@@ -71,6 +71,7 @@ interface TougeDashDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertVideo(value: VideoProjectEntity)
     @Query("SELECT * FROM video_projects WHERE sessionId = :sessionId ORDER BY createdAt DESC") fun videos(sessionId: String): Flow<List<VideoProjectEntity>>
     @Query("SELECT * FROM video_projects WHERE sessionId = :sessionId ORDER BY createdAt DESC") suspend fun videosOnce(sessionId: String): List<VideoProjectEntity>
+    @Query("SELECT COALESCE(SUM(fileSizeBytes), 0) FROM video_projects") fun videoStorageBytes(): Flow<Long>
     @Query("DELETE FROM video_projects WHERE id = :id") suspend fun deleteVideo(id: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertOverlayTemplate(value: OverlayTemplateEntity)

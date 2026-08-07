@@ -1,5 +1,6 @@
 package it.letscode.tougedash.history
 
+import android.content.Context
 import it.letscode.tougedash.data.local.DriveSessionEntity
 import it.letscode.tougedash.data.local.SyncState
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
@@ -12,11 +13,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
+import java.io.File
 import java.util.UUID
 import kotlin.math.max
 import kotlin.math.min
 
-class HistoryRepository(private val dao: TougeDashDao) {
+class HistoryRepository(private val dao: TougeDashDao, private val context: Context) {
     private val mutex = Mutex()
     private var active: DriveSessionEntity? = null
     private val mutableActiveSession = MutableStateFlow<DriveSessionEntity?>(null)
@@ -24,6 +30,9 @@ class HistoryRepository(private val dao: TougeDashDao) {
     private var previousLocation: RecordedLocation? = null
 
     val sessions = dao.sessions()
+    val storageBytes = combine(sessions, dao.videoStorageBytes()) { _, _ ->
+        localArchiveBytes()
+    }.distinctUntilChanged().flowOn(Dispatchers.IO)
     val activeSession = mutableActiveSession.asStateFlow()
     fun session(id: String) = dao.session(id)
     fun samples(id: String) = dao.chartSamples(id)
@@ -143,5 +152,21 @@ class HistoryRepository(private val dao: TougeDashDao) {
         val value = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
             kotlin.math.cos(lat1) * kotlin.math.cos(lat2) * kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
         return 2 * earth * kotlin.math.asin(kotlin.math.sqrt(value.coerceIn(0.0, 1.0)))
+    }
+
+    private fun localArchiveBytes(): Long {
+        val database = context.getDatabasePath("touge-dash.db")
+        val databaseBytes = listOf(
+            database,
+            File(database.path + "-wal"),
+            File(database.path + "-shm")
+        ).sumOf { file -> file.takeIf(File::isFile)?.length() ?: 0L }
+        val videoBytes = File(context.filesDir, "drive-videos")
+            .takeIf(File::isDirectory)
+            ?.walkTopDown()
+            ?.filter(File::isFile)
+            ?.sumOf(File::length)
+            ?: 0L
+        return (databaseBytes + videoBytes).coerceAtLeast(0L)
     }
 }
