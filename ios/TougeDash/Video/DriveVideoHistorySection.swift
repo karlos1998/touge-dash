@@ -720,6 +720,9 @@ private struct DriveVideoExportSheet: View {
     @State private var isPreviewPlaying = false
     @State private var showsAdvancedAlignment = false
     @State private var thumbnails: [CGImage] = []
+    @State private var exportRangeThumbnails: [CGImage] = []
+    @State private var exportRangeStart = 0.0
+    @State private var exportRangeEnd: Double
 
     init(
         session: DriveSession,
@@ -734,8 +737,10 @@ private struct DriveVideoExportSheet: View {
         self.sample = sample
         self.overlayStore = overlayStore
         timelineSpeedValues = samples.videoTimelineValues(maxPoints: 480)
-        _alignment = State(initialValue: DriveVideoTimelineAlignment(recording: recording, session: session))
+        let initialAlignment = DriveVideoTimelineAlignment(recording: recording, session: session)
+        _alignment = State(initialValue: initialAlignment)
         _overlayDraft = State(initialValue: overlayStore.template(id: recording.preferredOverlayTemplateID))
+        _exportRangeEnd = State(initialValue: initialAlignment.duration)
     }
 
     var body: some View {
@@ -749,7 +754,6 @@ private struct DriveVideoExportSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(localized("Zamknij")) {
-                        if exporter.state.isWorking { exporter.cancel() }
                         dismiss()
                     }
                 }
@@ -760,12 +764,23 @@ private struct DriveVideoExportSheet: View {
             .task(id: recording.id) {
                 await preparePreview()
             }
+            .task(id: recording.id) {
+                await loadExportRangeThumbnails()
+            }
             .task(id: showsAdvancedAlignment) {
                 guard showsAdvancedAlignment, thumbnails.isEmpty else { return }
                 await loadTimelineThumbnails()
             }
             .onDisappear {
                 player?.pause()
+            }
+            .onChange(of: alignment.duration) { previousDuration, newDuration in
+                let selectedWholePreviousRange = exportRangeStart <= 0.001
+                    && abs(exportRangeEnd - previousDuration) <= 0.05
+                exportRangeStart = min(exportRangeStart, max(0, newDuration - minimumExportDuration))
+                exportRangeEnd = selectedWholePreviousRange
+                    ? newDuration
+                    : min(max(exportRangeStart + minimumExportDuration, exportRangeEnd), newDuration)
             }
         }
         .preferredColorScheme(.dark)
@@ -778,6 +793,7 @@ private struct DriveVideoExportSheet: View {
             synchronizationEditor
             exportOptions
             exportStatus
+            exportRangeSelector
             exportButton
             Text(localized("Oryginalny film pozostaje wyłącznie na tym urządzeniu. Eksport tworzy kopię w aplikacji Zdjęcia; Touge Dash nie wysyła nagrania na serwer."))
                 .font(.caption)
@@ -862,12 +878,13 @@ private struct DriveVideoExportSheet: View {
                 if addsOverlay { overlayStore.save(overlayDraft) }
                 recording.preferredOverlayTemplateID = overlayDraft.id
                 try? modelContext.save()
+                let trimmedAlignment = exportAlignment
                 await exporter.export(
                     recording: recording,
                     samples: exportSamples(),
                     template: addsOverlay ? overlayDraft : nil,
-                    alignment: alignment,
-                    telemetryStartDate: alignment.telemetryStartDate(session: session)
+                    alignment: trimmedAlignment,
+                    telemetryStartDate: trimmedAlignment.telemetryStartDate(session: session)
                 )
             }
         } label: {
@@ -879,6 +896,75 @@ private struct DriveVideoExportSheet: View {
         .buttonStyle(.borderedProminent)
         .tint(.tougeCyan)
         .disabled(exporter.state.isWorking)
+    }
+
+    private var exportRangeSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .lastTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(localized("WYBIERZ FRAGMENT DO EKSPORTU"))
+                        .font(.caption2.weight(.black))
+                        .tracking(0.9)
+                        .foregroundStyle(Color.tougeYellow)
+                    Text(selectedExportDuration.videoPreciseDurationText)
+                        .font(.title3.monospacedDigit().weight(.black))
+                }
+                Spacer()
+                Text("\(exportRangeStart.videoPreciseDurationText) – \(exportRangeEnd.videoPreciseDurationText)")
+                    .font(.caption.monospacedDigit().weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 0) {
+                Button {
+                    previewPositionBinding.wrappedValue = exportRangeStart
+                    togglePreviewPlayback()
+                } label: {
+                    Image(systemName: isPreviewPlaying ? "pause.fill" : "play.fill")
+                        .font(.title2.weight(.black))
+                        .frame(width: 54, height: 76)
+                        .background(Color.white.opacity(0.13))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isPreviewPlaying ? localized("Pauza") : localized("Odtwórz wybrany fragment"))
+
+                VideoExportRangeSelector(
+                    start: $exportRangeStart,
+                    end: $exportRangeEnd,
+                    totalDuration: alignment.duration,
+                    thumbnails: exportRangeThumbnails,
+                    onScrub: scrubExportPreview
+                )
+                .frame(height: 76)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 11))
+
+            Text(localized("Przeciągnij lewy lub prawy uchwyt. Przyciemniony fragment nie trafi do galerii."))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 16))
+        .allowsHitTesting(!exporter.state.isWorking)
+        .opacity(exporter.state.isWorking ? 0.62 : 1)
+    }
+
+    private var minimumExportDuration: Double {
+        min(1, max(0.1, alignment.duration))
+    }
+
+    private var selectedExportDuration: Double {
+        max(0, exportRangeEnd - exportRangeStart)
+    }
+
+    private var exportAlignment: DriveVideoTimelineAlignment {
+        DriveVideoTimelineAlignment(
+            videoStartSeconds: alignment.videoStartSeconds + exportRangeStart,
+            telemetryStartSeconds: alignment.telemetryStartSeconds + exportRangeStart,
+            duration: selectedExportDuration,
+            videoDuration: recording.duration,
+            telemetryDuration: telemetryDuration
+        )
     }
 
     private func exportSamples() -> [TelemetryHistorySample] {
@@ -1091,6 +1177,24 @@ private struct DriveVideoExportSheet: View {
         )
         guard !Task.isCancelled, showsAdvancedAlignment else { return }
         thumbnails = loaded
+    }
+
+    @MainActor
+    private func loadExportRangeThumbnails() async {
+        guard let url = try? DriveVideoFileStore.url(for: recording),
+              FileManager.default.fileExists(atPath: url.path) else { return }
+        let loaded = await VideoTimelineThumbnailLoader.load(
+            url: url,
+            start: alignment.videoStartSeconds,
+            duration: alignment.duration,
+            count: recording.pixelHeight > recording.pixelWidth ? 8 : 10
+        )
+        guard !Task.isCancelled else { return }
+        exportRangeThumbnails = loaded
+    }
+
+    private func scrubExportPreview(to relativeSeconds: Double) {
+        previewPositionBinding.wrappedValue = relativeSeconds
     }
 
     private func seekPreview(to seconds: Double) {
@@ -1406,6 +1510,93 @@ private struct VideoTimelineBackdrop: View {
     }
 }
 
+private struct VideoExportRangeSelector: View {
+    @Binding var start: Double
+    @Binding var end: Double
+    let totalDuration: Double
+    let thumbnails: [CGImage]
+    let onScrub: (Double) -> Void
+
+    @State private var initialStart: Double?
+    @State private var initialEnd: Double?
+
+    private let handleWidth: CGFloat = 28
+
+    var body: some View {
+        GeometryReader { proxy in
+            let safeTotal = max(0.1, totalDuration)
+            let width = max(1, proxy.size.width)
+            let leftX = width * start / safeTotal
+            let rightX = width * end / safeTotal
+            let minimumDuration = min(1, safeTotal)
+
+            ZStack(alignment: .leading) {
+                VideoTimelineBackdrop(thumbnails: thumbnails)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                Color.black.opacity(0.65)
+                    .frame(width: max(0, leftX))
+
+                Color.black.opacity(0.65)
+                    .frame(width: max(0, width - rightX))
+                    .offset(x: rightX)
+
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: max(0, rightX - leftX))
+                    .overlay {
+                        Rectangle().stroke(Color.tougeYellow, lineWidth: 3)
+                    }
+                    .offset(x: leftX)
+
+                rangeHandle(systemImage: "chevron.compact.left")
+                    .offset(x: min(max(0, leftX), max(0, width - handleWidth)))
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let origin = initialStart ?? start
+                                initialStart = origin
+                                let delta = value.translation.width / width * safeTotal
+                                start = min(max(0, origin + delta), max(0, end - minimumDuration))
+                                onScrub(start)
+                            }
+                            .onEnded { _ in initialStart = nil }
+                    )
+                    .accessibilityLabel(localized("Początek eksportu"))
+
+                rangeHandle(systemImage: "chevron.compact.right")
+                    .offset(x: min(max(0, rightX - handleWidth), max(0, width - handleWidth)))
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                let origin = initialEnd ?? end
+                                initialEnd = origin
+                                let delta = value.translation.width / width * safeTotal
+                                end = max(min(safeTotal, origin + delta), min(safeTotal, start + minimumDuration))
+                                onScrub(end)
+                            }
+                            .onEnded { _ in initialEnd = nil }
+                    )
+                    .accessibilityLabel(localized("Koniec eksportu"))
+            }
+            .background(Color.white.opacity(0.08))
+            .clipped()
+        }
+    }
+
+    private func rangeHandle(systemImage: String) -> some View {
+        ZStack {
+            Rectangle().fill(Color.tougeYellow)
+            Image(systemName: systemImage)
+                .font(.title2.weight(.black))
+                .foregroundStyle(.black)
+        }
+        .frame(width: handleWidth)
+        .contentShape(Rectangle().inset(by: -8))
+        .zIndex(2)
+    }
+}
+
 private struct TelemetryTimelineBackdrop: View {
     let values: [Double]
 
@@ -1450,7 +1641,12 @@ private struct TimelineNudgeControl: View {
 }
 
 private enum VideoTimelineThumbnailLoader {
-    nonisolated static func load(url: URL, duration: Double, count: Int) async -> [CGImage] {
+    nonisolated static func load(
+        url: URL,
+        start: Double = 0,
+        duration: Double,
+        count: Int
+    ) async -> [CGImage] {
         guard duration > 0, count > 0 else { return [] }
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
@@ -1462,7 +1658,7 @@ private enum VideoTimelineThumbnailLoader {
         for index in 0..<count {
             guard !Task.isCancelled else { break }
             let fraction = (Double(index) + 0.5) / Double(count)
-            let time = CMTime(seconds: duration * fraction, preferredTimescale: 600)
+            let time = CMTime(seconds: start + duration * fraction, preferredTimescale: 600)
             if let result = try? await generator.image(at: time) {
                 images.append(result.image)
             }

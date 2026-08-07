@@ -322,6 +322,11 @@
 "Szablon HUD" = "Szablon HUD";
 "Edytuj szablony nakładek" = "Edytuj szablony nakładek";
 "Zapisz film w Zdjęciach" = "Zapisz film w Zdjęciach";
+"WYBIERZ FRAGMENT DO EKSPORTU" = "WYBIERZ FRAGMENT DO EKSPORTU";
+"Przeciągnij lewy lub prawy uchwyt. Przyciemniony fragment nie trafi do galerii." = "Przeciągnij lewy lub prawy uchwyt. Przyciemniony fragment nie trafi do galerii.";
+"Odtwórz wybrany fragment" = "Odtwórz wybrany fragment";
+"Początek eksportu" = "Początek eksportu";
+"Koniec eksportu" = "Koniec eksportu";
 "Oryginalny film pozostaje wyłącznie na tym urządzeniu. Eksport tworzy kopię w aplikacji Zdjęcia; Touge Dash nie wysyła nagrania na serwer." = "Oryginalny film pozostaje wyłącznie na tym urządzeniu. Eksport tworzy kopię w aplikacji Zdjęcia; Touge Dash nie wysyła nagrania na serwer.";
 "Renderowanie filmu…" = "Renderowanie filmu…";
 "Anuluj eksport" = "Anuluj eksport";

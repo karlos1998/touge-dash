@@ -380,6 +380,11 @@
 "Szablon HUD" = "HUD template";
 "Edytuj szablony nakładek" = "Edit overlay templates";
 "Zapisz film w Zdjęciach" = "Save video to Photos";
+"WYBIERZ FRAGMENT DO EKSPORTU" = "SELECT EXPORT RANGE";
+"Przeciągnij lewy lub prawy uchwyt. Przyciemniony fragment nie trafi do galerii." = "Drag the left or right handle. Dimmed footage will not be exported.";
+"Odtwórz wybrany fragment" = "Play selected range";
+"Początek eksportu" = "Export start";
+"Koniec eksportu" = "Export end";
 "Oryginalny film pozostaje wyłącznie na tym urządzeniu. Eksport tworzy kopię w aplikacji Zdjęcia; Touge Dash nie wysyła nagrania na serwer." = "The original video stays only on this device. Export creates a copy in Photos; Touge Dash never uploads the recording.";
 "Renderowanie filmu…" = "Rendering video…";
 "Anuluj eksport" = "Cancel export";
