@@ -378,7 +378,7 @@ final class VideoExportBackgroundCoordinator {
 
             let registered = BGTaskScheduler.shared.register(
                 forTaskWithIdentifier: String(identifier),
-                using: nil
+                using: .main
             ) { [weak self] task in
                 guard let continuedTask = task as? BGContinuedProcessingTask else {
                     task.setTaskCompleted(success: false)
@@ -435,7 +435,7 @@ final class VideoExportBackgroundCoordinator {
         activeTask = task
         task.progress.totalUnitCount = 1_000
         task.progress.completedUnitCount = 0
-        task.expirationHandler = { [weak self, weak task] in
+        task.expirationHandler = { @Sendable [weak self, weak task] in
             guard let task else { return }
             Task { @MainActor in
                 self?.expire(task)

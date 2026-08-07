@@ -796,11 +796,11 @@ private struct DriveVideoExportSheet: View {
     private var exportContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             exportPreview
+            exportRangeSelector
             previewControls
             synchronizationEditor
             exportOptions
             exportStatus
-            exportRangeSelector
             exportButton
             Text(localized("Oryginalny film pozostaje wyłącznie na tym urządzeniu. Eksport tworzy kopię w aplikacji Zdjęcia; Touge Dash nie wysyła nagrania na serwer."))
                 .font(.caption)
