@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -110,9 +111,16 @@ fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samp
         uri?.let { container.videoRepository.importFromGallery(session.id, driveDuration, it) }
     }
     Column(Modifier.fillMaxWidth().padding(14.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column { Text("VIDEO + TELEMETRY", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold); Text(appText("Synchronized drive footage", "Nagrania zsynchronizowane z przejazdem"), fontWeight = FontWeight.Black) }
-            Button(onClick = { picker.launch("video/*") }) { Icon(Icons.Default.VideoLibrary, null); Text(appText(" Use my video", " Użyj mojego filmu")) }
+        Column {
+            Text("VIDEO + TELEMETRY", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text(appText("Synchronized drive footage", "Nagrania zsynchronizowane z przejazdem"), fontWeight = FontWeight.Black)
+        }
+        Button(
+            onClick = { picker.launch("video/*") },
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp).heightIn(min = 44.dp)
+        ) {
+            Icon(Icons.Default.VideoLibrary, null, Modifier.size(18.dp))
+            Text(appText(" Use my video", " Użyj mojego filmu"))
         }
         if (task.operation != null) {
             Card(Modifier.fillMaxWidth().padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
@@ -120,6 +128,15 @@ fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samp
                     Text(localizedVideoOperation(task.operation!!), fontWeight = FontWeight.Bold)
                     LinearProgressIndicator(progress = { task.progress }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp))
                     Text("${(task.progress * 100).roundToInt()}%${if (task.totalBytes > 0) "  •  ${videoBytes(task.transferredBytes)} / ${videoBytes(task.totalBytes)}" else ""}", color = TougeMuted, fontSize = 10.sp)
+                    if (task.completed && task.outputWidth > 0) {
+                        val codec = if (task.outputVideoMimeType?.contains("hevc", ignoreCase = true) == true) "HEVC" else "H.264"
+                        val bitrate = task.outputVideoBitrate.takeIf { it > 0 }?.let { " • %.1f Mb/s".format(it / 1_000_000.0) }.orEmpty()
+                        Text(
+                            "$codec • ${task.outputWidth}×${task.outputHeight}$bitrate${if (task.outputHasAudio) " • audio" else ""}",
+                            color = TougeCyan,
+                            fontSize = 10.sp
+                        )
+                    }
                     task.error?.let { Text(it, color = TougeRed) }
                     if (task.completed || task.error != null) TextButton(onClick = container.videoRepository::clearTask) { Text(appText("Close", "Zamknij")) }
                     else if (task.operation == "Rendering telemetry HUD") TextButton(onClick = container.videoRepository::cancelExport) { Text(appText("Cancel export", "Anuluj eksport"), color = TougeRed) }

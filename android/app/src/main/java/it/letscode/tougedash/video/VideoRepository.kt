@@ -5,10 +5,12 @@ package it.letscode.tougedash.video
 import android.content.ContentValues
 import android.content.Context
 import android.media.MediaMetadataRetriever
+import android.media.MediaCodecInfo
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.media3.common.MediaItem
+import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.effect.OverlayEffect
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
@@ -16,6 +18,7 @@ import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
 import androidx.media3.transformer.ProgressHolder
 import androidx.media3.transformer.Transformer
+import androidx.media3.transformer.VideoEncoderSettings
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
 import it.letscode.tougedash.data.local.TougeDashDao
 import it.letscode.tougedash.data.local.VideoProjectEntity
@@ -45,7 +48,12 @@ data class VideoTaskState(
     val totalBytes: Long = 0,
     val projectId: String? = null,
     val error: String? = null,
-    val completed: Boolean = false
+    val completed: Boolean = false,
+    val outputVideoMimeType: String? = null,
+    val outputVideoBitrate: Int = 0,
+    val outputWidth: Int = 0,
+    val outputHeight: Int = 0,
+    val outputHasAudio: Boolean = false
 )
 
 class VideoRepository(
@@ -196,13 +204,38 @@ class VideoRepository(
                 project.pixelHeight
             )
             val edited = EditedMediaItem.Builder(item).setEffects(Effects(emptyList(), listOf(OverlayEffect(listOf(overlay))))).build()
+            val encodingPlan = VideoExportQuality.plan(project.pixelWidth, project.pixelHeight, project.framesPerSecond)
+            val encoderSettings = VideoEncoderSettings.Builder()
+                .setBitrate(encodingPlan.bitrate)
+                .setBitrateMode(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+                .setiFrameIntervalSeconds(1f)
+                .build()
+            val encoderFactory = DefaultEncoderFactory.Builder(context)
+                .setRequestedVideoEncoderSettings(encoderSettings)
+                .setEnableFallback(true)
+                .build()
             mutableTask.value = VideoTaskState("Rendering telemetry HUD", projectId = project.id)
-            transformer = Transformer.Builder(context).addListener(object : Transformer.Listener {
+            transformer = Transformer.Builder(context)
+                .setVideoMimeType(encodingPlan.mimeType)
+                .setEncoderFactory(encoderFactory)
+                .addListener(object : Transformer.Listener {
                 override fun onCompleted(composition: androidx.media3.transformer.Composition, exportResult: ExportResult) {
                     transformer = null
                     scope.launch(Dispatchers.IO) {
                         runCatching { saveToGallery(output) }
-                            .onSuccess { mutableTask.value = mutableTask.value.copy(progress = 1f, completed = true, transferredBytes = output.length(), totalBytes = output.length()) }
+                            .onSuccess {
+                                mutableTask.value = mutableTask.value.copy(
+                                    progress = 1f,
+                                    completed = true,
+                                    transferredBytes = output.length(),
+                                    totalBytes = output.length(),
+                                    outputVideoMimeType = exportResult.videoMimeType,
+                                    outputVideoBitrate = exportResult.averageVideoBitrate,
+                                    outputWidth = exportResult.width,
+                                    outputHeight = exportResult.height,
+                                    outputHasAudio = exportResult.audioMimeType != null
+                                )
+                            }
                             .onFailure { mutableTask.value = mutableTask.value.copy(error = it.message ?: "Could not save video") }
                         output.delete()
                     }
@@ -235,9 +268,18 @@ class VideoRepository(
             put(MediaStore.Video.Media.IS_PENDING, 1)
         }
         val uri = requireNotNull(context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values))
-        context.contentResolver.openOutputStream(uri).use { output -> requireNotNull(output); file.inputStream().use { it.copyTo(output) } }
-        context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
-        return uri
+        var published = false
+        try {
+            context.contentResolver.openOutputStream(uri).use { output ->
+                requireNotNull(output)
+                file.inputStream().use { it.copyTo(output) }
+            }
+            context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
+            published = true
+            return uri
+        } finally {
+            if (!published) context.contentResolver.delete(uri, null, null)
+        }
     }
 
     private fun displayName(uri: Uri): String? = context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->

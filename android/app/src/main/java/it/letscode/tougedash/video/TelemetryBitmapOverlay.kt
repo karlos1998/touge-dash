@@ -28,8 +28,9 @@ class TelemetryBitmapOverlay(
     width: Int,
     height: Int
 ) : BitmapOverlay() {
-    private val bitmapWidth = width.coerceIn(640, 3840)
-    private val bitmapHeight = height.coerceIn(360, 3840)
+    private val bitmapSize = overlayBitmapSize(width, height)
+    private val bitmapWidth = bitmapSize.first
+    private val bitmapHeight = bitmapSize.second
     private val portrait = bitmapHeight > bitmapWidth
     private val bitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888)
     private val canvas = Canvas(bitmap)
