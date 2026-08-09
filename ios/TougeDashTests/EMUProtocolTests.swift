@@ -4,6 +4,17 @@ import XCTest
 @testable import TougeDash
 
 final class EMUProtocolTests: XCTestCase {
+    func testDriveShareSelectionClampsToANonEmptyRange() {
+        XCTAssertEqual(
+            DriveShareSelection(startOffsetMillis: 9_999, endOffsetMillis: 10_000),
+            DriveShareSelection.normalized(
+                driveDurationMillis: 10_000,
+                startOffsetMillis: 20_000,
+                endOffsetMillis: -5
+            )
+        )
+    }
+
     func testDriveMetadataKeepsNameAndMultipleColoredTags() throws {
         let session = DriveSession(vehicleID: UUID(), startedAt: .now)
         let tags = [

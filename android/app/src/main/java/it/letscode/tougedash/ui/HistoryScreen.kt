@@ -80,6 +80,7 @@ import it.letscode.tougedash.data.local.TelemetrySampleEntity
 import it.letscode.tougedash.data.local.AccelerationAttemptEntity
 import it.letscode.tougedash.di.AppContainer
 import it.letscode.tougedash.history.CapturedTelemetryPoint
+import it.letscode.tougedash.history.DriveShareRange
 import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.ConnectionState
 import it.letscode.tougedash.ui.theme.TougeCyan
@@ -763,10 +764,12 @@ private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntit
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val chooserTitle = appText("Share drive", "Udostępnij przejazd")
-    val totalSeconds = ((session.endedAt - session.startedAt).coerceAtLeast(1) / 1000f)
-    var fragment by remember { mutableStateOf(false) }
-    var startSeconds by remember { mutableFloatStateOf(0f) }
-    var endSeconds by remember(totalSeconds) { mutableFloatStateOf(totalSeconds) }
+    val totalSeconds = ((session.endedAt - session.startedAt).coerceAtLeast(1_000) / 1000f)
+    val rangePreferences = remember { context.getSharedPreferences("drive-share-ranges", android.content.Context.MODE_PRIVATE) }
+    val rangeKey = session.id
+    var fragment by remember { mutableStateOf(rangePreferences.getBoolean("$rangeKey-fragment", false)) }
+    var startSeconds by remember { mutableFloatStateOf(rangePreferences.getFloat("$rangeKey-start", 0f).coerceIn(0f, totalSeconds)) }
+    var endSeconds by remember(totalSeconds) { mutableFloatStateOf(rangePreferences.getFloat("$rangeKey-end", totalSeconds).coerceIn(1f, totalSeconds)) }
     var unit by remember { mutableStateOf("DAYS") }
     var amount by remember { mutableStateOf(7) }
     var working by remember { mutableStateOf(false) }
@@ -778,6 +781,13 @@ private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntit
             val offset = (it.recordedAt - session.startedAt) / 1000f
             offset in startSeconds..endSeconds
         }
+    }
+    LaunchedEffect(fragment, startSeconds, endSeconds) {
+        rangePreferences.edit()
+            .putBoolean("$rangeKey-fragment", fragment)
+            .putFloat("$rangeKey-start", startSeconds)
+            .putFloat("$rangeKey-end", endSeconds)
+            .apply()
     }
     LaunchedEffect(session.id, container.authRepository.isAuthenticated) {
         if (container.authRepository.isAuthenticated) {
@@ -864,7 +874,12 @@ private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntit
             if (shareUrl == null) Button(enabled = !working && container.authRepository.isAuthenticated, onClick = {
                 scope.launch {
                     working = true; error = null
-                    runCatching { container.cloudSyncRepository.createDriveShare(session, unit, amount.takeUnless { unit == "FOREVER" }, if (fragment) (startSeconds * 1000).toLong() else null, if (fragment) (endSeconds * 1000).toLong() else null) }
+                    val range = if (fragment) DriveShareRange.normalize(
+                        session.endedAt - session.startedAt,
+                        (startSeconds * 1000).toLong(),
+                        (endSeconds * 1000).toLong()
+                    ) else null
+                    runCatching { container.cloudSyncRepository.createDriveShare(session, unit, amount.takeUnless { unit == "FOREVER" }, range?.startOffsetMillis, range?.endOffsetMillis) }
                         .onSuccess {
                             shareUrl = it
                             links = runCatching { container.cloudSyncRepository.driveShares(session) }.getOrDefault(links)
