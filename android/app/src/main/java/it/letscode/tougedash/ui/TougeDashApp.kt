@@ -64,6 +64,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -307,6 +308,7 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
     val accent = widget.accent.color()
     val kind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val fontScale = LocalDensity.current.fontScale
     val compactLandscape = landscape && screenHeightDp < 600
     val fittedPortrait = !landscape && screenHeightDp < 850
     val height = if (landscape) {
@@ -322,7 +324,7 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
         when (kind) {
             DashboardWidgetKind.HERO -> if (fittedPortrait) 190.dp else 250.dp
             DashboardWidgetKind.GROUP -> if (fittedPortrait) 125.dp else 190.dp
-            DashboardWidgetKind.COMPACT -> if (fittedPortrait) 54.dp else 70.dp
+            DashboardWidgetKind.COMPACT -> if (fittedPortrait) maxOf(64f, 54f * fontScale).dp else 70.dp
             DashboardWidgetKind.GAUGE -> if (fittedPortrait) 174.dp else 210.dp
             DashboardWidgetKind.CHART -> if (fittedPortrait) 184.dp else 220.dp
             DashboardWidgetKind.PERFORMANCE -> if (fittedPortrait) 164.dp else 188.dp
@@ -426,7 +428,10 @@ private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
 
 @Composable
 private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, compactLandscape: Boolean, fittedPortrait: Boolean) {
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+    Column(
+        Modifier.fillMaxSize(),
+        verticalArrangement = if (compact) Arrangement.spacedBy(2.dp, Alignment.CenterVertically) else Arrangement.SpaceBetween
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text(metric.localizedName(), color = TougeMuted, fontSize = if (compact && fittedPortrait) 8.sp else if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, maxLines = 1)
             TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else if (fittedPortrait) 18.dp else 22.dp))
