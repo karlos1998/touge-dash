@@ -165,6 +165,19 @@ struct CloudDriveShare: Decodable, Sendable {
     let endOffsetMillis: Int64?
 }
 
+struct CloudDriveShareRange: Decodable, Sendable {
+    let startOffsetMillis: Int64
+    let endOffsetMillis: Int64
+    let durationMillis: Int64
+}
+
+struct CloudDriveShareLink: Decodable, Identifiable, Sendable {
+    let id: UUID
+    let createdAt: Date
+    let expiresAt: Date?
+    let range: CloudDriveShareRange?
+}
+
 struct CloudSessionUpload: Encodable, Sendable {
     let id: UUID
     let startedAt: Date

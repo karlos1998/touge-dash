@@ -505,6 +505,24 @@ final class CloudSyncManager: ObservableObject {
         return url
     }
 
+    func driveShares(sessionID: UUID, vehicleID: UUID) async throws -> [CloudDriveShareLink] {
+        guard let remoteVehicleID = remoteVehicleID(for: vehicleID) else {
+            throw CloudAPIError.server(status: 409, message: localized("Auto nie jest połączone z chmurą."))
+        }
+        return try await account.get(
+            endpoint: "/api/v1/vehicles/\(remoteVehicleID.uuidString)/sessions/\(sessionID.uuidString)/shares"
+        )
+    }
+
+    func revokeDriveShare(sessionID: UUID, vehicleID: UUID, shareID: UUID) async throws {
+        guard let remoteVehicleID = remoteVehicleID(for: vehicleID) else {
+            throw CloudAPIError.server(status: 409, message: localized("Auto nie jest połączone z chmurą."))
+        }
+        try await account.delete(
+            endpoint: "/api/v1/vehicles/\(remoteVehicleID.uuidString)/sessions/\(sessionID.uuidString)/shares/\(shareID.uuidString)"
+        )
+    }
+
     func sessionStatus(for session: DriveSession) -> CloudSyncItemStatus {
         if let transient = sessionStatuses[session.id] { return transient }
         if session.syncState == .synced { return .synced }

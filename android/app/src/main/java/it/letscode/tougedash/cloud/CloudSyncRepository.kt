@@ -51,6 +51,10 @@ class CloudSyncRepository(
 ) {
     @Serializable
     data class DriveTag(val id: String, val name: String, val color: String)
+    @Serializable
+    data class DriveShareRange(val startOffsetMillis: Long, val endOffsetMillis: Long, val durationMillis: Long)
+    @Serializable
+    data class DriveShareLink(val id: String, val createdAt: String, val expiresAt: String? = null, val range: DriveShareRange? = null)
 
     suspend fun driveTags(): List<DriveTag> {
         check(api.isAuthenticated) { "Sign in before managing tags." }
@@ -126,6 +130,21 @@ class CloudSyncRepository(
         ).jsonObject
         val token = response["token"]?.jsonPrimitive?.content ?: error("Server did not return a share token.")
         return BuildConfig.WEB_BASE_URL.trimEnd('/') + "/shared/drives/" + token
+    }
+
+    suspend fun driveShares(session: DriveSessionEntity): List<DriveShareLink> {
+        var vehicle = dao.vehicle(session.vehicleHardwareId) ?: error("Vehicle not found.")
+        vehicle = discover(vehicle)
+        val remoteVehicleId = vehicle.remoteId ?: error("Vehicle has not been synchronized.")
+        val response = api.request("/api/v1/vehicles/$remoteVehicleId/sessions/${session.id}/shares")
+        return json.decodeFromString(response.toString())
+    }
+
+    suspend fun revokeDriveShare(session: DriveSessionEntity, shareId: String) {
+        var vehicle = dao.vehicle(session.vehicleHardwareId) ?: error("Vehicle not found.")
+        vehicle = discover(vehicle)
+        val remoteVehicleId = vehicle.remoteId ?: error("Vehicle has not been synchronized.")
+        api.request("/api/v1/vehicles/$remoteVehicleId/sessions/${session.id}/shares/$shareId", "DELETE")
     }
     suspend fun createIncidentShare(incidentId: String, unit: String, amount: Int?): String {
         check(api.isAuthenticated) { "Sign in before sharing a report." }

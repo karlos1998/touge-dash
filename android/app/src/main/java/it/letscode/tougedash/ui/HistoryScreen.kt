@@ -367,7 +367,7 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
     }
     selectedIncident?.let { incident -> IncidentReportDialog(incident, container) { selectedIncident = null } }
     if (showMetadata && session != null) DriveMetadataDialog(container, session!!, { showMetadata = false })
-    if (showShare && session != null) DriveShareDialog(container, session!!, { showShare = false })
+    if (showShare && session != null) DriveShareDialog(container, session!!, rawSamples, { showShare = false })
 }
 
 @Composable
@@ -759,7 +759,7 @@ private fun DriveMetadataDialog(container: AppContainer, session: DriveSessionEn
 }
 
 @Composable
-private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntity, dismiss: () -> Unit) {
+private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntity, samples: List<TelemetrySampleEntity>, dismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val chooserTitle = appText("Share drive", "Udostępnij przejazd")
@@ -772,6 +772,20 @@ private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntit
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var shareUrl by remember { mutableStateOf<String?>(null) }
+    var links by remember { mutableStateOf<List<it.letscode.tougedash.cloud.CloudSyncRepository.DriveShareLink>>(emptyList()) }
+    val previewSamples = remember(samples, fragment, startSeconds, endSeconds) {
+        if (!fragment) samples else samples.filter {
+            val offset = (it.recordedAt - session.startedAt) / 1000f
+            offset in startSeconds..endSeconds
+        }
+    }
+    LaunchedEffect(session.id, container.authRepository.isAuthenticated) {
+        if (container.authRepository.isAuthenticated) {
+            runCatching { container.cloudSyncRepository.driveShares(session) }
+                .onSuccess { links = it }
+                .onFailure { error = it.message }
+        }
+    }
     AlertDialog(
         onDismissRequest = dismiss,
         title = { Column { Text(appText("SHARE A DRIVE", "UDOSTĘPNIJ PRZEJAZD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black); Text(session.customName ?: DateFormat.getDateTimeInstance().format(Date(session.startedAt)), fontWeight = FontWeight.Black) } },
@@ -789,6 +803,21 @@ private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntit
                     Text(appText("End", "Koniec"), fontSize = 10.sp)
                     Slider(endSeconds, { endSeconds = it.coerceAtLeast(startSeconds + 1f) }, valueRange = 0f..totalSeconds)
                 }
+                if (previewSamples.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        MiniValue(appText("SAMPLES", "PRÓBKI"), previewSamples.size.toString(), TougeCyan)
+                        MiniValue(appText("MAX BOOST", "MAX DOŁADOWANIE"), "%.2f bar".format(previewSamples.maxOf { it.boostBar }), TougeMint)
+                        MiniValue(appText("MAX SPEED", "MAX PRĘDKOŚĆ"), "${previewSamples.maxOf { it.speedKph }.roundToInt()} km/h", TougeOrange)
+                    }
+                    Text(
+                        appText(
+                            "Preview includes ${previewSamples.count { it.latitude != null }} GPS points.",
+                            "Podgląd obejmuje ${previewSamples.count { it.latitude != null }} punktów GPS."
+                        ),
+                        color = TougeMuted,
+                        fontSize = 9.sp
+                    )
+                }
                 Text(appText("LINK EXPIRATION", "WAŻNOŚĆ LINKU"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(unit == "HOURS", { unit = "HOURS"; amount = amount.coerceIn(1, 168) }, label = { Text(appText("Hours", "Godziny")) })
@@ -804,6 +833,29 @@ private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntit
                     Text(shareUrl!!, color = TougeMint, fontSize = 10.sp)
                     Button(onClick = { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareUrl) }, chooserTitle)) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Share, null); Text(appText(" Send link", " Wyślij link")) }
                 }
+                if (links.isNotEmpty()) {
+                    Text(appText("ACTIVE LINKS", "AKTYWNE LINKI"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    links.forEach { link ->
+                        Row(
+                            Modifier.fillMaxWidth().background(Color.White.copy(alpha = .035f), RoundedCornerShape(7.dp)).padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(link.expiresAt ?: appText("No expiration", "Bezterminowo"), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                link.range?.let { Text("${duration(it.startOffsetMillis)} → ${duration(it.endOffsetMillis)}", color = TougeMint, fontSize = 9.sp) }
+                            }
+                            IconButton(onClick = {
+                                scope.launch {
+                                    working = true; error = null
+                                    runCatching { container.cloudSyncRepository.revokeDriveShare(session, link.id) }
+                                        .onSuccess { links = links.filterNot { it.id == link.id } }
+                                        .onFailure { error = it.message }
+                                    working = false
+                                }
+                            }) { Icon(Icons.Default.Delete, appText("Revoke link", "Unieważnij link"), tint = TougeRed) }
+                        }
+                    }
+                }
                 if (!container.authRepository.isAuthenticated) Text(appText("Sign in to Touge Dash Cloud before creating a link.", "Zaloguj się do Touge Dash Cloud, aby utworzyć link."), color = TougeOrange, fontSize = 11.sp)
                 error?.let { Text(it, color = TougeRed, fontSize = 11.sp) }
             }
@@ -813,7 +865,10 @@ private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntit
                 scope.launch {
                     working = true; error = null
                     runCatching { container.cloudSyncRepository.createDriveShare(session, unit, amount.takeUnless { unit == "FOREVER" }, if (fragment) (startSeconds * 1000).toLong() else null, if (fragment) (endSeconds * 1000).toLong() else null) }
-                        .onSuccess { shareUrl = it }
+                        .onSuccess {
+                            shareUrl = it
+                            links = runCatching { container.cloudSyncRepository.driveShares(session) }.getOrDefault(links)
+                        }
                         .onFailure { error = it.message }
                     working = false
                 }

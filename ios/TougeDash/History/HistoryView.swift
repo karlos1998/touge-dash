@@ -1068,7 +1068,7 @@ private struct DriveSessionDetailView: View {
             DriveMetadataEditor(session: session, cloudAccount: cloudAccount, cloudSync: cloudSync)
         }
         .sheet(isPresented: $showingDriveShare) {
-            DriveShareSheet(session: session, cloudAccount: cloudAccount, cloudSync: cloudSync)
+            DriveShareSheet(session: session, samples: cachedSamples, cloudAccount: cloudAccount, cloudSync: cloudSync)
         }
         .task {
             let sessionID = session.id
@@ -1353,6 +1353,7 @@ private struct DriveMetadataEditor: View {
 private struct DriveShareSheet: View {
     @Environment(\.dismiss) private var dismiss
     let session: DriveSession
+    let samples: [TelemetryHistorySample]
     @ObservedObject var cloudAccount: CloudAccountService
     @ObservedObject var cloudSync: CloudSyncManager
     @State private var sharesFragment = false
@@ -1363,9 +1364,11 @@ private struct DriveShareSheet: View {
     @State private var working = false
     @State private var error: String?
     @State private var shareURL: URL?
+    @State private var links: [CloudDriveShareLink] = []
 
-    init(session: DriveSession, cloudAccount: CloudAccountService, cloudSync: CloudSyncManager) {
+    init(session: DriveSession, samples: [TelemetryHistorySample], cloudAccount: CloudAccountService, cloudSync: CloudSyncManager) {
         self.session = session
+        self.samples = samples
         self.cloudAccount = cloudAccount
         self.cloudSync = cloudSync
         _endSeconds = State(initialValue: max(1, session.duration))
@@ -1393,6 +1396,16 @@ private struct DriveShareSheet: View {
                         LabeledContent(localized("Koniec")) {
                             Slider(value: Binding(get: { endSeconds }, set: { endSeconds = max($0, startSeconds + 1) }), in: 0...max(1, session.duration))
                         }
+                    }
+                    if !previewSamples.isEmpty {
+                        HStack(spacing: 8) {
+                            HeaderSummary(title: "PRÓBKI", value: previewSamples.count.formatted(), tint: .tougeCyan)
+                            HeaderSummary(title: "MAX BOOST", value: (previewSamples.map(\.boostBar).max() ?? 0).formatted(.number.precision(.fractionLength(2))) + " bar", tint: .tougeMint)
+                            HeaderSummary(title: "MAX SPEED", value: Int(previewSamples.map(\.speedKPH).max() ?? 0).formatted() + " km/h", tint: .tougeOrange)
+                        }
+                        Text(String(format: localized("Podgląd obejmuje %@ punktów GPS."), previewSamples.filter { $0.latitude != nil }.count.formatted()))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                 } header: { Text(localized("UDOSTĘPNIANY ZAKRES")) }
 
@@ -1424,6 +1437,29 @@ private struct DriveShareSheet: View {
                     } header: { Text(localized("LINK JEST GOTOWY")) }
                 }
 
+                if !links.isEmpty {
+                    Section {
+                        ForEach(links) { link in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(link.expiresAt?.formatted(date: .abbreviated, time: .shortened) ?? localized("Bezterminowo"))
+                                        .font(.subheadline.weight(.bold))
+                                    if let range = link.range {
+                                        Text("\(formatDuration(Double(range.startOffsetMillis) / 1_000)) → \(formatDuration(Double(range.endOffsetMillis) / 1_000))")
+                                            .font(.caption.monospacedDigit())
+                                            .foregroundStyle(Color.tougeMint)
+                                    }
+                                }
+                                Spacer()
+                                Button(role: .destructive) { revoke(link) } label: {
+                                    Image(systemName: "link.badge.minus")
+                                }
+                                .disabled(working)
+                            }
+                        }
+                    } header: { Text(localized("AKTYWNE LINKI")) }
+                }
+
                 if !cloudAccount.isAuthenticated {
                     Section { Text(localized("Zaloguj się do Touge Dash Cloud, aby utworzyć link.")).foregroundStyle(Color.tougeOrange) }
                 }
@@ -1440,7 +1476,15 @@ private struct DriveShareSheet: View {
                     }
                 }
             }
+            .task { await loadLinks() }
         }
+    }
+
+    private var previewSamples: [TelemetryHistorySample] {
+        guard sharesFragment else { return samples }
+        let start = session.startedAt.addingTimeInterval(startSeconds)
+        let end = session.startedAt.addingTimeInterval(endSeconds)
+        return samples.filter { $0.timestamp >= start && $0.timestamp <= end }
     }
 
     private func createLink() {
@@ -1456,6 +1500,29 @@ private struct DriveShareSheet: View {
                     startOffsetMillis: sharesFragment ? Int64((startSeconds * 1_000).rounded()) : nil,
                     endOffsetMillis: sharesFragment ? Int64((endSeconds * 1_000).rounded()) : nil
                 )
+                await loadLinks()
+            } catch { self.error = error.localizedDescription }
+            working = false
+        }
+    }
+
+    private func loadLinks() async {
+        guard cloudAccount.isAuthenticated else { return }
+        do { links = try await cloudSync.driveShares(sessionID: session.id, vehicleID: session.vehicleID) }
+        catch { self.error = error.localizedDescription }
+    }
+
+    private func revoke(_ link: CloudDriveShareLink) {
+        working = true
+        error = nil
+        Task {
+            do {
+                try await cloudSync.revokeDriveShare(
+                    sessionID: session.id,
+                    vehicleID: session.vehicleID,
+                    shareID: link.id
+                )
+                links.removeAll { $0.id == link.id }
             } catch { self.error = error.localizedDescription }
             working = false
         }
