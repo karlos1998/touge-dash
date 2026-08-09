@@ -750,10 +750,15 @@ private struct DriveSessionRow: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(session.startedAt.formatted(
+                    Text(session.customName ?? session.startedAt.formatted(
                         Date.FormatStyle(date: .abbreviated, time: .shortened)
                     ))
                         .font(.headline.weight(.black))
+                    if session.customName != nil {
+                        Text(session.startedAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened)))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                     Text(String(
                         format: localized("%@ · %@ próbek"),
                         formatDuration(session.duration),
@@ -783,6 +788,14 @@ private struct DriveSessionRow: View {
                 SessionStat(title: "MAX SPEED", value: Int(session.maxSpeedKPH).formatted(), unit: "km/h", tint: .tougeIce)
                 SessionStat(title: "OIL MAX", value: Int(session.maxOilTemperatureCelsius).formatted(), unit: "°C", tint: .tougeOrange)
                 SessionStat(title: "COOLANT", value: Int(session.maxCoolantCelsius).formatted(), unit: "°C", tint: .tougeMint)
+            }
+
+            if !session.driveTags.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(session.driveTags) { DriveTagPill(tag: $0) }
+                    }
+                }
             }
 
             if session.distanceMeters > 0 {
@@ -860,6 +873,8 @@ private struct DriveSessionDetailView: View {
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
     @State private var routeHasMovement = false
     @State private var showingNoteComposer = false
+    @State private var showingMetadataEditor = false
+    @State private var showingDriveShare = false
     private let chartColumns = [GridItem(.adaptive(minimum: 460), spacing: 14)]
 
     private var selectedSample: TelemetryHistorySample? {
@@ -898,6 +913,30 @@ private struct DriveSessionDetailView: View {
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 14) {
                     SessionDetailHeader(session: session)
+
+                    HStack(spacing: 10) {
+                        Button { showingMetadataEditor = true } label: {
+                            Label("Edytuj nazwę i tagi", systemImage: "tag.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.tougeCyan)
+
+                        Button { showingDriveShare = true } label: {
+                            Label("Udostępnij link", systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.tougeMint)
+                    }
+
+                    if !session.driveTags.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 7) {
+                                ForEach(session.driveTags) { DriveTagPill(tag: $0) }
+                            }
+                        }
+                    }
 
                     CloudSyncItemCard(
                         itemName: "PRZEJAZD",
@@ -1025,6 +1064,12 @@ private struct DriveSessionDetailView: View {
             Date.FormatStyle(date: .abbreviated, time: .omitted)
         ))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingMetadataEditor) {
+            DriveMetadataEditor(session: session, cloudAccount: cloudAccount, cloudSync: cloudSync)
+        }
+        .sheet(isPresented: $showingDriveShare) {
+            DriveShareSheet(session: session, cloudAccount: cloudAccount, cloudSync: cloudSync)
+        }
         .task {
             let sessionID = session.id
             let descriptor = FetchDescriptor<TelemetryHistorySample>(
@@ -1084,10 +1129,15 @@ private struct SessionDetailHeader: View {
                         .font(.system(size: 11, weight: .black))
                         .tracking(1.4)
                         .foregroundStyle(Color.tougeCyan)
-                    Text(session.startedAt.formatted(
+                    Text(session.customName ?? session.startedAt.formatted(
                         Date.FormatStyle(date: .complete, time: .shortened)
                     ))
                         .font(.title3.weight(.black))
+                    if session.customName != nil {
+                        Text(session.startedAt.formatted(Date.FormatStyle(date: .complete, time: .shortened)))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Image(systemName: "waveform.path.ecg")
@@ -1126,6 +1176,301 @@ private struct HeaderSummary: View {
                 .minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct DriveTagPill: View {
+    let tag: CloudDriveTag
+
+    var body: some View {
+        let tint = Color.driveTag(hex: tag.color)
+        HStack(spacing: 5) {
+            Circle().fill(tint).frame(width: 6, height: 6)
+            Text(tag.name)
+                .font(.system(size: 9, weight: .black))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(tint.opacity(0.13), in: Capsule())
+        .overlay(Capsule().stroke(tint.opacity(0.35)))
+    }
+}
+
+private struct DriveMetadataEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    let session: DriveSession
+    @ObservedObject var cloudAccount: CloudAccountService
+    @ObservedObject var cloudSync: CloudSyncManager
+    @State private var name: String
+    @State private var tags: [CloudDriveTag] = []
+    @State private var selectedIDs: Set<UUID>
+    @State private var newTagName = ""
+    @State private var newTagColor = "#18D7E3"
+    @State private var working = false
+    @State private var error: String?
+    private let palette = ["#18D7E3", "#45E6A8", "#FF9D44", "#FF5C58", "#A879FF", "#F5D547"]
+
+    init(session: DriveSession, cloudAccount: CloudAccountService, cloudSync: CloudSyncManager) {
+        self.session = session
+        self.cloudAccount = cloudAccount
+        self.cloudSync = cloudSync
+        _name = State(initialValue: session.customName ?? "")
+        _selectedIDs = State(initialValue: Set(session.driveTags.map(\.id)))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField(localized("np. Próba boostu po strojeniu"), text: $name)
+                        .textInputAutocapitalization(.sentences)
+                        .onChange(of: name) { _, value in name = String(value.prefix(120)) }
+                    Text(localized("Pusta nazwa przywróci automatyczną datę i godzinę."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } header: { Text(localized("WŁASNA NAZWA")) }
+
+                Section {
+                    if tags.isEmpty {
+                        Text(cloudAccount.isAuthenticated
+                             ? localized("Nie masz jeszcze żadnych tagów.")
+                             : localized("Zaloguj się, aby zarządzać tagami."))
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(tags) { tag in
+                        Button {
+                            if selectedIDs.contains(tag.id) { selectedIDs.remove(tag.id) }
+                            else { selectedIDs.insert(tag.id) }
+                        } label: {
+                            HStack {
+                                DriveTagPill(tag: tag)
+                                Spacer()
+                                Image(systemName: selectedIDs.contains(tag.id) ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(selectedIDs.contains(tag.id) ? Color.tougeMint : .secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: { Text(localized("TAGI PRZEJAZDU")) }
+
+                if cloudAccount.isAuthenticated {
+                    Section {
+                        TextField(localized("Nazwa tagu"), text: $newTagName)
+                            .onChange(of: newTagName) { _, value in newTagName = String(value.prefix(40)) }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(palette, id: \.self) { hex in
+                                    Circle()
+                                        .fill(Color.driveTag(hex: hex))
+                                        .frame(width: newTagColor == hex ? 36 : 30, height: newTagColor == hex ? 36 : 30)
+                                        .overlay(Circle().stroke(.white, lineWidth: newTagColor == hex ? 2 : 0))
+                                        .onTapGesture { newTagColor = hex }
+                                }
+                            }
+                            .padding(.vertical, 3)
+                        }
+                        Button(localized("Utwórz i przypisz")) { createTag() }
+                            .disabled(newTagName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || working)
+                    } header: { Text(localized("NOWY TAG")) }
+                }
+
+                if let error {
+                    Section { Text(error).foregroundStyle(Color.tougeRed) }
+                }
+            }
+            .navigationTitle(localized("Nazwa i tagi przejazdu"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(localized("Anuluj")) { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(working ? localized("Zapisywanie…") : localized("Zapisz")) { save() }
+                        .disabled(working)
+                }
+            }
+            .task {
+                guard cloudAccount.isAuthenticated else {
+                    tags = session.driveTags
+                    return
+                }
+                do { tags = try await cloudSync.driveTags() }
+                catch { self.error = error.localizedDescription }
+            }
+        }
+    }
+
+    private func createTag() {
+        working = true
+        error = nil
+        Task {
+            do {
+                let tag = try await cloudSync.createDriveTag(name: newTagName, color: newTagColor)
+                tags = (tags + [tag]).sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                selectedIDs.insert(tag.id)
+                newTagName = ""
+            } catch { self.error = error.localizedDescription }
+            working = false
+        }
+    }
+
+    private func save() {
+        working = true
+        error = nil
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let assigned = tags.filter { selectedIDs.contains($0.id) }
+        session.customName = normalizedName.isEmpty ? nil : String(normalizedName.prefix(120))
+        session.driveTags = assigned
+        session.metadataDirty = true
+        if session.syncState == .synced { session.syncState = .changedAfterSync }
+        do { try modelContext.save() }
+        catch {
+            self.error = error.localizedDescription
+            working = false
+            return
+        }
+        guard cloudAccount.isAuthenticated else {
+            working = false
+            dismiss()
+            return
+        }
+        Task {
+            do {
+                try await cloudSync.updateDriveMetadata(
+                    sessionID: session.id,
+                    vehicleID: session.vehicleID,
+                    customName: session.customName,
+                    tags: assigned
+                )
+                dismiss()
+            } catch { self.error = error.localizedDescription }
+            working = false
+        }
+    }
+}
+
+private struct DriveShareSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let session: DriveSession
+    @ObservedObject var cloudAccount: CloudAccountService
+    @ObservedObject var cloudSync: CloudSyncManager
+    @State private var sharesFragment = false
+    @State private var startSeconds = 0.0
+    @State private var endSeconds: Double
+    @State private var unit = "DAYS"
+    @State private var amount = 7
+    @State private var working = false
+    @State private var error: String?
+    @State private var shareURL: URL?
+
+    init(session: DriveSession, cloudAccount: CloudAccountService, cloudSync: CloudSyncManager) {
+        self.session = session
+        self.cloudAccount = cloudAccount
+        self.cloudSync = cloudSync
+        _endSeconds = State(initialValue: max(1, session.duration))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker(localized("Zakres"), selection: $sharesFragment) {
+                        Text(localized("Cały przejazd")).tag(false)
+                        Text(localized("Wybrany fragment")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    if sharesFragment {
+                        Text(localized("Wybierz początek i koniec tak jak przy przycinaniu filmu."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(formatDuration(startSeconds))  →  \(formatDuration(endSeconds))")
+                            .font(.headline.monospacedDigit().weight(.black))
+                            .foregroundStyle(Color.tougeMint)
+                        LabeledContent(localized("Początek")) {
+                            Slider(value: Binding(get: { startSeconds }, set: { startSeconds = min($0, endSeconds - 1) }), in: 0...max(1, session.duration))
+                        }
+                        LabeledContent(localized("Koniec")) {
+                            Slider(value: Binding(get: { endSeconds }, set: { endSeconds = max($0, startSeconds + 1) }), in: 0...max(1, session.duration))
+                        }
+                    }
+                } header: { Text(localized("UDOSTĘPNIANY ZAKRES")) }
+
+                Section {
+                    Picker(localized("Ważność"), selection: $unit) {
+                        Text(localized("Godziny")).tag("HOURS")
+                        Text(localized("Dni")).tag("DAYS")
+                        Text(localized("Bezterminowo")).tag("FOREVER")
+                    }
+                    .pickerStyle(.segmented)
+                    if unit != "FOREVER" {
+                        Stepper(value: $amount, in: 1...(unit == "HOURS" ? 168 : 365)) {
+                            Text("\(amount) \(unit == "HOURS" ? localized("godz.") : localized("dni"))")
+                        }
+                    }
+                } header: { Text(localized("WAŻNOŚĆ LINKU")) }
+
+                if let shareURL {
+                    Section {
+                        Text(shareURL.absoluteString)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                        ShareLink(item: shareURL) {
+                            Label(localized("Wyślij link"), systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.tougeMint)
+                    } header: { Text(localized("LINK JEST GOTOWY")) }
+                }
+
+                if !cloudAccount.isAuthenticated {
+                    Section { Text(localized("Zaloguj się do Touge Dash Cloud, aby utworzyć link.")).foregroundStyle(Color.tougeOrange) }
+                }
+                if let error { Section { Text(error).foregroundStyle(Color.tougeRed) } }
+            }
+            .navigationTitle(localized("Udostępnij przejazd"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button(localized("Zamknij")) { dismiss() } }
+                if shareURL == nil {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(working ? localized("Tworzenie linku…") : localized("Utwórz link")) { createLink() }
+                            .disabled(working || !cloudAccount.isAuthenticated)
+                    }
+                }
+            }
+        }
+    }
+
+    private func createLink() {
+        working = true
+        error = nil
+        Task {
+            do {
+                shareURL = try await cloudSync.createDriveShare(
+                    sessionID: session.id,
+                    vehicleID: session.vehicleID,
+                    unit: unit,
+                    amount: unit == "FOREVER" ? nil : amount,
+                    startOffsetMillis: sharesFragment ? Int64((startSeconds * 1_000).rounded()) : nil,
+                    endOffsetMillis: sharesFragment ? Int64((endSeconds * 1_000).rounded()) : nil
+                )
+            } catch { self.error = error.localizedDescription }
+            working = false
+        }
+    }
+}
+
+private extension Color {
+    static func driveTag(hex: String) -> Color {
+        var value: UInt64 = 0
+        Scanner(string: hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))).scanHexInt64(&value)
+        return Color(
+            red: Double((value >> 16) & 0xff) / 255,
+            green: Double((value >> 8) & 0xff) / 255,
+            blue: Double(value & 0xff) / 255
+        )
     }
 }
 

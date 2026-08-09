@@ -458,6 +458,11 @@ final class DriveSession {
     var maxOilTemperatureCelsius: Double
     var minimumOilPressureBar: Double?
     var containsLocation: Bool
+    // Optional fields preserve automatic migration for archives created by
+    // earlier app versions.
+    var customName: String?
+    var tagsData: Data?
+    var metadataDirty: Bool?
     var syncStateRaw: String
     var revision: Int
 
@@ -484,6 +489,9 @@ final class DriveSession {
         maxOilTemperatureCelsius = 0
         minimumOilPressureBar = nil
         containsLocation = false
+        customName = nil
+        tagsData = nil
+        metadataDirty = false
         syncStateRaw = HistorySyncState.local.rawValue
         revision = 1
         samples = []
@@ -496,6 +504,14 @@ final class DriveSession {
     var syncState: HistorySyncState {
         get { HistorySyncState(rawValue: syncStateRaw) ?? .local }
         set { syncStateRaw = newValue.rawValue }
+    }
+
+    var driveTags: [CloudDriveTag] {
+        get {
+            guard let tagsData else { return [] }
+            return (try? JSONDecoder.tougeDashCloud().decode([CloudDriveTag].self, from: tagsData)) ?? []
+        }
+        set { tagsData = try? JSONEncoder.tougeDashCloud().encode(newValue) }
     }
 }
 

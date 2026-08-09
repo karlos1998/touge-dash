@@ -4,6 +4,22 @@ import XCTest
 @testable import TougeDash
 
 final class EMUProtocolTests: XCTestCase {
+    func testDriveMetadataKeepsNameAndMultipleColoredTags() throws {
+        let session = DriveSession(vehicleID: UUID(), startedAt: .now)
+        let tags = [
+            CloudDriveTag(id: UUID(), name: "Track", color: "#18D7E3"),
+            CloudDriveTag(id: UUID(), name: "Wet", color: "#45E6A8")
+        ]
+
+        session.customName = "Boost run"
+        session.driveTags = tags
+        session.metadataDirty = true
+
+        XCTAssertEqual(session.customName, "Boost run")
+        XCTAssertEqual(session.driveTags, tags)
+        XCTAssertEqual(session.metadataDirty, true)
+    }
+
     @MainActor
     func testLiveActivityStartsBeforeBackgroundBluetoothScanning() async {
         var events: [String] = []

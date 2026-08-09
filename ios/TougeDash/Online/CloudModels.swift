@@ -125,6 +125,46 @@ struct CloudIncidentShare: Decodable, Sendable {
     let expiresAt: Date?
 }
 
+struct CloudDriveTag: Codable, Equatable, Identifiable, Sendable {
+    let id: UUID
+    var name: String
+    var color: String
+}
+
+struct CloudDriveTagRequest: Encodable, Sendable {
+    let name: String
+    let color: String
+}
+
+struct CloudDriveNameRequest: Encodable, Sendable {
+    let name: String?
+}
+
+struct CloudDriveTagsRequest: Encodable, Sendable {
+    let tagIds: [UUID]
+}
+
+struct CloudDriveMetadata: Decodable, Sendable {
+    let customName: String?
+    let tags: [CloudDriveTag]
+}
+
+struct CloudDriveShareRequest: Encodable, Sendable {
+    let unit: String
+    let amount: Int?
+    let startOffsetMillis: Int64?
+    let endOffsetMillis: Int64?
+}
+
+struct CloudDriveShare: Decodable, Sendable {
+    let id: UUID
+    let token: String
+    let createdAt: Date
+    let expiresAt: Date?
+    let startOffsetMillis: Int64?
+    let endOffsetMillis: Int64?
+}
+
 struct CloudSessionUpload: Encodable, Sendable {
     let id: UUID
     let startedAt: Date
