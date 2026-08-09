@@ -1371,7 +1371,12 @@ private struct DriveShareSheet: View {
         self.samples = samples
         self.cloudAccount = cloudAccount
         self.cloudSync = cloudSync
-        _endSeconds = State(initialValue: max(1, session.duration))
+        let prefix = "TougeDash.driveShare.\(session.id.uuidString)"
+        let defaults = UserDefaults.standard
+        _sharesFragment = State(initialValue: defaults.bool(forKey: prefix + ".fragment"))
+        _startSeconds = State(initialValue: min(max(0, defaults.double(forKey: prefix + ".start")), max(0, session.duration - 1)))
+        let storedEnd = defaults.double(forKey: prefix + ".end")
+        _endSeconds = State(initialValue: storedEnd > 0 ? min(max(1, storedEnd), max(1, session.duration)) : max(1, session.duration))
     }
 
     var body: some View {
@@ -1477,6 +1482,9 @@ private struct DriveShareSheet: View {
                 }
             }
             .task { await loadLinks() }
+            .onChange(of: sharesFragment) { _, _ in persistRange() }
+            .onChange(of: startSeconds) { _, _ in persistRange() }
+            .onChange(of: endSeconds) { _, _ in persistRange() }
         }
     }
 
@@ -1487,18 +1495,30 @@ private struct DriveShareSheet: View {
         return samples.filter { $0.timestamp >= start && $0.timestamp <= end }
     }
 
+    private func persistRange() {
+        let prefix = "TougeDash.driveShare.\(session.id.uuidString)"
+        UserDefaults.standard.set(sharesFragment, forKey: prefix + ".fragment")
+        UserDefaults.standard.set(startSeconds, forKey: prefix + ".start")
+        UserDefaults.standard.set(endSeconds, forKey: prefix + ".end")
+    }
+
     private func createLink() {
         working = true
         error = nil
         Task {
             do {
+                let range = sharesFragment ? DriveShareSelection.normalized(
+                    driveDurationMillis: Int64((session.duration * 1_000).rounded()),
+                    startOffsetMillis: Int64((startSeconds * 1_000).rounded()),
+                    endOffsetMillis: Int64((endSeconds * 1_000).rounded())
+                ) : nil
                 shareURL = try await cloudSync.createDriveShare(
                     sessionID: session.id,
                     vehicleID: session.vehicleID,
                     unit: unit,
                     amount: unit == "FOREVER" ? nil : amount,
-                    startOffsetMillis: sharesFragment ? Int64((startSeconds * 1_000).rounded()) : nil,
-                    endOffsetMillis: sharesFragment ? Int64((endSeconds * 1_000).rounded()) : nil
+                    startOffsetMillis: range?.startOffsetMillis,
+                    endOffsetMillis: range?.endOffsetMillis
                 )
                 await loadLinks()
             } catch { self.error = error.localizedDescription }

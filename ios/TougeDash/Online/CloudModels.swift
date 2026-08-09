@@ -156,6 +156,20 @@ struct CloudDriveShareRequest: Encodable, Sendable {
     let endOffsetMillis: Int64?
 }
 
+struct DriveShareSelection: Equatable, Sendable {
+    let startOffsetMillis: Int64
+    let endOffsetMillis: Int64
+
+    var durationMillis: Int64 { endOffsetMillis - startOffsetMillis }
+
+    static func normalized(driveDurationMillis: Int64, startOffsetMillis: Int64, endOffsetMillis: Int64) -> Self {
+        let duration = max(1, driveDurationMillis)
+        let start = min(max(0, startOffsetMillis), duration - 1)
+        let end = min(max(start + 1, endOffsetMillis), duration)
+        return Self(startOffsetMillis: start, endOffsetMillis: end)
+    }
+}
+
 struct CloudDriveShare: Decodable, Sendable {
     let id: UUID
     let token: String
