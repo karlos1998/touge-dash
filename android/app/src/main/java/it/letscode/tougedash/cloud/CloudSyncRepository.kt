@@ -27,10 +27,12 @@ import it.letscode.tougedash.model.VehicleAlertRules
 import it.letscode.tougedash.alerts.AlertRepository
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -47,6 +49,84 @@ class CloudSyncRepository(
     private val json: Json,
     private val alerts: AlertRepository
 ) {
+    @Serializable
+    data class DriveTag(val id: String, val name: String, val color: String)
+
+    suspend fun driveTags(): List<DriveTag> {
+        check(api.isAuthenticated) { "Sign in before managing tags." }
+        return json.decodeFromString(api.request("/api/v1/drive-tags").toString())
+    }
+
+    suspend fun createDriveTag(name: String, color: String): DriveTag {
+        check(api.isAuthenticated) { "Sign in before creating a tag." }
+        val response = api.request(
+            "/api/v1/drive-tags",
+            "POST",
+            buildJsonObject { put("name", name.trim().take(40)); put("color", color) }
+        )
+        return json.decodeFromString(response.toString())
+    }
+
+    suspend fun updateDriveTag(tag: DriveTag): DriveTag {
+        val response = api.request(
+            "/api/v1/drive-tags/${tag.id}",
+            "PATCH",
+            buildJsonObject { put("name", tag.name.trim().take(40)); put("color", tag.color) }
+        )
+        return json.decodeFromString(response.toString())
+    }
+
+    suspend fun deleteDriveTag(tagId: String) {
+        api.request("/api/v1/drive-tags/$tagId", "DELETE")
+    }
+
+    suspend fun updateDriveMetadata(session: DriveSessionEntity, customName: String?, tags: List<DriveTag>) {
+        check(api.isAuthenticated) { "Sign in before editing cloud history." }
+        var vehicle = dao.vehicle(session.vehicleHardwareId) ?: error("Vehicle not found.")
+        vehicle = discover(vehicle)
+        val remoteVehicleId = vehicle.remoteId ?: error("Vehicle has not been synchronized.")
+        if (session.remoteId == null || session.syncState != SyncState.SYNCED) {
+            check(sync()) { "Synchronize the drive before editing it." }
+        }
+        api.request(
+            "/api/v1/vehicles/$remoteVehicleId/sessions/${session.id}/name",
+            "PATCH",
+            buildJsonObject { if (customName == null) put("name", JsonNull) else put("name", customName) }
+        )
+        api.request(
+            "/api/v1/vehicles/$remoteVehicleId/sessions/${session.id}/tags",
+            "PUT",
+            buildJsonObject { put("tagIds", buildJsonArray { tags.forEach { add(JsonPrimitive(it.id)) } }) }
+        )
+        dao.updateSession(session.copy(customName = customName, tagsJson = json.encodeToString(tags), metadataDirty = false, syncState = SyncState.SYNCED))
+    }
+
+    suspend fun createDriveShare(
+        session: DriveSessionEntity,
+        unit: String,
+        amount: Int?,
+        startOffsetMillis: Long?,
+        endOffsetMillis: Long?
+    ): String {
+        check(api.isAuthenticated) { "Sign in before sharing a drive." }
+        check(sync()) { "Synchronize the drive before sharing it." }
+        var vehicle = dao.vehicle(session.vehicleHardwareId) ?: error("Vehicle not found.")
+        vehicle = discover(vehicle)
+        val remoteVehicleId = vehicle.remoteId ?: error("Vehicle has not been synchronized.")
+        val body = buildJsonObject {
+            put("unit", unit)
+            if (unit != "FOREVER") put("amount", requireNotNull(amount))
+            startOffsetMillis?.let { put("startOffsetMillis", it) }
+            endOffsetMillis?.let { put("endOffsetMillis", it) }
+        }
+        val response = api.request(
+            "/api/v1/vehicles/$remoteVehicleId/sessions/${session.id}/shares",
+            "POST",
+            body
+        ).jsonObject
+        val token = response["token"]?.jsonPrimitive?.content ?: error("Server did not return a share token.")
+        return BuildConfig.WEB_BASE_URL.trimEnd('/') + "/shared/drives/" + token
+    }
     suspend fun createIncidentShare(incidentId: String, unit: String, amount: Int?): String {
         check(api.isAuthenticated) { "Sign in before sharing a report." }
         check(sync()) { "Synchronize the report before sharing it." }
@@ -92,7 +172,14 @@ class CloudSyncRepository(
             val vehicles = dao.vehiclesOnce().map { discover(it) }
             vehicles.forEach { vehicle ->
                 val remoteId = vehicle.remoteId ?: return@forEach
-                dao.pendingSessions(25).filter { it.vehicleHardwareId == vehicle.localHardwareId }.forEach { uploadSession(it, remoteId) }
+                dao.pendingSessions(25).filter { it.vehicleHardwareId == vehicle.localHardwareId }.forEach {
+                    uploadSession(it, remoteId)
+                    if (it.metadataDirty) {
+                        val refreshed = dao.sessionOnce(it.id) ?: it
+                        val tags = runCatching { json.decodeFromString<List<DriveTag>>(refreshed.tagsJson) }.getOrDefault(emptyList())
+                        updateDriveMetadata(refreshed, refreshed.customName, tags)
+                    }
+                }
                 dao.pendingIncidents(25).filter { it.vehicleHardwareId == vehicle.localHardwareId }.forEach { uploadIncident(it, remoteId) }
                 dao.pendingAnnotations(100).filter { it.vehicleHardwareId == vehicle.localHardwareId }.forEach { annotation ->
                     val body = buildJsonObject { put("id", annotation.id); annotation.incidentId?.let { put("incidentId", it) }; put("recordedAt", iso(annotation.recordedAt)); put("body", annotation.body) }

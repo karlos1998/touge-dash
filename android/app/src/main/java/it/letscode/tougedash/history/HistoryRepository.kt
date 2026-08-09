@@ -42,6 +42,19 @@ class HistoryRepository(private val dao: TougeDashDao, private val context: Cont
     fun videos(id: String) = dao.videos(id)
     fun accelerationAttempts(id: String) = dao.accelerationAttempts(id)
 
+    suspend fun updateMetadata(session: DriveSessionEntity, customName: String?, tagsJson: String) {
+        val normalizedName = customName?.trim()?.take(120)?.takeIf(String::isNotEmpty)
+        dao.updateSession(
+            session.copy(
+                customName = normalizedName,
+                tagsJson = tagsJson,
+                metadataDirty = true,
+                modifiedAt = System.currentTimeMillis(),
+                syncState = if (session.syncState == SyncState.SYNCED) SyncState.CHANGED_AFTER_SYNC else session.syncState
+            )
+        )
+    }
+
     suspend fun ensureVehicle(hardwareId: String, name: String): VehicleEntity {
         val current = dao.vehicle(hardwareId)
         if (current != null) return current
