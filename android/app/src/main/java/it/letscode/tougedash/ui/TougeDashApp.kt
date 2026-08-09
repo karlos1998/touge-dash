@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -66,6 +67,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,6 +83,7 @@ import it.letscode.tougedash.model.TelemetryConnection
 import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.TelemetrySnapshot
 import it.letscode.tougedash.model.VehicleAlertRules
+import it.letscode.tougedash.telemetry.TelemetryRuntime
 import it.letscode.tougedash.ui.theme.TougeBlue
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
@@ -665,15 +668,38 @@ private fun VehicleNameDialog(container: AppContainer, vehicle: VehicleEntity, d
 
 @Composable
 private fun ConnectionDialog(connection: TelemetryConnection, close: () -> Unit, permissions: () -> Unit, rescan: () -> Unit) {
+    val diagnostics by TelemetryRuntime.diagnostics.collectAsState()
     AlertDialog(
         onDismissRequest = close,
         title = { Text(stringResource(R.string.connection_details)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(connection.deviceName ?: connection.state.localizedLabel(), fontWeight = FontWeight.Bold)
                 connection.hardwareId?.let { Text(it, color = TougeMuted, fontSize = 12.sp) }
                 connection.message?.let { Text(it) }
                 Text("${appText("Frames", "Ramki")} ${connection.validFrames} • ${appText("checksum", "błędne sumy")} ${connection.badChecksums} • ${appText("dropped", "pominięte bajty")} ${connection.droppedBytes}", color = TougeMuted, fontSize = 12.sp)
+                Text(
+                    "RX ${connection.receivedPackets} ${appText("packets", "pakietów")} • ${connection.receivedBytes} B",
+                    color = TougeMuted,
+                    fontSize = 12.sp
+                )
+                connection.lastPacketHex?.let {
+                    Text("LAST RX  $it", color = TougeCyan, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                }
+                if (diagnostics.isNotEmpty()) {
+                    Text(appText("DIAGNOSTICS", "DIAGNOSTYKA"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        diagnostics.take(10).reversed().joinToString("\n") { it.substringAfter(": ") },
+                        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = .22f), RoundedCornerShape(7.dp)).padding(9.dp),
+                        color = TougeMuted,
+                        fontSize = 9.sp,
+                        lineHeight = 12.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
                 if (connection.state == ConnectionState.PermissionRequired) Text(stringResource(R.string.permissions_explanation))
             }
         },

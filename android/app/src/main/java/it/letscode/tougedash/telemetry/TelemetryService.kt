@@ -17,6 +17,8 @@ import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothSocket
+import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Intent
@@ -25,8 +27,6 @@ import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
-import android.os.Handler
-import android.os.Looper
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -60,15 +60,24 @@ class TelemetryService : Service() {
     private val binder = LocalBinder()
     private val parser = EmuFrameParser()
     private val accumulator = EmuTelemetryAccumulator()
+    private val connectionSlot = BleConnectionSlot<BluetoothGatt>()
     private val bluetoothManager by lazy { getSystemService(BluetoothManager::class.java) }
     private val adapter: BluetoothAdapter? get() = bluetoothManager?.adapter
     private val container get() = (application as TougeDashApplication).container
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var samplingJob: Job? = null
-    private var bluetoothGatt: BluetoothGatt? = null
     private var controlCharacteristic: BluetoothGattCharacteristic? = null
+    private var sppSocket: BluetoothSocket? = null
+    private var sppConnectionJob: Job? = null
     private var scanning = false
     private var manuallyStopped = false
+    private var reconnectJob: Job? = null
+    private var connectionTimeoutJob: Job? = null
+    @Volatile private var connectionReady = false
+    private var reconnectAttempt = 0
+    private var receivedPacketCount = 0L
+    private var receivedByteCount = 0L
+    private var lastPacketHex: String? = null
     private var lastConnectionPublishAt = 0L
     private var lastForegroundNotificationAt = 0L
     private var lastAddress: String?
@@ -89,6 +98,20 @@ class TelemetryService : Service() {
 
     override fun onBind(intent: Intent?): IBinder = binder
     override fun onDestroy() {
+        manuallyStopped = true
+        reconnectJob?.cancel()
+        reconnectJob = null
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = null
+        sppConnectionJob?.cancel()
+        sppConnectionJob = null
+        runCatching { sppSocket?.close() }
+        sppSocket = null
+        stopScan()
+        connectionSlot.clear()?.let {
+            it.disconnect()
+            it.close()
+        }
         stopSampling()
         container.ecuControls.connectionChanged(false)
         container.locationTracker.stop()
@@ -115,26 +138,65 @@ class TelemetryService : Service() {
             updateConnection(ConnectionState.BluetoothOff, message = local("Bluetooth is disabled", "Bluetooth jest wyłączony"))
             return
         }
-        if (!force && bluetoothGatt != null) return
+        if (!force && (connectionSlot.activeValue() != null || sppSocket != null || sppConnectionJob?.isActive == true || scanning)) return
+        reconnectJob?.cancel()
+        reconnectJob = null
         stopScan()
-        lastAddress?.let { address ->
-            runCatching { currentAdapter.getRemoteDevice(address) }.getOrNull()?.let {
-                updateConnection(ConnectionState.Connecting, it.name, address)
-                bluetoothGatt = it.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
-                return
+        if (force) {
+            reconnectAttempt = 0
+            connectionTimeoutJob?.cancel()
+            connectionTimeoutJob = null
+            connectionReady = false
+            sppConnectionJob?.cancel()
+            sppConnectionJob = null
+            runCatching { sppSocket?.close() }
+            sppSocket = null
+            connectionSlot.clear()?.let {
+                it.disconnect()
+                it.close()
             }
+            controlCharacteristic = null
+            container.ecuControls.transportChanged(false)
+        }
+        if (reconnectAttempt >= 2 && reconnectAttempt % 2 == 0 && beginSppConnection(currentAdapter)) return
+        if (reconnectAttempt < 2) lastAddress?.let { address ->
+            runCatching { currentAdapter.getRemoteDevice(address) }.getOrNull()?.let {
+                if (beginConnection(it, it.name ?: "EMULOGGER")) return
+            }
+        }
+        val scanner = currentAdapter.bluetoothLeScanner
+        if (scanner == null) {
+            updateConnection(ConnectionState.Failed, message = local("Bluetooth scanner is unavailable", "Skaner Bluetooth jest niedostępny"))
+            scheduleReconnect("BluetoothLeScanner unavailable")
+            return
         }
         scanning = true
         updateConnection(ConnectionState.Scanning, message = local("Looking only for ECUMaster interfaces", "Szukanie wyłącznie interfejsów ECUMaster"))
-        currentAdapter.bluetoothLeScanner?.startScan(scanCallback)
+        runCatching { scanner.startScan(scanCallback) }
+            .onSuccess { TelemetryRuntime.diagnostic("BLE scan started") }
+            .onFailure {
+                scanning = false
+                updateConnection(ConnectionState.Failed, message = local("Bluetooth scan could not start", "Nie udało się uruchomić skanowania Bluetooth"))
+                scheduleReconnect("startScan failed: ${it.message ?: it.javaClass.simpleName}")
+            }
     }
 
     fun stopTelemetry() {
         manuallyStopped = true
+        reconnectJob?.cancel()
+        reconnectJob = null
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = null
+        connectionReady = false
+        sppConnectionJob?.cancel()
+        sppConnectionJob = null
+        runCatching { sppSocket?.close() }
+        sppSocket = null
         stopScan()
-        bluetoothGatt?.disconnect()
-        bluetoothGatt?.close()
-        bluetoothGatt = null
+        connectionSlot.clear()?.let {
+            it.disconnect()
+            it.close()
+        }
         controlCharacteristic = null
         container.ecuControls.connectionChanged(false)
         stopSampling()
@@ -144,8 +206,122 @@ class TelemetryService : Service() {
     }
 
     private fun stopScan() {
-        if (scanning && hasBluetoothPermission()) adapter?.bluetoothLeScanner?.stopScan(scanCallback)
+        if (scanning && hasBluetoothPermission()) runCatching { adapter?.bluetoothLeScanner?.stopScan(scanCallback) }
         scanning = false
+    }
+
+    private fun beginConnection(device: BluetoothDevice, name: String): Boolean {
+        if (manuallyStopped || !connectionSlot.tryReserve()) return false
+        connectionReady = false
+        stopScan()
+        updateConnection(ConnectionState.Connecting, name, device.address)
+        TelemetryRuntime.diagnostic("Connecting once to $name [${device.address}]")
+        val gatt = runCatching {
+            device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        }.getOrNull()
+        if (gatt == null || !connectionSlot.bind(gatt)) {
+            connectionSlot.cancelReservation()
+            gatt?.close()
+            scheduleReconnect("connectGatt rejected")
+            return false
+        }
+        scheduleConnectionTimeout(gatt)
+        return true
+    }
+
+    private fun scheduleConnectionTimeout(gatt: BluetoothGatt) {
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = serviceScope.launch {
+            delay(CONNECTION_TIMEOUT_MILLIS)
+            withContext(Dispatchers.Main) {
+                if (connectionSlot.isActive(gatt) && !connectionReady) {
+                    failActiveConnection(gatt, "Connection setup timed out")
+                }
+            }
+        }
+    }
+
+    private fun beginSppConnection(currentAdapter: BluetoothAdapter): Boolean {
+        val device = currentAdapter.bondedDevices
+            .filter { likelyEmuName(it.name ?: "") }
+            .sortedByDescending { bonded -> bonded.uuids?.any { it.uuid == SPP_UUID } == true }
+            .firstOrNull() ?: return false
+        if (sppConnectionJob?.isActive == true || sppSocket != null || connectionSlot.activeValue() != null) return false
+        stopScan()
+        updateConnection(ConnectionState.Connecting, device.name ?: "EMULOGGER", device.address,
+            message = local("Connecting through paired serial Bluetooth", "Łączenie przez sparowany port szeregowy Bluetooth"))
+        TelemetryRuntime.diagnostic("Trying paired SPP ${device.name} [${device.address}]")
+        sppConnectionJob = serviceScope.launch(Dispatchers.IO) {
+            val socket = runCatching { device.createRfcommSocketToServiceRecord(SPP_UUID) }.getOrNull()
+            if (socket == null) {
+                withContext(Dispatchers.Main) { finishSppConnection(device, "SPP socket creation failed") }
+                return@launch
+            }
+            sppSocket = socket
+            try {
+                socket.connect()
+                reconnectAttempt = 0
+                withContext(Dispatchers.Main) {
+                    if (sppSocket !== socket || manuallyStopped) return@withContext
+                    lastAddress = null
+                    updateConnection(ConnectionState.Connected, device.name ?: "EMULOGGER", device.address,
+                        message = local("Serial Bluetooth", "Bluetooth szeregowy"))
+                    container.ecuControls.connectionChanged(true)
+                    container.ecuControls.transportChanged(true) { data -> writeSppControl(socket, data) }
+                    startSampling(device.address, device.name ?: "EMULOGGER")
+                    TelemetryRuntime.diagnostic("Connected through paired SPP")
+                }
+                val buffer = ByteArray(1_024)
+                while (isActive && sppSocket === socket) {
+                    val count = socket.inputStream.read(buffer)
+                    if (count < 0) break
+                    if (count > 0) processEmuBytes(buffer.copyOf(count), device.name ?: "EMULOGGER", device.address)
+                }
+                throw IllegalStateException("SPP stream closed")
+            } catch (error: Exception) {
+                runCatching { socket.close() }
+                withContext(Dispatchers.Main) {
+                    if (sppSocket === socket) {
+                        sppSocket = null
+                        finishSppConnection(device, "SPP ${error.message ?: "connection failed"}")
+                    }
+                }
+            }
+        }
+        return true
+    }
+
+    private fun finishSppConnection(device: BluetoothDevice, reason: String) {
+        sppConnectionJob = null
+        container.ecuControls.connectionChanged(false)
+        stopSampling()
+        updateConnection(ConnectionState.Reconnecting, device.name, device.address,
+            message = local("Serial Bluetooth connection lost", "Utracono szeregowe połączenie Bluetooth") + " ($reason)")
+        TelemetryRuntime.diagnostic(reason)
+        scheduleReconnect(reason)
+    }
+
+    private fun writeSppControl(socket: BluetoothSocket, data: ByteArray): Boolean {
+        if (sppSocket !== socket || !socket.isConnected || !EcuControlSnapshot.isValidStatusFrame(data)) return false
+        return runCatching {
+            socket.outputStream.write(data)
+            socket.outputStream.flush()
+            TelemetryRuntime.diagnostic("ECU TX [SPP] ${data.joinToString(" ") { "%02X".format(it.toUByte().toInt()) }}")
+        }.isSuccess
+    }
+
+    private fun scheduleReconnect(reason: String) {
+        if (manuallyStopped || reconnectJob?.isActive == true) return
+        reconnectAttempt++
+        val delayMillis = (1_500L shl minOf(reconnectAttempt - 1, 3)).coerceAtMost(10_000L)
+        TelemetryRuntime.diagnostic("Bluetooth reconnect in ${delayMillis}ms: $reason")
+        reconnectJob = serviceScope.launch {
+            delay(delayMillis)
+            withContext(Dispatchers.Main) {
+                reconnectJob = null
+                if (!manuallyStopped && connectionSlot.activeValue() == null) startScanning()
+            }
+        }
     }
 
     private val scanCallback = object : ScanCallback() {
@@ -153,54 +329,82 @@ class TelemetryService : Service() {
             if (!hasBluetoothPermission()) return
             val advertised = result.scanRecord?.deviceName
             val name = advertised ?: result.device.name ?: "BLE device"
-            val serviceMatch = result.scanRecord?.serviceUuids?.any { it.uuid == EMU_SERVICE_UUID } == true
-            if (!serviceMatch && !likelyEmuName(name)) return
+            val scanRecord = result.scanRecord
+            val serviceMatch = scanRecord?.serviceUuids?.any { it.uuid == EMU_SERVICE_UUID } == true
+            val payloads = buildList {
+                scanRecord?.bytes?.let(::add)
+                scanRecord?.serviceData?.values?.let(::addAll)
+                scanRecord?.manufacturerSpecificData?.let { values ->
+                    repeat(values.size()) { index -> add(values.valueAt(index)) }
+                }
+            }
+            if (!BleAdvertisementMatcher.matches(name, serviceMatch, payloads)) return
             TelemetryRuntime.diagnostic("Accepted $name, RSSI ${result.rssi}")
-            stopScan()
-            updateConnection(ConnectionState.Connecting, name, result.device.address)
-            bluetoothGatt = result.device.connectGatt(this@TelemetryService, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+            beginConnection(result.device, name)
         }
 
         override fun onScanFailed(errorCode: Int) {
             scanning = false
             updateConnection(ConnectionState.Failed, message = local("Bluetooth scan failed", "Skanowanie Bluetooth nie powiodło się") + " ($errorCode)")
+            scheduleReconnect("Scan failed ($errorCode)")
         }
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            if (newState == BluetoothProfile.STATE_CONNECTED) {
-                if (!hasBluetoothPermission()) return
+            if (!connectionSlot.isActive(gatt)) {
+                TelemetryRuntime.diagnostic("Ignoring stale GATT callback status=$status state=$newState")
+                gatt.close()
+                return
+            }
+            if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
+                if (!hasBluetoothPermission()) {
+                    abandonForMissingPermission(gatt)
+                    return
+                }
                 lastAddress = gatt.device.address
                 updateConnection(ConnectionState.Connected, gatt.device.name ?: "EMULOGGER", gatt.device.address)
                 container.ecuControls.connectionChanged(true)
                 TelemetryRuntime.diagnostic("Connected; discovering FFE0")
-                gatt.discoverServices()
+                if (!gatt.discoverServices()) failActiveConnection(gatt, "Service discovery was rejected")
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                controlCharacteristic = null
-                container.ecuControls.connectionChanged(false)
-                gatt.close()
-                if (bluetoothGatt === gatt) bluetoothGatt = null
-                stopSampling()
-                updateConnection(ConnectionState.Reconnecting, message = local("Connection lost", "Utracono połączenie"))
-                if (!manuallyStopped) Handler(Looper.getMainLooper()).post { startScanning(force = true) }
+                failActiveConnection(gatt, "Disconnected, GATT status $status")
+            } else if (status != BluetoothGatt.GATT_SUCCESS) {
+                failActiveConnection(gatt, "GATT error $status, state $newState")
             }
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            if (!hasBluetoothPermission()) return
+            if (!connectionSlot.isActive(gatt)) return
+            if (!hasBluetoothPermission()) {
+                abandonForMissingPermission(gatt)
+                return
+            }
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                failActiveConnection(gatt, "Service discovery failed ($status)")
+                return
+            }
             val service: BluetoothGattService? = gatt.getService(EMU_SERVICE_UUID)
             val characteristic = service?.getCharacteristic(EMU_CHARACTERISTIC_UUID)
             if (characteristic == null) {
                 TelemetryRuntime.diagnostic("FFE1 not found")
-                gatt.disconnect()
+                failActiveConnection(gatt, "FFE1 not found")
                 return
             }
-            gatt.setCharacteristicNotification(characteristic, true)
-            characteristic.getDescriptor(CCCD_UUID)?.let { descriptor ->
-                // CCCD is Bluetooth subscription metadata, not an ECU control value.
-                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                gatt.writeDescriptor(descriptor)
+            val supportsNotify = characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
+            val supportsIndicate = characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
+            if (!supportsNotify && !supportsIndicate) {
+                failActiveConnection(gatt, "FFE1 does not support notifications")
+                return
+            }
+            if (!gatt.setCharacteristicNotification(characteristic, true)) {
+                failActiveConnection(gatt, "FFE1 notification setup rejected")
+                return
+            }
+            val descriptor = characteristic.getDescriptor(CCCD_UUID)
+            if (descriptor == null || !writeNotificationDescriptor(gatt, descriptor)) {
+                failActiveConnection(gatt, "FFE1 notification descriptor rejected")
+                return
             }
             val nusControl = gatt.getService(NUS_SERVICE_UUID)?.getCharacteristic(NUS_RX_UUID)
                 ?.takeIf(::supportsWrite)
@@ -211,26 +415,60 @@ class TelemetryService : Service() {
                 approvedControl != null && writeControlFrame(gatt, approvedControl, data)
             }
             TelemetryRuntime.diagnostic(
-                if (approvedControl == null) "Subscribed to FFE1; ECU control is unavailable"
-                else "Subscribed to FFE1; approved ECU control ${approvedControl.uuid}"
+                if (approvedControl == null) "Discovered FFE1; ECU control is read-only"
+                else "Discovered FFE1; approved ECU control ${approvedControl.uuid}"
             )
+        }
+
+        override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
+            if (!connectionSlot.isActive(gatt) || descriptor.uuid != CCCD_UUID) return
+            if (!hasBluetoothPermission()) {
+                abandonForMissingPermission(gatt)
+                return
+            }
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                failActiveConnection(gatt, "FFE1 subscription failed ($status)")
+                return
+            }
+            reconnectAttempt = 0
+            connectionReady = true
+            connectionTimeoutJob?.cancel()
+            connectionTimeoutJob = null
+            TelemetryRuntime.diagnostic("Subscribed to FFE1")
+            val characteristic = descriptor.characteristic
+            if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_READ != 0) {
+                runCatching { gatt.readCharacteristic(characteristic) }.onFailure {
+                    TelemetryRuntime.diagnostic("Initial FFE1 read rejected: ${it.message ?: it.javaClass.simpleName}")
+                }
+            }
             startSampling(gatt.device.address, gatt.device.name ?: "EMULOGGER")
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            if (characteristic.uuid != EMU_CHARACTERISTIC_UUID) return
-            parser.feed(characteristic.value ?: return).forEach {
-                container.ecuControls.ingest(it)
-                TelemetryRuntime.updateSnapshot(accumulator.apply(it))
+            processIncomingValue(gatt, characteristic, characteristic.value ?: return)
+        }
+
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            processIncomingValue(gatt, characteristic, value)
+        }
+
+        override fun onCharacteristicRead(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                processIncomingValue(gatt, characteristic, characteristic.value ?: return)
             }
-            updateConnection(
-                ConnectionState.Connected,
-                gatt.device.name ?: "EMULOGGER",
-                gatt.device.address,
-                valid = parser.stats.validFrames,
-                bad = parser.stats.badChecksums,
-                dropped = parser.stats.droppedBytes
-            )
+        }
+
+        override fun onCharacteristicRead(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray,
+            status: Int
+        ) {
+            if (status == BluetoothGatt.GATT_SUCCESS) processIncomingValue(gatt, characteristic, value)
         }
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
@@ -240,6 +478,96 @@ class TelemetryService : Service() {
                 container.ecuControls.transportWriteFailed()
             }
         }
+    }
+
+    private fun writeNotificationDescriptor(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor): Boolean {
+        // CCCD is Bluetooth subscription metadata, not an ECU control value.
+        val characteristic = descriptor.characteristic
+        val subscriptionValue = if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
+            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+        } else {
+            BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+        }
+        return if (Build.VERSION.SDK_INT >= 33) {
+            gatt.writeDescriptor(descriptor, subscriptionValue) == BluetoothStatusCodes.SUCCESS
+        } else {
+            descriptor.value = subscriptionValue
+            gatt.writeDescriptor(descriptor)
+        }
+    }
+
+    private fun processIncomingValue(
+        gatt: BluetoothGatt,
+        characteristic: BluetoothGattCharacteristic,
+        value: ByteArray
+    ) {
+        if (!connectionSlot.isActive(gatt) || characteristic.uuid != EMU_CHARACTERISTIC_UUID || value.isEmpty()) return
+        if (!hasBluetoothPermission()) {
+            abandonForMissingPermission(gatt)
+            return
+        }
+        processEmuBytes(value, gatt.device.name ?: "EMULOGGER", gatt.device.address)
+    }
+
+    private fun abandonForMissingPermission(gatt: BluetoothGatt) {
+        if (!connectionSlot.release(gatt)) return
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = null
+        connectionReady = false
+        controlCharacteristic = null
+        container.ecuControls.connectionChanged(false)
+        stopSampling()
+        runCatching { gatt.close() }
+        updateConnection(
+            ConnectionState.PermissionRequired,
+            message = local("Bluetooth permission required", "Wymagane uprawnienie Bluetooth")
+        )
+    }
+
+    private fun processEmuBytes(value: ByteArray, deviceName: String, hardwareId: String) {
+        receivedPacketCount++
+        receivedByteCount += value.size
+        lastPacketHex = value.take(40).joinToString(" ") { "%02X".format(it.toUByte().toInt()) }
+        if (receivedPacketCount <= 10 || receivedPacketCount % 100L == 0L) {
+            TelemetryRuntime.diagnostic("RX #$receivedPacketCount [$deviceName] $lastPacketHex")
+        }
+        if (EcuControlSnapshot.isValidStatusFrame(value)) {
+            container.ecuControls.ingestStatusFrame(value)
+        } else {
+            parser.feed(value).forEach {
+                container.ecuControls.ingest(it)
+                TelemetryRuntime.updateSnapshot(accumulator.apply(it))
+            }
+        }
+        updateConnection(
+            ConnectionState.Connected,
+            deviceName,
+            hardwareId,
+            valid = parser.stats.validFrames,
+            bad = parser.stats.badChecksums,
+            dropped = parser.stats.droppedBytes
+        )
+    }
+
+    private fun failActiveConnection(gatt: BluetoothGatt, reason: String) {
+        if (!connectionSlot.release(gatt)) {
+            gatt.close()
+            return
+        }
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = null
+        connectionReady = false
+        TelemetryRuntime.diagnostic(reason)
+        controlCharacteristic = null
+        container.ecuControls.connectionChanged(false)
+        stopSampling()
+        runCatching { gatt.disconnect() }
+        runCatching { gatt.close() }
+        updateConnection(
+            ConnectionState.Reconnecting,
+            message = local("Connection lost", "Utracono połączenie") + " ($reason)"
+        )
+        scheduleReconnect(reason)
     }
 
     private fun supportsWrite(characteristic: BluetoothGattCharacteristic): Boolean {
@@ -253,14 +581,19 @@ class TelemetryService : Service() {
         characteristic: BluetoothGattCharacteristic,
         data: ByteArray
     ): Boolean {
-        if (bluetoothGatt !== gatt || !EcuControlSnapshot.isValidStatusFrame(data) || !supportsWrite(characteristic)) return false
-        characteristic.writeType = if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) {
+        if (!connectionSlot.isActive(gatt) || !EcuControlSnapshot.isValidStatusFrame(data) || !supportsWrite(characteristic)) return false
+        val writeType = if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) {
             BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
         } else {
             BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         }
-        characteristic.value = data
-        val accepted = gatt.writeCharacteristic(characteristic)
+        val accepted = if (Build.VERSION.SDK_INT >= 33) {
+            gatt.writeCharacteristic(characteristic, data, writeType) == BluetoothStatusCodes.SUCCESS
+        } else {
+            characteristic.writeType = writeType
+            characteristic.value = data
+            gatt.writeCharacteristic(characteristic)
+        }
         if (accepted) {
             TelemetryRuntime.diagnostic("ECU TX [${characteristic.uuid}] ${data.joinToString(" ") { "%02X".format(it.toUByte().toInt()) }}")
         }
@@ -363,7 +696,20 @@ class TelemetryService : Service() {
         // EMULOGGER can emit hundreds of frames per second. Parser counters are useful in
         // diagnostics, but publishing them for every frame would constantly recompose UI.
         if (statusChanged || now - lastConnectionPublishAt >= 250) {
-            TelemetryRuntime.updateConnection(TelemetryConnection(state, name, hardwareId, message, valid, bad, dropped))
+            TelemetryRuntime.updateConnection(
+                TelemetryConnection(
+                    state = state,
+                    deviceName = name,
+                    hardwareId = hardwareId,
+                    message = message,
+                    validFrames = valid,
+                    badChecksums = bad,
+                    droppedBytes = dropped,
+                    receivedPackets = receivedPacketCount,
+                    receivedBytes = receivedByteCount,
+                    lastPacketHex = lastPacketHex
+                )
+            )
             lastConnectionPublishAt = now
         }
         if (statusChanged) {
@@ -402,10 +748,7 @@ class TelemetryService : Service() {
         ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED &&
         ActivityCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 
-    private fun likelyEmuName(name: String): Boolean {
-        val normalized = name.lowercase()
-        return listOf("emu", "ecumaster", "canbt", "btcan", "edl", "logger").any(normalized::contains)
-    }
+    private fun likelyEmuName(name: String): Boolean = BleAdvertisementMatcher.containsMarker(name)
 
     private fun local(english: String, polish: String): String =
         if (resources.configuration.locales[0].language == "pl") polish else english
@@ -417,10 +760,12 @@ class TelemetryService : Service() {
         private const val LAST_DEVICE = "last_device"
         private const val CHANNEL_ID = "live_telemetry"
         private const val NOTIFICATION_ID = 42
+        private const val CONNECTION_TIMEOUT_MILLIS = 45_000L
         val EMU_SERVICE_UUID: UUID = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
         val EMU_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
         val NUS_SERVICE_UUID: UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
         val NUS_RX_UUID: UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+        val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }
 }

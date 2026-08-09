@@ -621,6 +621,12 @@ extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
             ))
         } else {
             appendDiagnostic(String(format: localized("Subscribed to %@"), characteristic.uuid.uuidString))
+            if characteristic.uuid == ECUControlTransportPolicy.emuCharacteristic,
+               characteristic.properties.contains(.read) {
+                // Some EDL firmware exposes the current switch/rotary state as
+                // the initial FFE1 value rather than as telemetry channels.
+                peripheral.readValue(for: characteristic)
+            }
         }
     }
 

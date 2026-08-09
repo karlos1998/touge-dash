@@ -67,6 +67,16 @@ class EmuProtocolTest {
         assertTrue(EcuControlSnapshot.isValidStatusFrame(frame))
     }
 
+    @Test fun fullStatusFrameInitializesControlState() {
+        val frame = byteArrayOf(0x08, 0x55, 0xA0.toByte(), 0x12, 0x34, 0xAB.toByte(), 0xCD.toByte(), 0xBB.toByte())
+        val accumulator = EcuControlLoopbackAccumulator()
+
+        assertTrue(accumulator.applyStatusFrame(frame))
+        val state = requireNotNull(accumulator.synchronizedSnapshot())
+        assertEquals(listOf(true, false, true, false, false, false, false, false), state.switches)
+        assertEquals(listOf(1, 2, 3, 4, 10, 11, 12, 13), state.rotaryValues)
+    }
+
     @Test fun ecuControlLoopbackDecodesAndRetainsSynchronizedState() {
         val accumulator = EcuControlLoopbackAccumulator()
         accumulator.apply(EmuFrame(254, 0xA0), 1_000)

@@ -86,6 +86,11 @@ final class ECUControlCoordinator: ObservableObject {
         refreshLoopbackState()
     }
 
+    func ingestStatusFrame(_ data: Data) {
+        guard isConnected, loopback.applyStatusFrame(data) else { return }
+        refreshLoopbackState()
+    }
+
     func switchValue(channel: Int) -> Bool? {
         guard observedSnapshot != nil || pending != nil else { return nil }
         return displaySnapshot.switchValue(channel: channel)

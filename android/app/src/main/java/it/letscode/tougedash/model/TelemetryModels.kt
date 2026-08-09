@@ -46,7 +46,10 @@ data class TelemetryConnection(
     val message: String? = null,
     val validFrames: Long = 0,
     val badChecksums: Long = 0,
-    val droppedBytes: Long = 0
+    val droppedBytes: Long = 0,
+    val receivedPackets: Long = 0,
+    val receivedBytes: Long = 0,
+    val lastPacketHex: String? = null
 )
 
 @Serializable

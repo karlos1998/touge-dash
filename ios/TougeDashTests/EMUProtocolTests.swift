@@ -538,6 +538,28 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(loopback.synchronizedSnapshot(), state)
     }
 
+    func testECUControlFullStatusFrameInitializesLoopback() throws {
+        var loopback = ECUControlLoopbackAccumulator()
+        let frame = Data([0x08, 0x55, 0xA0, 0x12, 0x34, 0xAB, 0xCD, 0xBB])
+
+        XCTAssertTrue(loopback.applyStatusFrame(frame))
+        let state = try XCTUnwrap(loopback.synchronizedSnapshot())
+        XCTAssertEqual(state.switches, [true, false, true, false, false, false, false, false])
+        XCTAssertEqual(state.rotaryValues, [1, 2, 3, 4, 10, 11, 12, 13])
+    }
+
+    @MainActor
+    func testECUControlCoordinatorAcceptsFullStatusFrame() {
+        let coordinator = ECUControlCoordinator(notificationCenter: NotificationCenter(), applicationIsActive: true)
+        coordinator.connectionChanged(isConnected: true)
+        coordinator.transportAvailabilityChanged(true)
+
+        coordinator.ingestStatusFrame(Data([0x08, 0x55, 0x80, 0, 0, 0, 0, 0xDD]))
+
+        XCTAssertTrue(coordinator.isReady)
+        XCTAssertEqual(coordinator.switchValue(channel: 1), true)
+    }
+
     func testECUControlRejectsInvalidChannelRangeAndChecksum() {
         let state = ECUControlSnapshot()
         XCTAssertNil(state.settingSwitch(channel: 0, to: true))

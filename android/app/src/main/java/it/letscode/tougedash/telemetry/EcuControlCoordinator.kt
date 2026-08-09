@@ -80,6 +80,12 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
     }
 
     @Synchronized
+    fun ingestStatusFrame(data: ByteArray) {
+        if (!mutableState.value.connected || !loopback.applyStatusFrame(data)) return
+        refresh()
+    }
+
+    @Synchronized
     fun toggleSwitch(channel: Int): Boolean {
         val current = mutableState.value
         val observed = current.observed ?: return false

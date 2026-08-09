@@ -41,6 +41,19 @@ data class EcuControlSnapshot(
             data[0].toUByte().toInt() == 0x08 &&
             data[1].toUByte().toInt() == 0x55 &&
             (data.take(7).sumOf { it.toUByte().toInt() } and 0xff) == data[7].toUByte().toInt()
+
+        fun decodeStatusFrame(data: ByteArray): EcuControlSnapshot? {
+            if (!isValidStatusFrame(data)) return null
+            val switchByte = data[2].toUByte().toInt()
+            val rotary = data.sliceArray(3..6).flatMap { byte ->
+                val value = byte.toUByte().toInt()
+                listOf(value shr 4, value and 0x0f)
+            }
+            return EcuControlSnapshot(
+                switches = List(8) { index -> switchByte and (1 shl (7 - index)) != 0 },
+                rotaryValues = rotary
+            )
+        }
     }
 }
 
@@ -81,6 +94,20 @@ internal class EcuControlLoopbackAccumulator {
         }
     }
 
+    fun applyStatusFrame(data: ByteArray): Boolean {
+        val snapshot = EcuControlSnapshot.decodeStatusFrame(data) ?: return false
+        revision++
+        switchByte = snapshot.switches.withIndex().fold(0) { result, item ->
+            if (item.value) result or (1 shl (7 - item.index)) else result
+        }
+        rotary1234 = pack(snapshot.rotaryValues.take(4))
+        rotary5678 = pack(snapshot.rotaryValues.drop(4))
+        switchRevision = revision
+        rotary1234Revision = revision
+        rotary5678Revision = revision
+        return true
+    }
+
     fun synchronizedSnapshot(): EcuControlSnapshot? {
         val switchesRaw = switchByte ?: return null
         val firstRotary = rotary1234 ?: return null
@@ -102,4 +129,5 @@ internal class EcuControlLoopbackAccumulator {
     }
 
     private fun unpack(value: Int) = listOf(12, 8, 4, 0).map { shift -> (value shr shift) and 0x0f }
+    private fun pack(values: List<Int>) = values.fold(0) { result, value -> (result shl 4) or (value and 0x0f) }
 }

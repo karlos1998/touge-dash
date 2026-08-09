@@ -252,6 +252,11 @@ final class TelemetryController: ObservableObject {
 
     private func ingest(_ data: Data) {
         totalReceivedBytes += data.count
+        if ECUControlSnapshot.isValidStatusFrame(data) {
+            ecuControls.ingestStatusFrame(data)
+            noteTelemetryCommunication(at: .now)
+            return
+        }
         let frames = parser.feed(data)
         let now = Date.now
         if now.timeIntervalSince(lastDiagnosticsPublish) >= TelemetryUpdateCadence.diagnosticsInterval {

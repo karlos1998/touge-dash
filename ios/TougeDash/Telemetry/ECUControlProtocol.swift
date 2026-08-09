@@ -59,6 +59,18 @@ struct ECUControlSnapshot: Equatable, Sendable {
         return checksum == bytes[7]
     }
 
+    static func decodeStatusFrame(_ data: Data) -> ECUControlSnapshot? {
+        guard isValidStatusFrame(data) else { return nil }
+        let bytes = Array(data)
+        let switches = (0..<8).map { index in
+            (bytes[2] & UInt8(1 << (7 - index))) != 0
+        }
+        let rotaryValues = bytes[3...6].flatMap { byte in
+            [byte >> 4, byte & 0x0F]
+        }
+        return ECUControlSnapshot(switches: switches, rotaryValues: rotaryValues)
+    }
+
     private var switchBitmap: UInt8 {
         switches.enumerated().reduce(0) { result, entry in
             entry.element ? result | UInt8(1 << (7 - entry.offset)) : result
@@ -107,6 +119,21 @@ struct ECUControlLoopbackAccumulator: Sendable {
         return true
     }
 
+    @discardableResult
+    mutating func applyStatusFrame(_ data: Data) -> Bool {
+        guard let snapshot = ECUControlSnapshot.decodeStatusFrame(data) else { return false }
+        revision &+= 1
+        switchByte = snapshot.switches.enumerated().reduce(0) { result, entry in
+            entry.element ? result | UInt8(1 << (7 - entry.offset)) : result
+        }
+        rotary1234 = pack(snapshot.rotaryValues.prefix(4))
+        rotary5678 = pack(snapshot.rotaryValues.suffix(4))
+        switchRevision = revision
+        rotary1234Revision = revision
+        rotary5678Revision = revision
+        return true
+    }
+
     /// eDash accumulates the three loopback channels over the lifetime of a
     /// connection. They are not guaranteed to arrive in one two-second window.
     func synchronizedSnapshot() -> ECUControlSnapshot? {
@@ -143,5 +170,9 @@ struct ECUControlLoopbackAccumulator: Sendable {
 
     private func unpack(_ value: UInt16) -> [UInt8] {
         [12, 8, 4, 0].map { shift in UInt8((value >> shift) & 0x0F) }
+    }
+
+    private func pack<S: Sequence>(_ values: S) -> UInt16 where S.Element == UInt8 {
+        values.reduce(0) { result, value in (result << 4) | UInt16(value & 0x0F) }
     }
 }
