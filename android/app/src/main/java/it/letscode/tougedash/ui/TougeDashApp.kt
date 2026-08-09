@@ -3,6 +3,7 @@ package it.letscode.tougedash.ui
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,6 +86,8 @@ import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.TelemetrySnapshot
 import it.letscode.tougedash.model.VehicleAlertRules
 import it.letscode.tougedash.telemetry.TelemetryRuntime
+import it.letscode.tougedash.telemetry.TelemetryOverlayPreferences
+import it.letscode.tougedash.telemetry.TelemetryService
 import it.letscode.tougedash.ui.theme.TougeBlue
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
@@ -541,6 +544,23 @@ private fun MoreScreen(container: AppContainer) {
     val videoSettings by container.videoRecordingSettings.settings.collectAsState()
     var showVideoWarning by remember { mutableStateOf(false) }
     var warningCountdown by remember { mutableIntStateOf(5) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var overlayEnabled by remember {
+        mutableStateOf(
+            Settings.canDrawOverlays(context) && TelemetryOverlayPreferences.isEnabled(context)
+        )
+    }
+    val overlayPermission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        val granted = Settings.canDrawOverlays(context)
+        overlayEnabled = granted
+        TelemetryOverlayPreferences.setEnabled(context, granted)
+        if (granted) {
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, TelemetryService::class.java).setAction(TelemetryService.ACTION_SHOW_OVERLAY)
+            )
+        }
+    }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         routeEnabled = granted
         container.locationTracker.setEnabled(granted)
@@ -548,6 +568,16 @@ private fun MoreScreen(container: AppContainer) {
     val videoPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         val cameraGranted = result[Manifest.permission.CAMERA] == true || ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
         if (cameraGranted) container.videoRecordingSettings.update(videoSettings.copy(automaticRecording = true))
+    }
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                overlayEnabled = Settings.canDrawOverlays(context) &&
+                    TelemetryOverlayPreferences.isEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     LaunchedEffect(showVideoWarning) {
         if (showVideoWarning) {
@@ -568,6 +598,51 @@ private fun MoreScreen(container: AppContainer) {
                         if (enabled) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                         else { routeEnabled = false; container.locationTracker.setEnabled(false) }
                     })
+                }
+            }
+            TougePanelSurface(TougeCyan, Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.telemetry_hud), fontWeight = FontWeight.Bold)
+                            Text(
+                                stringResource(R.string.telemetry_hud_description),
+                                color = TougeMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Switch(overlayEnabled, { enabled ->
+                            if (!enabled) {
+                                overlayEnabled = false
+                                TelemetryOverlayPreferences.setEnabled(context, false)
+                                ContextCompat.startForegroundService(
+                                    context,
+                                    Intent(context, TelemetryService::class.java).setAction(TelemetryService.ACTION_HIDE_OVERLAY)
+                                )
+                            } else if (Settings.canDrawOverlays(context)) {
+                                overlayEnabled = true
+                                TelemetryOverlayPreferences.setEnabled(context, true)
+                                ContextCompat.startForegroundService(
+                                    context,
+                                    Intent(context, TelemetryService::class.java).setAction(TelemetryService.ACTION_SHOW_OVERLAY)
+                                )
+                            } else {
+                                overlayPermission.launch(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            }
+                        })
+                    }
+                    if (!Settings.canDrawOverlays(context)) {
+                        Text(
+                            stringResource(R.string.telemetry_hud_permission),
+                            color = TougeOrange,
+                            fontSize = 10.sp
+                        )
+                    }
                 }
             }
             TougePanelSurface(TougeOrange, Modifier.fillMaxWidth().padding(top = 10.dp)) {
