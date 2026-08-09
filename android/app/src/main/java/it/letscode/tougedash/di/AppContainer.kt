@@ -61,6 +61,13 @@ class AppContainer(val application: Application) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_acceleration_attempts_sessionId_type_durationMillis ON acceleration_attempts(sessionId, type, durationMillis)")
             }
         })
+        .addMigrations(object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE drive_sessions ADD COLUMN customName TEXT")
+                db.execSQL("ALTER TABLE drive_sessions ADD COLUMN tagsJson TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE drive_sessions ADD COLUMN metadataDirty INTEGER NOT NULL DEFAULT 0")
+            }
+        })
         .build()
     val dao = database.dao()
     val runtime = TelemetryRuntime

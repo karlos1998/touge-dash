@@ -1,0 +1,1111 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "856b8f31f6f240dba95529ab81471f8a",
+    "entities": [
+      {
+        "tableName": "vehicles",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`localHardwareId` TEXT NOT NULL, `remoteId` TEXT, `displayName` TEXT NOT NULL, `role` TEXT NOT NULL, `accountId` TEXT, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`localHardwareId`))",
+        "fields": [
+          {
+            "fieldPath": "localHardwareId",
+            "columnName": "localHardwareId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteId",
+            "columnName": "remoteId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "role",
+            "columnName": "role",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accountId",
+            "columnName": "accountId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "localHardwareId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "drive_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vehicleHardwareId` TEXT NOT NULL, `remoteId` TEXT, `startedAt` INTEGER NOT NULL, `endedAt` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL, `sampleCount` INTEGER NOT NULL, `distanceMeters` REAL NOT NULL, `maxRpm` REAL NOT NULL, `maxSpeedKph` REAL NOT NULL, `maxBoostBar` REAL NOT NULL, `maxCoolantCelsius` REAL NOT NULL, `maxOilTemperatureCelsius` REAL NOT NULL, `minimumOilPressureBar` REAL, `containsLocation` INTEGER NOT NULL, `customName` TEXT, `tagsJson` TEXT NOT NULL, `metadataDirty` INTEGER NOT NULL, `syncState` TEXT NOT NULL, `syncProgress` REAL NOT NULL, `syncBytesSent` INTEGER NOT NULL, `syncBytesTotal` INTEGER NOT NULL, `syncError` TEXT, `revision` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleHardwareId",
+            "columnName": "vehicleHardwareId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteId",
+            "columnName": "remoteId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "endedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifiedAt",
+            "columnName": "modifiedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleCount",
+            "columnName": "sampleCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "distanceMeters",
+            "columnName": "distanceMeters",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxRpm",
+            "columnName": "maxRpm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxSpeedKph",
+            "columnName": "maxSpeedKph",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxBoostBar",
+            "columnName": "maxBoostBar",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxCoolantCelsius",
+            "columnName": "maxCoolantCelsius",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "maxOilTemperatureCelsius",
+            "columnName": "maxOilTemperatureCelsius",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minimumOilPressureBar",
+            "columnName": "minimumOilPressureBar",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "containsLocation",
+            "columnName": "containsLocation",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "customName",
+            "columnName": "customName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tagsJson",
+            "columnName": "tagsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metadataDirty",
+            "columnName": "metadataDirty",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncProgress",
+            "columnName": "syncProgress",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncBytesSent",
+            "columnName": "syncBytesSent",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncBytesTotal",
+            "columnName": "syncBytesTotal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncError",
+            "columnName": "syncError",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_drive_sessions_vehicleHardwareId",
+            "unique": false,
+            "columnNames": [
+              "vehicleHardwareId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_sessions_vehicleHardwareId` ON `${TABLE_NAME}` (`vehicleHardwareId`)"
+          },
+          {
+            "name": "index_drive_sessions_startedAt",
+            "unique": false,
+            "columnNames": [
+              "startedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_drive_sessions_startedAt` ON `${TABLE_NAME}` (`startedAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "telemetry_samples",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `recordedAt` INTEGER NOT NULL, `rpm` REAL NOT NULL, `boostBar` REAL NOT NULL, `mapKpa` REAL NOT NULL, `throttlePercent` REAL NOT NULL, `coolantCelsius` REAL NOT NULL, `intakeCelsius` REAL NOT NULL, `oilTemperatureCelsius` REAL NOT NULL, `oilPressureBar` REAL NOT NULL, `fuelPressureBar` REAL NOT NULL, `afr` REAL NOT NULL, `lambda` REAL NOT NULL, `batteryVoltage` REAL NOT NULL, `ignitionDegrees` REAL NOT NULL, `injectorDutyPercent` REAL NOT NULL, `speedKph` REAL NOT NULL, `checkEngineMask` INTEGER NOT NULL, `latitude` REAL, `longitude` REAL, `horizontalAccuracy` REAL, `altitude` REAL, `chartEligible` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`sessionId`) REFERENCES `drive_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "recordedAt",
+            "columnName": "recordedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rpm",
+            "columnName": "rpm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "boostBar",
+            "columnName": "boostBar",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mapKpa",
+            "columnName": "mapKpa",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "throttlePercent",
+            "columnName": "throttlePercent",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "coolantCelsius",
+            "columnName": "coolantCelsius",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "intakeCelsius",
+            "columnName": "intakeCelsius",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oilTemperatureCelsius",
+            "columnName": "oilTemperatureCelsius",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oilPressureBar",
+            "columnName": "oilPressureBar",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fuelPressureBar",
+            "columnName": "fuelPressureBar",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "afr",
+            "columnName": "afr",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lambda",
+            "columnName": "lambda",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "batteryVoltage",
+            "columnName": "batteryVoltage",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ignitionDegrees",
+            "columnName": "ignitionDegrees",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "injectorDutyPercent",
+            "columnName": "injectorDutyPercent",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "speedKph",
+            "columnName": "speedKph",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "checkEngineMask",
+            "columnName": "checkEngineMask",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "horizontalAccuracy",
+            "columnName": "horizontalAccuracy",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "altitude",
+            "columnName": "altitude",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "chartEligible",
+            "columnName": "chartEligible",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_telemetry_samples_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_samples_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_telemetry_samples_sessionId_recordedAt",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "recordedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_samples_sessionId_recordedAt` ON `${TABLE_NAME}` (`sessionId`, `recordedAt`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "drive_sessions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sessionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "incidents",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vehicleHardwareId` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `kind` TEXT NOT NULL, `severity` TEXT NOT NULL, `triggeredAt` INTEGER NOT NULL, `captureStartedAt` INTEGER NOT NULL, `captureEndedAt` INTEGER NOT NULL, `sampleCount` INTEGER NOT NULL, `sampleRateHz` REAL NOT NULL, `triggerValue` REAL NOT NULL, `thresholdValue` REAL NOT NULL, `triggerUnit` TEXT NOT NULL, `triggerRpm` REAL NOT NULL, `triggerBoostBar` REAL NOT NULL, `triggerAfr` REAL NOT NULL, `triggerSpeedKph` REAL NOT NULL, `latitude` REAL, `longitude` REAL, `encodedSamples` TEXT NOT NULL, `syncState` TEXT NOT NULL, `syncProgress` REAL NOT NULL, `syncError` TEXT, `revision` INTEGER NOT NULL, `remoteId` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleHardwareId",
+            "columnName": "vehicleHardwareId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "severity",
+            "columnName": "severity",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggeredAt",
+            "columnName": "triggeredAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "captureStartedAt",
+            "columnName": "captureStartedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "captureEndedAt",
+            "columnName": "captureEndedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleCount",
+            "columnName": "sampleCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleRateHz",
+            "columnName": "sampleRateHz",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerValue",
+            "columnName": "triggerValue",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thresholdValue",
+            "columnName": "thresholdValue",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerUnit",
+            "columnName": "triggerUnit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerRpm",
+            "columnName": "triggerRpm",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerBoostBar",
+            "columnName": "triggerBoostBar",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerAfr",
+            "columnName": "triggerAfr",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerSpeedKph",
+            "columnName": "triggerSpeedKph",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "latitude",
+            "columnName": "latitude",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "longitude",
+            "columnName": "longitude",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "encodedSamples",
+            "columnName": "encodedSamples",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncProgress",
+            "columnName": "syncProgress",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncError",
+            "columnName": "syncError",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "remoteId",
+            "columnName": "remoteId",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_incidents_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_incidents_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_incidents_vehicleHardwareId",
+            "unique": false,
+            "columnNames": [
+              "vehicleHardwareId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_incidents_vehicleHardwareId` ON `${TABLE_NAME}` (`vehicleHardwareId`)"
+          },
+          {
+            "name": "index_incidents_triggeredAt",
+            "unique": false,
+            "columnNames": [
+              "triggeredAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_incidents_triggeredAt` ON `${TABLE_NAME}` (`triggeredAt`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "annotations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `vehicleHardwareId` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `incidentId` TEXT, `recordedAt` INTEGER NOT NULL, `body` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL, `syncState` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vehicleHardwareId",
+            "columnName": "vehicleHardwareId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "incidentId",
+            "columnName": "incidentId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "recordedAt",
+            "columnName": "recordedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "body",
+            "columnName": "body",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifiedAt",
+            "columnName": "modifiedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "syncState",
+            "columnName": "syncState",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_annotations_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_annotations_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_annotations_incidentId",
+            "unique": false,
+            "columnNames": [
+              "incidentId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_annotations_incidentId` ON `${TABLE_NAME}` (`incidentId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "dashboard_templates",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `definitionJson` TEXT NOT NULL, `schemaVersion` INTEGER NOT NULL, `modifiedAt` INTEGER NOT NULL, `deletedAt` INTEGER, `selected` INTEGER NOT NULL, `dirty` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "definitionJson",
+            "columnName": "definitionJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schemaVersion",
+            "columnName": "schemaVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifiedAt",
+            "columnName": "modifiedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deletedAt",
+            "columnName": "deletedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "selected",
+            "columnName": "selected",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dirty",
+            "columnName": "dirty",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "alert_configurations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`vehicleHardwareId` TEXT NOT NULL, `rulesJson` TEXT NOT NULL, `revision` INTEGER NOT NULL, `dirty` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `updatedByDisplayName` TEXT, PRIMARY KEY(`vehicleHardwareId`))",
+        "fields": [
+          {
+            "fieldPath": "vehicleHardwareId",
+            "columnName": "vehicleHardwareId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rulesJson",
+            "columnName": "rulesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dirty",
+            "columnName": "dirty",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedByDisplayName",
+            "columnName": "updatedByDisplayName",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "vehicleHardwareId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "video_projects",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `sourceKind` TEXT NOT NULL, `localUri` TEXT NOT NULL, `sourceDisplayName` TEXT, `durationSeconds` REAL NOT NULL, `fileSizeBytes` INTEGER NOT NULL, `pixelWidth` INTEGER NOT NULL, `pixelHeight` INTEGER NOT NULL, `framesPerSecond` REAL NOT NULL, `hasAudio` INTEGER NOT NULL, `videoTrimStartSeconds` REAL NOT NULL, `telemetryTrimStartSeconds` REAL NOT NULL, `exportDurationSeconds` REAL NOT NULL, `overlayTemplateId` TEXT, `createdAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceKind",
+            "columnName": "sourceKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localUri",
+            "columnName": "localUri",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceDisplayName",
+            "columnName": "sourceDisplayName",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "durationSeconds",
+            "columnName": "durationSeconds",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fileSizeBytes",
+            "columnName": "fileSizeBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pixelWidth",
+            "columnName": "pixelWidth",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pixelHeight",
+            "columnName": "pixelHeight",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "framesPerSecond",
+            "columnName": "framesPerSecond",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hasAudio",
+            "columnName": "hasAudio",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "videoTrimStartSeconds",
+            "columnName": "videoTrimStartSeconds",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "telemetryTrimStartSeconds",
+            "columnName": "telemetryTrimStartSeconds",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exportDurationSeconds",
+            "columnName": "exportDurationSeconds",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "overlayTemplateId",
+            "columnName": "overlayTemplateId",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_video_projects_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_video_projects_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "overlay_templates",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `definitionJson` TEXT NOT NULL, `modifiedAt` INTEGER NOT NULL, `selected` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "definitionJson",
+            "columnName": "definitionJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modifiedAt",
+            "columnName": "modifiedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "selected",
+            "columnName": "selected",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "acceleration_attempts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `type` TEXT NOT NULL, `startedAt` INTEGER NOT NULL, `endedAt` INTEGER NOT NULL, `durationMillis` INTEGER NOT NULL, `startSpeedKph` REAL NOT NULL, `endSpeedKph` REAL NOT NULL, `source` TEXT NOT NULL, `quality` TEXT NOT NULL, `sampleRateHz` REAL NOT NULL, `shiftCount` INTEGER NOT NULL, `revision` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`sessionId`) REFERENCES `drive_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAt",
+            "columnName": "startedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAt",
+            "columnName": "endedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationMillis",
+            "columnName": "durationMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startSpeedKph",
+            "columnName": "startSpeedKph",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endSpeedKph",
+            "columnName": "endSpeedKph",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quality",
+            "columnName": "quality",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleRateHz",
+            "columnName": "sampleRateHz",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shiftCount",
+            "columnName": "shiftCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revision",
+            "columnName": "revision",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_acceleration_attempts_sessionId",
+            "unique": false,
+            "columnNames": [
+              "sessionId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_acceleration_attempts_sessionId` ON `${TABLE_NAME}` (`sessionId`)"
+          },
+          {
+            "name": "index_acceleration_attempts_sessionId_type_durationMillis",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "type",
+              "durationMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_acceleration_attempts_sessionId_type_durationMillis` ON `${TABLE_NAME}` (`sessionId`, `type`, `durationMillis`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "drive_sessions",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "sessionId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '856b8f31f6f240dba95529ab81471f8a')"
+    ]
+  }
+}

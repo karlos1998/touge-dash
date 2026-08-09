@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         AlertConfigurationEntity::class, VideoProjectEntity::class, OverlayTemplateEntity::class,
         AccelerationAttemptEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class TougeDashDatabase : RoomDatabase() {

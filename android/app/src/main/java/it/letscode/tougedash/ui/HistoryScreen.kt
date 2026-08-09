@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Remove
@@ -50,6 +51,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -88,6 +90,7 @@ import it.letscode.tougedash.ui.theme.TougePanel
 import it.letscode.tougedash.ui.theme.TougeRed
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import org.osmdroid.config.Configuration
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -124,7 +127,9 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
                 Text(appText("No recorded drives yet", "Nie ma jeszcze zapisanych przejazdów"), color = TougeMuted, modifier = Modifier.padding(top = 14.dp))
             }
         } else LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(sessions, key = { it.id }) { SessionRow(it, select) { deleteSession = it } }
+            items(sessions, key = { it.id }) { session ->
+                SessionRow(session, sessionTags(container, session), select) { deleteSession = session }
+            }
             item { LocalArchiveStorageFooter(localArchiveBytes) }
         }
     }
@@ -230,7 +235,7 @@ private fun ManualSessionSplitCard(sampleCount: Int, split: () -> Unit) {
 }
 
 @Composable
-private fun SessionRow(session: DriveSessionEntity, select: (String) -> Unit, delete: (DriveSessionEntity) -> Unit) {
+private fun SessionRow(session: DriveSessionEntity, tags: List<it.letscode.tougedash.cloud.CloudSyncRepository.DriveTag>, select: (String) -> Unit, delete: (DriveSessionEntity) -> Unit) {
     val accent = when (session.syncState) {
         SyncState.SYNCED -> TougeMint
         SyncState.FAILED -> TougeRed
@@ -241,13 +246,17 @@ private fun SessionRow(session: DriveSessionEntity, select: (String) -> Unit, de
         Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(session.startedAt)), fontWeight = FontWeight.Bold)
+                    Text(session.customName ?: DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(session.startedAt)), fontWeight = FontWeight.Bold)
+                    if (session.customName != null) Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(session.startedAt)), color = TougeMuted, fontSize = 10.sp)
                     Text("${duration(session.endedAt - session.startedAt)}  •  ${session.sampleCount} ${appText("samples", "próbek")}", color = TougeMuted, fontSize = 12.sp)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SyncBadge(session)
                     IconButton(onClick = { delete(session) }) { Icon(Icons.Default.Delete, appText("Delete drive", "Usuń przejazd"), tint = TougeRed) }
                 }
+            }
+            if (tags.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                tags.forEach { tag -> DriveTagChip(tag) }
             }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 MiniValue(appText("MAX BOOST", "MAX DOŁADOWANIE"), "${"%.2f".format(session.maxBoostBar)} bar", TougeCyan)
@@ -290,6 +299,8 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
     var scrubber by remember(id) { mutableFloatStateOf(0f) }
     var noteDialog by remember { mutableStateOf(false) }
     var selectedIncident by remember(id) { mutableStateOf<IncidentEntity?>(null) }
+    var showMetadata by remember(id) { mutableStateOf(false) }
+    var showShare by remember(id) { mutableStateOf(false) }
     // chartEligible is only an optimization for long drives. Never let a bad or
     // incomplete eligibility set make an otherwise valid drive look empty.
     val chartSamples = if (samples.size >= 2 || rawSamples.isEmpty()) samples else rawSamples
@@ -300,7 +311,11 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
                 IconButton(onClick = back) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
                 Column(Modifier.weight(1f)) {
                     Text(appText("DRIVE REPORT", "RAPORT PRZEJAZDU"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    Text(session?.let { DateFormat.getDateTimeInstance().format(Date(it.startedAt)) } ?: "…", fontWeight = FontWeight.Black)
+                    Text(session?.let { it.customName ?: DateFormat.getDateTimeInstance().format(Date(it.startedAt)) } ?: "…", fontWeight = FontWeight.Black)
+                }
+                if (session != null) {
+                    IconButton(onClick = { showMetadata = true }) { Icon(Icons.Default.Edit, appText("Edit name and tags", "Edytuj nazwę i tagi"), tint = TougeCyan) }
+                    IconButton(onClick = { showShare = true }) { Icon(Icons.Default.Share, appText("Share drive", "Udostępnij przejazd"), tint = TougeMint) }
                 }
                 IconButton(onClick = { noteDialog = true }) { Icon(Icons.AutoMirrored.Filled.NoteAdd, null, tint = TougeMint) }
             }
@@ -308,6 +323,12 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
         if (session == null) item { Box(Modifier.fillMaxWidth().height(300.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         else {
             item { SessionSummary(session!!) }
+            val detailTags = sessionTags(container, session!!)
+            if (detailTags.isNotEmpty()) item {
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    detailTags.forEach { DriveTagChip(it) }
+                }
+            }
             if (session!!.syncState == SyncState.FAILED) item {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
                     Text(session!!.syncError ?: appText("Synchronization failed", "Synchronizacja nie powiodła się"), color = TougeRed, fontSize = 11.sp)
@@ -345,6 +366,8 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
         }
     }
     selectedIncident?.let { incident -> IncidentReportDialog(incident, container) { selectedIncident = null } }
+    if (showMetadata && session != null) DriveMetadataDialog(container, session!!, { showMetadata = false })
+    if (showShare && session != null) DriveShareDialog(container, session!!, { showShare = false })
 }
 
 @Composable
@@ -637,6 +660,167 @@ private fun AnnotationSection(values: List<AnnotationEntity>, startedAt: Long) {
 private fun AddNoteDialog(result: (String?) -> Unit) {
     var value by remember { mutableStateOf("") }
     androidx.compose.material3.AlertDialog(onDismissRequest = { result(null) }, title = { Text(appText("Note at current time", "Notatka w tym momencie")) }, text = { OutlinedTextField(value, { value = it }, minLines = 3) }, confirmButton = { Button(onClick = { result(value.trim().takeIf(String::isNotEmpty)) }) { Text(appText("Save", "Zapisz")) } }, dismissButton = { TextButton(onClick = { result(null) }) { Text(appText("Cancel", "Anuluj")) } })
+}
+
+@Composable
+private fun DriveTagChip(tag: it.letscode.tougedash.cloud.CloudSyncRepository.DriveTag) {
+    val color = remember(tag.color) { runCatching { Color(android.graphics.Color.parseColor(tag.color)) }.getOrDefault(TougeCyan) }
+    Row(
+        Modifier.background(color.copy(alpha = .13f), RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Box(Modifier.size(6.dp).background(color, RoundedCornerShape(50)))
+        Text(tag.name, color = color, fontSize = 9.sp, fontWeight = FontWeight.Black)
+    }
+}
+
+private fun sessionTags(container: AppContainer, session: DriveSessionEntity) =
+    runCatching {
+        container.json.decodeFromString<List<it.letscode.tougedash.cloud.CloudSyncRepository.DriveTag>>(session.tagsJson)
+    }.getOrDefault(emptyList())
+
+@Composable
+private fun DriveMetadataDialog(container: AppContainer, session: DriveSessionEntity, dismiss: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var name by remember(session.id, session.customName) { mutableStateOf(session.customName.orEmpty()) }
+    var tags by remember(session.id) { mutableStateOf<List<it.letscode.tougedash.cloud.CloudSyncRepository.DriveTag>>(emptyList()) }
+    var selected by remember(session.id, session.tagsJson) { mutableStateOf(sessionTags(container, session).map { it.id }.toSet()) }
+    var newTagName by remember { mutableStateOf("") }
+    val palette = listOf("#18D7E3", "#45E6A8", "#FF9D44", "#FF5C58", "#A879FF", "#F5D547")
+    var newTagColor by remember { mutableStateOf(palette.first()) }
+    var working by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(session.id) {
+        if (container.authRepository.isAuthenticated) {
+            runCatching { container.cloudSyncRepository.driveTags() }
+                .onSuccess { tags = it }
+                .onFailure { error = it.message }
+        } else tags = sessionTags(container, session)
+    }
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Column { Text(appText("ORGANIZE HISTORY", "ORGANIZACJA HISTORII"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black); Text(appText("Drive name and tags", "Nazwa i tagi przejazdu"), fontWeight = FontWeight.Black) } },
+        text = {
+            Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(name, { name = it.take(120) }, label = { Text(appText("Custom name", "Własna nazwa")) }, placeholder = { Text(appText("e.g. Boost run after tuning", "np. Próba boostu po strojeniu")) }, modifier = Modifier.fillMaxWidth())
+                Text(appText("DRIVE TAGS", "TAGI PRZEJAZDU"), color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                if (tags.isEmpty()) Text(if (container.authRepository.isAuthenticated) appText("No tags yet. Create the first one below.", "Nie ma jeszcze tagów. Utwórz pierwszy poniżej.") else appText("Sign in to manage reusable tags.", "Zaloguj się, aby zarządzać tagami."), color = TougeMuted, fontSize = 11.sp)
+                tags.forEach { tag ->
+                    FilterChip(
+                        selected = selected.contains(tag.id),
+                        onClick = { selected = if (selected.contains(tag.id)) selected - tag.id else selected + tag.id },
+                        label = { DriveTagChip(tag) }
+                    )
+                }
+                if (container.authRepository.isAuthenticated) {
+                    Text(appText("NEW TAG", "NOWY TAG"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    OutlinedTextField(newTagName, { newTagName = it.take(40) }, label = { Text(appText("Tag name", "Nazwa tagu")) }, modifier = Modifier.fillMaxWidth())
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        palette.forEach { hex ->
+                            val color = Color(android.graphics.Color.parseColor(hex))
+                            Box(
+                                Modifier.size(if (hex == newTagColor) 36.dp else 30.dp)
+                                    .background(color, RoundedCornerShape(50))
+                                    .clickable { newTagColor = hex }
+                            )
+                        }
+                    }
+                    Button(enabled = newTagName.isNotBlank() && !working, onClick = {
+                        scope.launch {
+                            working = true; error = null
+                            runCatching { container.cloudSyncRepository.createDriveTag(newTagName, newTagColor) }
+                                .onSuccess { created -> tags = (tags + created).sortedBy { it.name.lowercase() }; selected = selected + created.id; newTagName = "" }
+                                .onFailure { error = it.message }
+                            working = false
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text(appText("Create and assign", "Utwórz i przypisz")) }
+                }
+                error?.let { Text(it, color = TougeRed, fontSize = 11.sp) }
+            }
+        },
+        confirmButton = {
+            Button(enabled = !working, onClick = {
+                scope.launch {
+                    working = true; error = null
+                    val assigned = tags.filter { selected.contains(it.id) }
+                    container.historyRepository.updateMetadata(session, name, container.json.encodeToString(assigned))
+                    if (container.authRepository.isAuthenticated) {
+                        runCatching { container.cloudSyncRepository.updateDriveMetadata(session.copy(customName = name.trim().takeIf(String::isNotEmpty), tagsJson = container.json.encodeToString(assigned), metadataDirty = true), name.trim().takeIf(String::isNotEmpty), assigned) }
+                            .onSuccess { dismiss() }
+                            .onFailure { error = it.message; container.cloudSyncRepository.schedule() }
+                    } else dismiss()
+                    working = false
+                }
+            }) { Text(if (working) appText("Saving…", "Zapisywanie…") else appText("Save", "Zapisz")) }
+        },
+        dismissButton = { TextButton(onClick = dismiss) { Text(appText("Cancel", "Anuluj")) } }
+    )
+}
+
+@Composable
+private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntity, dismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val chooserTitle = appText("Share drive", "Udostępnij przejazd")
+    val totalSeconds = ((session.endedAt - session.startedAt).coerceAtLeast(1) / 1000f)
+    var fragment by remember { mutableStateOf(false) }
+    var startSeconds by remember { mutableFloatStateOf(0f) }
+    var endSeconds by remember(totalSeconds) { mutableFloatStateOf(totalSeconds) }
+    var unit by remember { mutableStateOf("DAYS") }
+    var amount by remember { mutableStateOf(7) }
+    var working by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var shareUrl by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = dismiss,
+        title = { Column { Text(appText("SHARE A DRIVE", "UDOSTĘPNIJ PRZEJAZD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black); Text(session.customName ?: DateFormat.getDateTimeInstance().format(Date(session.startedAt)), fontWeight = FontWeight.Black) } },
+        text = {
+            Column(Modifier.heightIn(max = 580.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    FilterChip(!fragment, { fragment = false }, label = { Text(appText("Full drive", "Cały przejazd")) })
+                    FilterChip(fragment, { fragment = true }, label = { Text(appText("Selected fragment", "Wybrany fragment")) })
+                }
+                if (fragment) {
+                    Text(appText("Choose the beginning and end like when trimming a video.", "Wybierz początek i koniec tak jak przy przycinaniu filmu."), color = TougeMuted, fontSize = 11.sp)
+                    Text("${duration((startSeconds * 1000).toLong())}  →  ${duration((endSeconds * 1000).toLong())}", color = TougeMint, fontWeight = FontWeight.Black)
+                    Text(appText("Beginning", "Początek"), fontSize = 10.sp)
+                    Slider(startSeconds, { startSeconds = it.coerceAtMost(endSeconds - 1f) }, valueRange = 0f..totalSeconds)
+                    Text(appText("End", "Koniec"), fontSize = 10.sp)
+                    Slider(endSeconds, { endSeconds = it.coerceAtLeast(startSeconds + 1f) }, valueRange = 0f..totalSeconds)
+                }
+                Text(appText("LINK EXPIRATION", "WAŻNOŚĆ LINKU"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(unit == "HOURS", { unit = "HOURS"; amount = amount.coerceIn(1, 168) }, label = { Text(appText("Hours", "Godziny")) })
+                    FilterChip(unit == "DAYS", { unit = "DAYS"; amount = amount.coerceIn(1, 365) }, label = { Text(appText("Days", "Dni")) })
+                    FilterChip(unit == "FOREVER", { unit = "FOREVER" }, label = { Text(appText("Forever", "Bezterminowo")) })
+                }
+                if (unit != "FOREVER") Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { amount = (amount - 1).coerceAtLeast(1) }) { Icon(Icons.Default.Remove, null) }
+                    Text(amount.toString(), fontWeight = FontWeight.Black)
+                    IconButton(onClick = { amount = (amount + 1).coerceAtMost(if (unit == "HOURS") 168 else 365) }) { Icon(Icons.Default.Add, null) }
+                }
+                if (shareUrl != null) {
+                    Text(shareUrl!!, color = TougeMint, fontSize = 10.sp)
+                    Button(onClick = { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(Intent.EXTRA_TEXT, shareUrl) }, chooserTitle)) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Share, null); Text(appText(" Send link", " Wyślij link")) }
+                }
+                if (!container.authRepository.isAuthenticated) Text(appText("Sign in to Touge Dash Cloud before creating a link.", "Zaloguj się do Touge Dash Cloud, aby utworzyć link."), color = TougeOrange, fontSize = 11.sp)
+                error?.let { Text(it, color = TougeRed, fontSize = 11.sp) }
+            }
+        },
+        confirmButton = {
+            if (shareUrl == null) Button(enabled = !working && container.authRepository.isAuthenticated, onClick = {
+                scope.launch {
+                    working = true; error = null
+                    runCatching { container.cloudSyncRepository.createDriveShare(session, unit, amount.takeUnless { unit == "FOREVER" }, if (fragment) (startSeconds * 1000).toLong() else null, if (fragment) (endSeconds * 1000).toLong() else null) }
+                        .onSuccess { shareUrl = it }
+                        .onFailure { error = it.message }
+                    working = false
+                }
+            }) { Text(if (working) appText("Creating link…", "Tworzenie linku…") else appText("Create link", "Utwórz link")) }
+        },
+        dismissButton = { TextButton(onClick = dismiss) { Text(appText("Close", "Zamknij")) } }
+    )
 }
 
 @Composable
