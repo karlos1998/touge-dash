@@ -176,6 +176,8 @@
 "Gotowy link" = "Ready link";
 "Udostępnij raport" = "Share report";
 "Utwórz link" = "Create link";
+"AKTYWNE LINKI" = "ACTIVE LINKS";
+"Podgląd obejmuje %@ punktów GPS." = "The preview includes %@ GPS points.";
 "Najpierw zsynchronizuj auto z kontem." = "Sync the vehicle with your account first.";
 "Dodaj notatkę do wybranego momentu" = "Add a note to the selected point";
 "INCYDENTY W TYM PRZEJEŹDZIE" = "INCIDENTS IN THIS DRIVE";
