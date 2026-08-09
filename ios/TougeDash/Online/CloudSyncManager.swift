@@ -420,6 +420,91 @@ final class CloudSyncManager: ObservableObject {
             .vehicle.id
     }
 
+    func driveTags() async throws -> [CloudDriveTag] {
+        guard account.isAuthenticated else { throw CloudAPIError.unauthorized }
+        return try await account.get(endpoint: "/api/v1/drive-tags")
+    }
+
+    func createDriveTag(name: String, color: String) async throws -> CloudDriveTag {
+        guard account.isAuthenticated else { throw CloudAPIError.unauthorized }
+        return try await account.send(
+            endpoint: "/api/v1/drive-tags",
+            body: CloudDriveTagRequest(name: String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40)), color: color)
+        )
+    }
+
+    func updateDriveTag(_ tag: CloudDriveTag) async throws -> CloudDriveTag {
+        try await account.send(
+            endpoint: "/api/v1/drive-tags/\(tag.id.uuidString)",
+            method: "PATCH",
+            body: CloudDriveTagRequest(name: tag.name, color: tag.color)
+        )
+    }
+
+    func deleteDriveTag(id: UUID) async throws {
+        try await account.delete(endpoint: "/api/v1/drive-tags/\(id.uuidString)")
+    }
+
+    func updateDriveMetadata(
+        sessionID: UUID,
+        vehicleID: UUID,
+        customName: String?,
+        tags: [CloudDriveTag]
+    ) async throws {
+        guard account.isAuthenticated else { throw CloudAPIError.unauthorized }
+        guard let remoteVehicleID = remoteVehicleID(for: vehicleID) else {
+            throw CloudAPIError.server(status: 409, message: localized("Auto nie jest połączone z chmurą."))
+        }
+        await syncNow()
+        let _: CloudDriveMetadata = try await account.send(
+            endpoint: "/api/v1/vehicles/\(remoteVehicleID.uuidString)/sessions/\(sessionID.uuidString)/name",
+            method: "PATCH",
+            body: CloudDriveNameRequest(name: customName)
+        )
+        let metadata: CloudDriveMetadata = try await account.send(
+            endpoint: "/api/v1/vehicles/\(remoteVehicleID.uuidString)/sessions/\(sessionID.uuidString)/tags",
+            method: "PUT",
+            body: CloudDriveTagsRequest(tagIds: tags.map(\.id))
+        )
+        var descriptor = FetchDescriptor<DriveSession>(predicate: #Predicate { $0.id == sessionID })
+        descriptor.fetchLimit = 1
+        if let local = try context.fetch(descriptor).first {
+            local.customName = metadata.customName
+            local.driveTags = metadata.tags
+            local.metadataDirty = false
+            local.syncState = .synced
+            try context.save()
+        }
+    }
+
+    func createDriveShare(
+        sessionID: UUID,
+        vehicleID: UUID,
+        unit: String,
+        amount: Int?,
+        startOffsetMillis: Int64?,
+        endOffsetMillis: Int64?
+    ) async throws -> URL {
+        guard account.isAuthenticated else { throw CloudAPIError.unauthorized }
+        guard let remoteVehicleID = remoteVehicleID(for: vehicleID) else {
+            throw CloudAPIError.server(status: 409, message: localized("Auto nie jest połączone z chmurą."))
+        }
+        await syncNow()
+        let share: CloudDriveShare = try await account.send(
+            endpoint: "/api/v1/vehicles/\(remoteVehicleID.uuidString)/sessions/\(sessionID.uuidString)/shares",
+            body: CloudDriveShareRequest(
+                unit: unit,
+                amount: amount,
+                startOffsetMillis: startOffsetMillis,
+                endOffsetMillis: endOffsetMillis
+            )
+        )
+        guard let url = URL(string: account.webAddress.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/shared/drives/" + share.token) else {
+            throw CloudAPIError.invalidServerAddress
+        }
+        return url
+    }
+
     func sessionStatus(for session: DriveSession) -> CloudSyncItemStatus {
         if let transient = sessionStatuses[session.id] { return transient }
         if session.syncState == .synced { return .synced }
@@ -605,6 +690,21 @@ final class CloudSyncManager: ObservableObject {
             sentEmptySession = true
         }
         session.syncState = session.revision == uploadedRevision ? .synced : .changedAfterSync
+        if session.metadataDirty == true {
+            let _: CloudDriveMetadata = try await account.send(
+                endpoint: "/api/v1/vehicles/\(vehicleID.uuidString)/sessions/\(session.id.uuidString)/name",
+                method: "PATCH",
+                body: CloudDriveNameRequest(name: session.customName)
+            )
+            let metadata: CloudDriveMetadata = try await account.send(
+                endpoint: "/api/v1/vehicles/\(vehicleID.uuidString)/sessions/\(session.id.uuidString)/tags",
+                method: "PUT",
+                body: CloudDriveTagsRequest(tagIds: session.driveTags.map(\.id))
+            )
+            session.customName = metadata.customName
+            session.driveTags = metadata.tags
+            session.metadataDirty = false
+        }
         try context.save()
         sessionStatuses[session.id] = session.syncState == .synced ? .synced : .queued
         if var progress {
