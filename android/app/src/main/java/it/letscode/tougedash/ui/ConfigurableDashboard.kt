@@ -10,7 +10,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +30,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,6 +62,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -89,6 +91,8 @@ import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
 import it.letscode.tougedash.ui.theme.TougeRed
 import it.letscode.tougedash.ui.theme.TougeMuted
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -105,7 +109,7 @@ fun ConfigurableDashboardScreen(
     val performance by container.accelerationEngine.state.collectAsState()
     val ecuControlState by container.ecuControls.state.collectAsState()
     val scope = rememberCoroutineScope()
-    var editorWidget by remember { mutableStateOf<DashboardWidget?>(null) }
+    var editorTarget by remember { mutableStateOf<Pair<DashboardTemplate, DashboardWidget>?>(null) }
     var templateMenu by remember { mutableStateOf(false) }
     var renameTemplate by remember { mutableStateOf<DashboardTemplate?>(null) }
     var deleteTemplate by remember { mutableStateOf<DashboardTemplate?>(null) }
@@ -114,10 +118,30 @@ fun ConfigurableDashboardScreen(
     val alertRules by container.alertRepository.rules(hardwareId ?: "local-default").collectAsState(initial = VehicleAlertRules())
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     val newPageName = appText("Screen ${templates.size + 1}", "Ekran ${templates.size + 1}")
-    val gridState = rememberLazyGridState()
-    LaunchedEffect(landscape) { gridState.scrollToItem(0) }
-    val widgets = template.definition.widgets.filter { (if (landscape) it.landscapeSpan else it.portraitSpan) > 0 }
-        .sortedBy { if (landscape) it.landscapeOrder else it.portraitOrder }
+    val templateIds = remember(templates) { templates.map { it.id } }
+    val pagerState = rememberPagerState(
+        initialPage = templates.indexOfFirst { it.id == template.id }.coerceAtLeast(0),
+        pageCount = { templates.size.coerceAtLeast(1) }
+    )
+    val visibleTemplateId = templates.getOrNull(pagerState.currentPage)?.id ?: template.id
+
+    LaunchedEffect(template.id, templateIds) {
+        val destination = templates.indexOfFirst { it.id == template.id }
+        if (destination >= 0 && destination != pagerState.currentPage && !pagerState.isScrollInProgress) {
+            pagerState.animateScrollToPage(destination)
+        }
+    }
+    LaunchedEffect(pagerState, templateIds) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collectLatest { page ->
+                templates.getOrNull(page)?.let { container.dashboardRepository.select(it.id) }
+            }
+    }
+    val showPage: (String) -> Unit = { id ->
+        val destination = templates.indexOfFirst { it.id == id }
+        if (destination >= 0) scope.launch { pagerState.animateScrollToPage(destination) }
+    }
 
     Column(Modifier.fillMaxSize()) {
         if (editing) {
@@ -138,7 +162,7 @@ fun ConfigurableDashboardScreen(
                     }
                 }
                 DropdownMenu(expanded = templateMenu, onDismissRequest = { templateMenu = false }) {
-                    templates.forEach { item -> DropdownMenuItem(text = { Text(item.localizedName()) }, onClick = { templateMenu = false; scope.launch { container.dashboardRepository.select(item.id) } }) }
+                    templates.forEach { item -> DropdownMenuItem(text = { Text(item.localizedName()) }, onClick = { templateMenu = false; showPage(item.id) }) }
                     DropdownMenuItem(text = { Text(appText("Rename screen", "Zmień nazwę ekranu")) }, leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, null) }, onClick = { templateMenu = false; renameTemplate = template })
                     DropdownMenuItem(text = { Text(appText("Delete screen", "Usuń ekran"), color = TougeRed) }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = TougeRed) }, enabled = templates.size > 1, onClick = { templateMenu = false; deleteTemplate = template })
                     DropdownMenuItem(text = { Text(appText("Restore factory screen", "Przywróć ekran fabryczny")) }, leadingIcon = { Icon(Icons.Default.Restore, null) }, onClick = { templateMenu = false; restoreFactory = true })
@@ -146,61 +170,59 @@ fun ConfigurableDashboardScreen(
                 Text(appText("Drag cards to arrange", "Przeciągaj karty"), Modifier.padding(start = 10.dp), color = TougeCyan, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
             }
         }
-        var pageDrag by remember(template.id, editing) { mutableFloatStateOf(0f) }
-        Box(
-            Modifier.weight(1f).pointerInput(templates, template.id, editing) {
-                if (!editing) detectHorizontalDragGestures(
-                    onDragStart = { pageDrag = 0f },
-                    onHorizontalDrag = { change, amount -> change.consume(); pageDrag += amount },
-                    onDragCancel = { pageDrag = 0f },
-                    onDragEnd = {
-                        val current = templates.indexOfFirst { it.id == template.id }
-                        val destination = if (pageDrag < -70f) current + 1 else if (pageDrag > 70f) current - 1 else current
-                        if (destination in templates.indices && destination != current) scope.launch { container.dashboardRepository.select(templates[destination].id) }
-                        pageDrag = 0f
-                    }
-                )
-            }
-        ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.weight(1f),
+            userScrollEnabled = !editing,
+            key = { page -> templates.getOrNull(page)?.id ?: page }
+        ) { page ->
+            val pageTemplate = templates.getOrNull(page) ?: template
+            val gridState = rememberLazyGridState()
+            LaunchedEffect(landscape) { gridState.scrollToItem(0) }
+            val widgets = pageTemplate.definition.widgets
+                .filter { (if (landscape) it.landscapeSpan else it.portraitSpan) > 0 }
+                .sortedBy { if (landscape) it.landscapeOrder else it.portraitOrder }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(12),
                 state = gridState,
-                horizontalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 10.dp), verticalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 10.dp),
+                verticalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 12.dp),
                 modifier = Modifier.fillMaxSize().padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 3.dp else 7.dp)
             ) {
                 items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) { widget ->
                     EditableDashboardCard(
                         widget, snapshot, chartPoints, performance, alertRules, landscape, editing,
                         ecuControlState, container.ecuControls,
-                        edit = { editorWidget = widget },
-                        remove = { scope.launch { saveWidgets(container, template, template.definition.widgets.filterNot { it.id == widget.id }) } },
-                        move = { direction -> scope.launch { saveWidgets(container, template, moveWidget(template.definition.widgets, widget.id, direction, landscape)) } }
+                        edit = { editorTarget = pageTemplate to widget },
+                        remove = { scope.launch { saveWidgets(container, pageTemplate, pageTemplate.definition.widgets.filterNot { it.id == widget.id }) } },
+                        move = { direction -> scope.launch { saveWidgets(container, pageTemplate, moveWidget(pageTemplate.definition.widgets, widget.id, direction, landscape)) } }
                     )
                 }
                 if (editing) item(span = { GridItemSpan(12) }) {
-                    Button(onClick = { editorWidget = DashboardWidget(kind = DashboardWidgetKind.VALUE, metrics = listOf(TelemetryMetric.RPM), portraitSpan = 6, landscapeSpan = 4, portraitOrder = template.definition.widgets.size) }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, null); Text(appText(" Add card", " Dodaj kartę"))
+                    Button(onClick = { editorTarget = pageTemplate to DashboardWidget(kind = DashboardWidgetKind.VALUE, metrics = listOf(TelemetryMetric.RPM), portraitSpan = 6, landscapeSpan = 4, portraitOrder = pageTemplate.definition.widgets.size) }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null)
+                        Text(appText(" Add card", " Dodaj kartę"))
                     }
                 }
             }
         }
         DashboardPageDots(
             templates = templates,
-            activeId = template.id,
+            activeId = visibleTemplateId,
             editing = editing,
             landscape = landscape,
-            select = { scope.launch { container.dashboardRepository.select(it) } },
+            select = showPage,
             addLeading = { scope.launch { container.dashboardRepository.createPage(template, true, newPageName) } },
             addTrailing = { scope.launch { container.dashboardRepository.createPage(template, false, newPageName) } }
         )
     }
-    editorWidget?.let { widget ->
-        WidgetEditor(widget, dismiss = { editorWidget = null }) { saved ->
-            val values = template.definition.widgets.toMutableList()
+    editorTarget?.let { (targetTemplate, widget) ->
+        WidgetEditor(widget, dismiss = { editorTarget = null }) { saved ->
+            val values = targetTemplate.definition.widgets.toMutableList()
             val index = values.indexOfFirst { it.id == saved.id }
             if (index >= 0) values[index] = saved else values += saved
-            scope.launch { saveWidgets(container, template, values) }
-            editorWidget = null
+            scope.launch { saveWidgets(container, targetTemplate, values) }
+            editorTarget = null
         }
     }
     renameTemplate?.let { current ->

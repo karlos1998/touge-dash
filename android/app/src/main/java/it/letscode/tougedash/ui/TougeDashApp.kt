@@ -303,7 +303,9 @@ private fun DashboardLogoMark(modifier: Modifier = Modifier) {
 internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, landscape: Boolean, rules: VehicleAlertRules = VehicleAlertRules()) {
     val accent = widget.accent.color()
     val kind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
-    val compactLandscape = landscape && LocalConfiguration.current.screenHeightDp < 600
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val compactLandscape = landscape && screenHeightDp < 600
+    val fittedPortrait = !landscape && screenHeightDp < 850
     val height = if (landscape) {
         when (kind) {
             DashboardWidgetKind.HERO -> if (compactLandscape) 154.dp else 210.dp
@@ -315,50 +317,54 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
         }
     } else {
         when (kind) {
-            DashboardWidgetKind.HERO -> 250.dp
-            DashboardWidgetKind.GROUP -> 190.dp
-            DashboardWidgetKind.COMPACT -> 70.dp
-            DashboardWidgetKind.GAUGE -> 210.dp
-            DashboardWidgetKind.CHART -> 220.dp
-            DashboardWidgetKind.PERFORMANCE -> 188.dp
-            else -> 145.dp
+            DashboardWidgetKind.HERO -> if (fittedPortrait) 190.dp else 250.dp
+            DashboardWidgetKind.GROUP -> if (fittedPortrait) 125.dp else 190.dp
+            DashboardWidgetKind.COMPACT -> if (fittedPortrait) 54.dp else 70.dp
+            DashboardWidgetKind.GAUGE -> if (fittedPortrait) 174.dp else 210.dp
+            DashboardWidgetKind.CHART -> if (fittedPortrait) 184.dp else 220.dp
+            DashboardWidgetKind.PERFORMANCE -> if (fittedPortrait) 164.dp else 188.dp
+            else -> if (fittedPortrait) 110.dp else 145.dp
         }
     }
     val warning = widget.metrics.any { it.isWarning(snapshot, rules) }
     TougePanelSurface(accent = accent, warning = warning, modifier = Modifier.fillMaxWidth().height(height)) {
-        Box(Modifier.fillMaxSize().padding(if (compactLandscape) 13.dp else 17.dp)) {
+        val horizontalPadding = if (kind == DashboardWidgetKind.COMPACT) 10.dp else if (compactLandscape || fittedPortrait) 13.dp else 17.dp
+        val verticalPadding = if (kind == DashboardWidgetKind.COMPACT && fittedPortrait) 6.dp else if (kind == DashboardWidgetKind.COMPACT) 9.dp else if (compactLandscape || fittedPortrait) 13.dp else 17.dp
+        Box(Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = verticalPadding)) {
             when (kind) {
-                DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
-                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, warning)
-                DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape)
-                DashboardWidgetKind.PERFORMANCE -> ValueWidget(TelemetryMetric.SPEED, snapshot, accent, false, compactLandscape)
-                else -> ValueWidget(widget.metrics.first(), snapshot, if (warning) TougeRed else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape)
+                DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, fittedPortrait)
+                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, fittedPortrait, warning)
+                DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, fittedPortrait)
+                DashboardWidgetKind.PERFORMANCE -> ValueWidget(TelemetryMetric.SPEED, snapshot, accent, false, compactLandscape, fittedPortrait)
+                else -> ValueWidget(widget.metrics.first(), snapshot, if (warning) TougeRed else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape, fittedPortrait)
             }
         }
     }
 }
 
 @Composable
-private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
+private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, fittedPortrait: Boolean) {
     val metric = widget.metrics.first()
     val value = metric.value(snapshot)
+    val dense = compact || fittedPortrait
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TelemetryGlyph(metric, TougeMuted, Modifier.size(if (compact) 14.dp else 16.dp))
-                Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.25.sp)
+                TelemetryGlyph(metric, TougeMuted, Modifier.size(if (dense) 14.dp else 16.dp))
+                Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = if (dense) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.25.sp)
             }
-            StatusTag(stringResource(R.string.live_data).uppercase(), accent, compact)
+            StatusTag(stringResource(R.string.live_data).uppercase(), accent, dense)
         }
         Column {
             Row(verticalAlignment = Alignment.Bottom) {
-                Text(metric.format(value), fontSize = if (compact) 48.sp else 68.sp, lineHeight = if (compact) 48.sp else 68.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                Text(metric.unit.uppercase(), Modifier.padding(start = 7.dp, bottom = if (compact) 6.dp else 10.dp), color = accent, fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp)
+                val valueSize = if (dense) 48.sp else 68.sp
+                Text(metric.format(value), fontSize = valueSize, lineHeight = valueSize, fontWeight = FontWeight.Black, maxLines = 1)
+                Text(metric.unit.uppercase(), Modifier.padding(start = 7.dp, bottom = if (dense) 6.dp else 10.dp), color = accent, fontSize = if (dense) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp)
             }
             val min = widget.gaugeMinimum ?: metric.defaultMin
             val max = widget.gaugeMaximum ?: metric.defaultMax
             val progress = ((value - min) / (max - min)).coerceIn(0.0, 1.0).toFloat()
-            Box(Modifier.fillMaxWidth().height(if (compact) 7.dp else 9.dp).background(Color.White.copy(alpha = .075f), RoundedCornerShape(5.dp))) {
+            Box(Modifier.fillMaxWidth().height(if (dense) 7.dp else 9.dp).background(Color.White.copy(alpha = .075f), RoundedCornerShape(5.dp))) {
                 Box(Modifier.fillMaxWidth(progress.coerceAtLeast(.018f)).fillMaxHeight().background(Brush.horizontalGradient(listOf(TougeBlue.copy(alpha = .75f), accent)), RoundedCornerShape(5.dp)))
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -366,45 +372,48 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
                 ScaleText(metric.format((min + max) / 2))
                 ScaleText("${metric.format(max)} ${metric.unit.uppercase()}")
             }
-            Row(Modifier.fillMaxWidth().padding(top = if (compact) 5.dp else 9.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                widget.metrics.drop(1).take(3).forEach { InlineMetric(it, snapshot, accent) }
+            Row(Modifier.fillMaxWidth().padding(top = if (dense) 5.dp else 9.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                widget.metrics.drop(1).take(3).forEach { InlineMetric(it, snapshot, accent, dense) }
             }
         }
     }
 }
 
 @Composable
-private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color) {
+private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
     Column(Modifier.fillMaxWidth(.3f)) {
-        Text(metric.localizedName(), color = TougeMuted.copy(alpha = .8f), fontSize = 7.sp, fontWeight = FontWeight.Black, letterSpacing = .7.sp)
+        Text(metric.localizedName(), color = TougeMuted.copy(alpha = .8f), fontSize = if (compact) 6.sp else 7.sp, lineHeight = if (compact) 7.sp else 9.sp, fontWeight = FontWeight.Black, letterSpacing = .7.sp)
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(metric.format(metric.value(snapshot)), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text(metric.unit, Modifier.padding(start = 3.dp, bottom = 1.dp), color = accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Text(metric.format(metric.value(snapshot)), color = Color.White, fontSize = if (compact) 11.sp else 13.sp, lineHeight = if (compact) 12.sp else 15.sp, fontWeight = FontWeight.Bold)
+            Text(metric.unit, Modifier.padding(start = 3.dp, bottom = 1.dp), color = accent, fontSize = if (compact) 7.sp else 8.sp, lineHeight = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, warning: Boolean) {
+private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, fittedPortrait: Boolean, warning: Boolean) {
+    val dense = compact || fittedPortrait
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Build, null, tint = TougeMuted, modifier = Modifier.size(if (compact) 14.dp else 16.dp))
-                Text((widget.title?.takeUnless { it.equals("Engine health", ignoreCase = true) } ?: stringResource(R.string.engine_health)).uppercase(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.35.sp)
+                Icon(Icons.Default.Build, null, tint = TougeMuted, modifier = Modifier.size(if (dense) 14.dp else 16.dp))
+                Text((widget.title?.takeUnless { it.equals("Engine health", ignoreCase = true) } ?: stringResource(R.string.engine_health)).uppercase(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = if (dense) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.35.sp)
             }
-            StatusTag(if (warning) appText("CHECK", "SPRAWDŹ") else appText("NOMINAL", "NOMINALNIE"), if (warning) TougeRed else accent, compact)
+            StatusTag(if (warning) appText("CHECK", "SPRAWDŹ") else appText("NOMINAL", "NOMINALNIE"), if (warning) TougeRed else accent, dense)
         }
-        Row(Modifier.fillMaxWidth().weight(1f).padding(top = if (compact) 2.dp else 18.dp), verticalAlignment = Alignment.Bottom) {
+        Row(Modifier.fillMaxWidth().weight(1f).padding(top = if (dense) 2.dp else 18.dp), verticalAlignment = Alignment.Bottom) {
             widget.metrics.take(3).forEachIndexed { index, metric ->
                 if (index > 0) Box(Modifier.fillMaxHeight(.78f).width(1.dp).background(Color.White.copy(alpha = .08f)))
-                Column(Modifier.weight(1f).padding(horizontal = if (compact) 8.dp else 12.dp), verticalArrangement = Arrangement.Bottom) {
+                Column(Modifier.weight(1f).padding(horizontal = if (dense) 8.dp else 12.dp), verticalArrangement = Arrangement.Bottom) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TelemetryGlyph(metric, metricAccent(metric, accent), Modifier.size(if (compact) 10.dp else 15.dp))
-                        Text(metric.localizedName(), Modifier.padding(start = 5.dp), color = TougeMuted, fontSize = if (compact) 6.sp else 8.sp, fontWeight = FontWeight.Black, letterSpacing = .55.sp, maxLines = 1)
+                        TelemetryGlyph(metric, metricAccent(metric, accent), Modifier.size(if (dense) 10.dp else 15.dp))
+                        Text(metric.localizedName(), Modifier.padding(start = 5.dp), color = TougeMuted, fontSize = if (dense) 6.sp else 8.sp, fontWeight = FontWeight.Black, letterSpacing = .55.sp, maxLines = 1)
                     }
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 21.sp else 37.sp, lineHeight = if (compact) 22.sp else 39.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                        Text(metric.unit, Modifier.padding(start = 4.dp, bottom = if (compact) 2.dp else 5.dp), color = metricAccent(metric, accent), fontSize = if (compact) 7.sp else 10.sp, fontWeight = FontWeight.Black)
+                        val valueSize = if (compact) 21.sp else if (fittedPortrait) 25.sp else 37.sp
+                        val valueLineHeight = if (compact) 22.sp else if (fittedPortrait) 26.sp else 39.sp
+                        Text(metric.format(metric.value(snapshot)), fontSize = valueSize, lineHeight = valueLineHeight, fontWeight = FontWeight.Black, maxLines = 1)
+                        Text(metric.unit, Modifier.padding(start = 4.dp, bottom = if (dense) 2.dp else 5.dp), color = metricAccent(metric, accent), fontSize = if (dense) 7.sp else 10.sp, fontWeight = FontWeight.Black)
                     }
                 }
             }
@@ -413,30 +422,37 @@ private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
 }
 
 @Composable
-private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, compactLandscape: Boolean) {
+private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, compactLandscape: Boolean, fittedPortrait: Boolean) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(metric.localizedName(), color = TougeMuted, fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, maxLines = 1)
-            TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else 22.dp))
+            Text(metric.localizedName(), color = TougeMuted, fontSize = if (compact && fittedPortrait) 8.sp else if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, maxLines = 1)
+            TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else if (fittedPortrait) 18.dp else 22.dp))
         }
         if (compact) {
-            Text("${metric.format(metric.value(snapshot))}${if (metric.unit == "%") "%" else " ${metric.unit}"}", color = accent, fontSize = if (compactLandscape) 21.sp else 23.sp, lineHeight = 23.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            Text(
+                "${metric.format(metric.value(snapshot))}${if (metric.unit == "%") "%" else " ${metric.unit}"}",
+                color = accent,
+                fontSize = if (fittedPortrait) 19.sp else if (compactLandscape) 21.sp else 23.sp,
+                lineHeight = if (fittedPortrait) 20.sp else 23.sp,
+                fontWeight = FontWeight.Black,
+                maxLines = 1
+            )
         } else {
             Column {
                 Row(verticalAlignment = Alignment.Bottom) {
-                    Text(metric.format(metric.value(snapshot)), fontSize = if (compactLandscape) 34.sp else 43.sp, lineHeight = if (compactLandscape) 35.sp else 44.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Clip)
+                    Text(metric.format(metric.value(snapshot)), fontSize = if (compactLandscape || fittedPortrait) 34.sp else 43.sp, lineHeight = if (compactLandscape || fittedPortrait) 35.sp else 44.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Clip)
                     if (metric != TelemetryMetric.AFR && metric != TelemetryMetric.BATTERY_VOLTAGE) {
                         Text(metric.unit, Modifier.padding(start = 5.dp, bottom = 5.dp), color = accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
                     }
                 }
-                Text(valueSubtitle(metric, snapshot), color = TougeMuted, fontSize = if (compactLandscape) 9.sp else 12.sp, fontWeight = FontWeight.Bold)
+                Text(valueSubtitle(metric, snapshot), color = TougeMuted, fontSize = if (compactLandscape || fittedPortrait) 9.sp else 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 @Composable
-private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
+private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, fittedPortrait: Boolean) {
     val metric = widget.metrics.first()
     val min = widget.gaugeMinimum ?: metric.defaultMin
     val max = widget.gaugeMaximum ?: metric.defaultMax
@@ -452,8 +468,8 @@ private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
                 drawArc(Brush.sweepGradient(listOf(TougeBlue, accent)), 150f, 240f * progress, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 24.sp else 38.sp, lineHeight = if (compact) 25.sp else 39.sp, fontWeight = FontWeight.Black)
-                Text(metric.unit, color = accent, fontSize = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Black)
+                Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 24.sp else if (fittedPortrait) 31.sp else 38.sp, lineHeight = if (compact) 25.sp else if (fittedPortrait) 32.sp else 39.sp, fontWeight = FontWeight.Black)
+                Text(metric.unit, color = accent, fontSize = if (compact) 8.sp else if (fittedPortrait) 9.sp else 10.sp, fontWeight = FontWeight.Black)
             }
         }
     }
