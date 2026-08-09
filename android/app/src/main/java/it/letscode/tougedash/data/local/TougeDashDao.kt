@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import androidx.room.Transaction
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -15,7 +16,10 @@ interface TougeDashDao {
     @Query("SELECT * FROM vehicles WHERE localHardwareId = :hardwareId") suspend fun vehicle(hardwareId: String): VehicleEntity?
     @Query("SELECT * FROM vehicles ORDER BY createdAt") suspend fun vehiclesOnce(): List<VehicleEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertSession(value: DriveSessionEntity)
+    // INSERT OR REPLACE deletes the existing parent row before inserting it again.
+    // Because telemetry_samples references drive_sessions with ON DELETE CASCADE,
+    // that used to erase every recorded sample whenever a session was flushed.
+    @Upsert suspend fun upsertSession(value: DriveSessionEntity)
     @Update suspend fun updateSession(value: DriveSessionEntity)
     @Query("SELECT * FROM drive_sessions ORDER BY startedAt DESC") fun sessions(): Flow<List<DriveSessionEntity>>
     @Query("SELECT * FROM drive_sessions WHERE id = :id") fun session(id: String): Flow<DriveSessionEntity?>

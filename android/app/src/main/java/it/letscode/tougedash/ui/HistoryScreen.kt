@@ -290,7 +290,10 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
     var scrubber by remember(id) { mutableFloatStateOf(0f) }
     var noteDialog by remember { mutableStateOf(false) }
     var selectedIncident by remember(id) { mutableStateOf<IncidentEntity?>(null) }
-    val selected = samples.getOrNull(((samples.lastIndex.coerceAtLeast(0)) * scrubber).roundToInt())
+    // chartEligible is only an optimization for long drives. Never let a bad or
+    // incomplete eligibility set make an otherwise valid drive look empty.
+    val chartSamples = if (samples.size >= 2 || rawSamples.isEmpty()) samples else rawSamples
+    val selected = chartSamples.getOrNull(((chartSamples.lastIndex.coerceAtLeast(0)) * scrubber).roundToInt())
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 30.dp)) {
         item {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -318,17 +321,20 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
             if (accelerationAttempts.isNotEmpty()) item { AccelerationSection(accelerationAttempts, session!!.startedAt) { attempt ->
                 scrubber = ((attempt.startedAt - session!!.startedAt).toFloat() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).coerceIn(0f, 1f)
             } }
-            item {
-                TelemetryCursor(selected, session!!.startedAt)
-                Slider(scrubber, { scrubber = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-                Text(appText("Move the time cursor; the page remains vertically scrollable", "Przesuwaj kursor czasu; stronę nadal możesz przewijać pionowo"), color = TougeMuted, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 18.dp))
+            if (chartSamples.isEmpty()) item { MissingTelemetryCard(session!!.sampleCount) }
+            else {
+                item {
+                    TelemetryCursor(selected, session!!.startedAt)
+                    Slider(scrubber, { scrubber = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                    Text(appText("Move the time cursor; the page remains vertically scrollable", "Przesuwaj kursor czasu; stronę nadal możesz przewijać pionowo"), color = TougeMuted, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 18.dp))
+                }
+                item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint)) }
+                item { TelemetryChart(appText("Temperatures", "Temperatury"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
+                item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
             }
-            item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), samples, selected, accelerationAttempts, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint)) }
-            item { TelemetryChart(appText("Temperatures", "Temperatury"), samples, selected, accelerationAttempts, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
-            item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), samples, selected, accelerationAttempts, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
             if (annotations.isNotEmpty()) item { AnnotationSection(annotations, session!!.startedAt) }
             item { DriveVideoSection(container, session!!, rawSamples, scrubber) }
-            if (samples.any { it.latitude != null && it.longitude != null }) item { RouteMap(samples) }
+            if (chartSamples.any { it.latitude != null && it.longitude != null }) item { RouteMap(chartSamples) }
         }
     }
     if (noteDialog && session != null) AddNoteDialog { body ->
@@ -339,6 +345,32 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
         }
     }
     selectedIncident?.let { incident -> IncidentReportDialog(incident, container) { selectedIncident = null } }
+}
+
+@Composable
+private fun MissingTelemetryCard(sampleCount: Int) {
+    TougePanelSurface(TougeOrange, Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp)) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                appText("TELEMETRY UNAVAILABLE", "BRAK DANYCH TELEMETRYCZNYCH"),
+                color = TougeOrange,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                if (sampleCount > 0) appText(
+                    "This drive contains a $sampleCount-sample summary, but its sample data was not preserved. Drives recorded after the update will display the timeline and charts correctly.",
+                    "Ten przejazd ma podsumowanie obejmujące $sampleCount próbek, ale same dane próbek nie zostały zachowane. Przejazdy nagrane po aktualizacji będą poprawnie wyświetlać oś czasu i wykresy."
+                ) else appText(
+                    "No telemetry samples were recorded for this drive.",
+                    "Dla tego przejazdu nie zapisano próbek telemetrycznych."
+                ),
+                color = TougeMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+    }
 }
 
 @Composable
