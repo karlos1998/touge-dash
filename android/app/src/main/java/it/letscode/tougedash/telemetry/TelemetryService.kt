@@ -252,14 +252,8 @@ class TelemetryService : Service() {
             message = local("Connecting through paired serial Bluetooth", "Łączenie przez sparowany port szeregowy Bluetooth"))
         TelemetryRuntime.diagnostic("Trying paired SPP ${device.name} [${device.address}]")
         sppConnectionJob = serviceScope.launch(Dispatchers.IO) {
-            val socket = runCatching { device.createRfcommSocketToServiceRecord(SPP_UUID) }.getOrNull()
-            if (socket == null) {
-                withContext(Dispatchers.Main) { finishSppConnection(device, "SPP socket creation failed") }
-                return@launch
-            }
-            sppSocket = socket
             try {
-                socket.connect()
+                val socket = connectPairedSerial(device)
                 reconnectAttempt = 0
                 withContext(Dispatchers.Main) {
                     if (sppSocket !== socket || manuallyStopped) return@withContext
@@ -279,9 +273,10 @@ class TelemetryService : Service() {
                 }
                 throw IllegalStateException("SPP stream closed")
             } catch (error: Exception) {
-                runCatching { socket.close() }
+                val failedSocket = sppSocket
+                runCatching { failedSocket?.close() }
                 withContext(Dispatchers.Main) {
-                    if (sppSocket === socket) {
+                    if (sppSocket === failedSocket) {
                         sppSocket = null
                         finishSppConnection(device, "SPP ${error.message ?: "connection failed"}")
                     }
@@ -289,6 +284,37 @@ class TelemetryService : Service() {
             }
         }
         return true
+    }
+
+    private fun connectPairedSerial(device: BluetoothDevice): BluetoothSocket {
+        if (hasBluetoothPermission()) runCatching { adapter?.cancelDiscovery() }
+        val factories = listOf<Pair<String, () -> BluetoothSocket>>(
+            "secure RFCOMM" to { device.createRfcommSocketToServiceRecord(SPP_UUID) },
+            "insecure RFCOMM" to { device.createInsecureRfcommSocketToServiceRecord(SPP_UUID) }
+        )
+        var lastFailure: Throwable? = null
+        for ((label, factory) in factories) {
+            if (manuallyStopped) throw IllegalStateException("Telemetry stopped")
+            val socket = try {
+                factory()
+            } catch (error: Throwable) {
+                lastFailure = error
+                TelemetryRuntime.diagnostic("$label socket creation failed: ${error.message}")
+                continue
+            }
+            sppSocket = socket
+            try {
+                socket.connect()
+                TelemetryRuntime.diagnostic("Connected through $label")
+                return socket
+            } catch (error: Throwable) {
+                lastFailure = error
+                TelemetryRuntime.diagnostic("$label connect failed: ${error.message}")
+                runCatching { socket.close() }
+                if (sppSocket === socket) sppSocket = null
+            }
+        }
+        throw IllegalStateException(lastFailure?.message ?: "RFCOMM connection failed", lastFailure)
     }
 
     private fun finishSppConnection(device: BluetoothDevice, reason: String) {
