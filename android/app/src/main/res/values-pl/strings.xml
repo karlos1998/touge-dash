@@ -25,9 +25,10 @@
     <string name="show_hud">Pokaż HUD</string>
     <string name="hide_hud">Ukryj HUD</string>
     <string name="telemetry_hud">Pływający HUD telemetrii</string>
-    <string name="telemetry_hud_description">Pokazuje dane silnika nad nawigacją i innymi aplikacjami. Przeciągnij do krawędzi, stuknij, aby rozwinąć, użyj —, aby zwinąć, albo ×, aby ukryć.</string>
+    <string name="telemetry_hud_description">Pokazuje dane silnika nad nawigacją i innymi aplikacjami. Przeciągnij do krawędzi, stuknij, aby rozwinąć, użyj —, aby zwinąć, ×, aby ukryć, albo przeciągnij dymek na cel u dołu ekranu.</string>
     <string name="telemetry_hud_permission">Android wymaga uprawnienia „Wyświetlanie nad innymi aplikacjami”. Touge Dash pokazuje HUD tylko podczas działania widocznej usługi telemetrii.</string>
     <string name="telemetry_hud_content_description">Telemetria Touge Dash. Obroty %1$d, doładowanie %2$.2f bara, temperatura oleju %3$.0f stopni.</string>
+    <string name="telemetry_hud_drag_to_close">Przeciągnij tutaj, aby zamknąć pływający HUD</string>
     <string name="widget_description">Obroty, doładowanie i kondycja silnika z Touge Dash</string>
     <string name="widget_live">● NA ŻYWO</string>
     <string name="widget_stale">● CZEKA</string>

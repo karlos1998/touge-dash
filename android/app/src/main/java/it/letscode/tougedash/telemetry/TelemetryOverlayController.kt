@@ -11,9 +11,11 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -22,7 +24,22 @@ import it.letscode.tougedash.model.ConnectionState
 import it.letscode.tougedash.model.TelemetryConnection
 import it.letscode.tougedash.model.TelemetrySnapshot
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.roundToInt
+
+internal data class OverlayCoordinate(val x: Float, val y: Float)
+
+internal object TelemetryOverlayDismissGesture {
+    fun distance(from: OverlayCoordinate, to: OverlayCoordinate): Float =
+        hypot(from.x - to.x, from.y - to.y)
+
+    fun proximity(distance: Float, attractionRadius: Float, captureRadius: Float): Float {
+        if (attractionRadius <= captureRadius) return if (distance <= captureRadius) 1f else 0f
+        return ((attractionRadius - distance) / (attractionRadius - captureRadius)).coerceIn(0f, 1f)
+    }
+
+    fun shouldDismiss(distance: Float, captureRadius: Float): Boolean = distance <= captureRadius
+}
 
 class TelemetryOverlayController(
     private val service: Service,
@@ -32,6 +49,10 @@ class TelemetryOverlayController(
     private val mainHandler = Handler(Looper.getMainLooper())
     private var root: FrameLayout? = null
     private var layoutParams: WindowManager.LayoutParams? = null
+    private var dismissLayer: FrameLayout? = null
+    private var dismissTarget: FrameLayout? = null
+    private var dismissLabel: TextView? = null
+    private var dismissArmed = false
     private var mode = TelemetryOverlayPreferences.mode(service)
     private var latestSnapshot = TelemetrySnapshot()
     private var latestConnection = TelemetryConnection()
@@ -66,6 +87,7 @@ class TelemetryOverlayController(
     fun hide(persist: Boolean = true) {
         edgeAnimator?.cancel()
         edgeAnimator = null
+        hideDismissTarget(immediate = true)
         root?.let { runCatching { windowManager.removeView(it) } }
         root = null
         layoutParams = null
@@ -219,6 +241,7 @@ class TelemetryOverlayController(
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     edgeAnimator?.cancel()
+                    hideDismissTarget(immediate = true)
                     downRawX = event.rawX
                     downRawY = event.rawY
                     startX = params.x
@@ -236,20 +259,133 @@ class TelemetryOverlayController(
                         params.y = startY + dy.roundToInt()
                         clamp(params)
                         runCatching { windowManager.updateViewLayout(touched, params) }
+                        showDismissTarget()
+                        updateDismissTarget(params, touched)
                     }
                     true
                 }
                 MotionEvent.ACTION_UP -> {
-                    touched.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
-                    if (moved) snapToEdge() else handleTap(event.x, event.y)
+                    if (moved && dismissArmed) {
+                        dismissOverlay(touched)
+                    } else {
+                        hideDismissTarget()
+                        touched.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(100).start()
+                        if (moved) snapToEdge() else handleTap(event.x, event.y)
+                    }
                     true
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    touched.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
+                    hideDismissTarget()
+                    touched.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(100).start()
+                    if (moved) snapToEdge()
                     true
                 }
                 else -> false
             }
+        }
+    }
+
+    private fun showDismissTarget() {
+        if (dismissLayer != null || !Settings.canDrawOverlays(service)) return
+        val layer = FrameLayout(service)
+        val target = FrameLayout(service).apply {
+            elevation = dp(20).toFloat()
+            alpha = 0f
+            scaleX = .72f
+            scaleY = .72f
+            background = dismissTargetBackground(armed = false)
+            contentDescription = service.getString(
+                it.letscode.tougedash.R.string.telemetry_hud_drag_to_close
+            )
+        }
+        val close = label("×", 34f, Color.WHITE, Typeface.NORMAL).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        target.addView(close, FrameLayout.LayoutParams(-1, -1))
+        layer.addView(
+            target,
+            FrameLayout.LayoutParams(dp(DISMISS_TARGET_SIZE_DP), dp(DISMISS_TARGET_SIZE_DP)).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = dp(DISMISS_TARGET_BOTTOM_MARGIN_DP)
+            }
+        )
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        runCatching { windowManager.addView(layer, params) }
+            .onSuccess {
+                dismissLayer = layer
+                dismissTarget = target
+                dismissLabel = close
+                target.animate().alpha(.92f).scaleX(1f).scaleY(1f).setDuration(140).start()
+            }
+    }
+
+    private fun updateDismissTarget(params: WindowManager.LayoutParams, bubble: View) {
+        val target = dismissTarget ?: return
+        val bounds = windowBounds()
+        val bubbleCenter = OverlayCoordinate(
+            x = params.x + params.width / 2f,
+            y = params.y + params.height / 2f
+        )
+        val targetCenter = OverlayCoordinate(
+            x = bounds.exactCenterX(),
+            y = bounds.bottom - navigationBarInsetBottom() -
+                dp(DISMISS_TARGET_BOTTOM_MARGIN_DP + DISMISS_TARGET_SIZE_DP / 2).toFloat()
+        )
+        val distance = TelemetryOverlayDismissGesture.distance(bubbleCenter, targetCenter)
+        val captureRadius = dp(DISMISS_CAPTURE_RADIUS_DP).toFloat()
+        val proximity = TelemetryOverlayDismissGesture.proximity(
+            distance,
+            dp(DISMISS_ATTRACTION_RADIUS_DP).toFloat(),
+            captureRadius
+        )
+        val armed = TelemetryOverlayDismissGesture.shouldDismiss(distance, captureRadius)
+        target.scaleX = 1f + .22f * proximity
+        target.scaleY = 1f + .22f * proximity
+        target.alpha = .88f + .12f * proximity
+        bubble.scaleX = .97f - .14f * proximity
+        bubble.scaleY = .97f - .14f * proximity
+        if (armed != dismissArmed) {
+            dismissArmed = armed
+            target.background = dismissTargetBackground(armed)
+            dismissLabel?.textSize = if (armed) 40f else 34f
+            if (armed) bubble.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        }
+    }
+
+    private fun dismissOverlay(bubble: View) {
+        dismissTarget?.animate()?.alpha(0f)?.scaleX(1.4f)?.scaleY(1.4f)?.setDuration(120)?.start()
+        bubble.animate()
+            .alpha(0f)
+            .scaleX(.18f)
+            .scaleY(.18f)
+            .setDuration(120)
+            .withEndAction {
+                if (root === bubble) hide()
+            }
+            .start()
+    }
+
+    private fun hideDismissTarget(immediate: Boolean = false) {
+        val layer = dismissLayer ?: return
+        dismissArmed = false
+        dismissLayer = null
+        dismissTarget = null
+        dismissLabel = null
+        if (immediate) {
+            runCatching { windowManager.removeView(layer) }
+        } else {
+            layer.animate().alpha(0f).setDuration(110).withEndAction {
+                runCatching { windowManager.removeView(layer) }
+            }.start()
         }
     }
 
@@ -328,6 +464,14 @@ class TelemetryOverlayController(
         )
     }
 
+    private fun navigationBarInsetBottom(): Int = if (android.os.Build.VERSION.SDK_INT >= 30) {
+        windowManager.currentWindowMetrics.windowInsets
+            .getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars())
+            .bottom
+    } else {
+        0
+    }
+
     private fun panelBackground(compact: Boolean) = GradientDrawable(
         GradientDrawable.Orientation.TL_BR,
         intArrayOf(Color.rgb(10, 25, 33), Color.rgb(3, 10, 14))
@@ -335,6 +479,12 @@ class TelemetryOverlayController(
         shape = if (compact) GradientDrawable.OVAL else GradientDrawable.RECTANGLE
         if (!compact) cornerRadius = dp(20).toFloat()
         setStroke(dp(1), Color.argb(115, 38, 215, 229))
+    }
+
+    private fun dismissTargetBackground(armed: Boolean) = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(if (armed) Color.rgb(218, 54, 63) else Color.rgb(63, 29, 35))
+        setStroke(dp(if (armed) 3 else 2), if (armed) Color.WHITE else Color.argb(180, 255, 91, 101))
     }
 
     private fun label(
@@ -377,5 +527,9 @@ class TelemetryOverlayController(
         const val STATUS_DOT_ID = 0x1009
         const val COLLAPSE_ID = 0x1010
         const val CLOSE_ID = 0x1011
+        const val DISMISS_TARGET_SIZE_DP = 86
+        const val DISMISS_TARGET_BOTTOM_MARGIN_DP = 58
+        const val DISMISS_CAPTURE_RADIUS_DP = 72
+        const val DISMISS_ATTRACTION_RADIUS_DP = 190
     }
 }

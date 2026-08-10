@@ -25,9 +25,10 @@
     <string name="show_hud">Show HUD</string>
     <string name="hide_hud">Hide HUD</string>
     <string name="telemetry_hud">Floating telemetry HUD</string>
-    <string name="telemetry_hud_description">Keep live engine values above navigation or other apps. Drag it to an edge, tap to expand, use — to collapse and × to hide.</string>
+    <string name="telemetry_hud_description">Keep live engine values above navigation or other apps. Drag it to an edge, tap to expand, use — to collapse, × to hide, or drag the bubble onto the target at the bottom of the screen.</string>
     <string name="telemetry_hud_permission">Android requires the “Display over other apps” permission. Touge Dash only shows the HUD while its visible telemetry service is running.</string>
     <string name="telemetry_hud_content_description">Touge Dash telemetry. RPM %1$d, boost %2$.2f bar, oil temperature %3$.0f degrees.</string>
+    <string name="telemetry_hud_drag_to_close">Drag here to close the floating HUD</string>
     <string name="widget_description">Live RPM, boost and engine health from Touge Dash</string>
     <string name="widget_live">● LIVE</string>
     <string name="widget_stale">● WAIT</string>
