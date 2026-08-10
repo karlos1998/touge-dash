@@ -11,6 +11,8 @@ data class TelemetrySnapshot(
     val throttlePercent: Double = 0.0,
     val coolantCelsius: Double = 0.0,
     val intakeCelsius: Double = 0.0,
+    val egt1Celsius: Double = 0.0,
+    val egt2Celsius: Double = 0.0,
     val oilTemperatureCelsius: Double = 0.0,
     val oilPressureBar: Double = 0.0,
     val fuelPressureBar: Double = 0.0,
@@ -66,6 +68,8 @@ enum class TelemetryMetric(
     @SerialName("throttle") THROTTLE("TPS", "%", 0.0, 100.0, 0),
     @SerialName("coolant") COOLANT("COOLANT", "°C", 0.0, 130.0, 0),
     @SerialName("intake") INTAKE("IAT", "°C", -20.0, 100.0, 0),
+    @SerialName("egt1") EGT1("EGT 1", "°C", 0.0, 1_100.0, 0),
+    @SerialName("egt2") EGT2("EGT 2", "°C", 0.0, 1_100.0, 0),
     @SerialName("oilTemperature") OIL_TEMPERATURE("OIL TEMP", "°C", 0.0, 150.0, 0),
     @SerialName("oilPressure") OIL_PRESSURE("OIL P", "bar", 0.0, 10.0, 1),
     @SerialName("fuelPressure") FUEL_PRESSURE("FUEL", "bar", 0.0, 10.0, 1),
@@ -83,6 +87,8 @@ enum class TelemetryMetric(
         THROTTLE -> snapshot.throttlePercent
         COOLANT -> snapshot.coolantCelsius
         INTAKE -> snapshot.intakeCelsius
+        EGT1 -> snapshot.egt1Celsius
+        EGT2 -> snapshot.egt2Celsius
         OIL_TEMPERATURE -> snapshot.oilTemperatureCelsius
         OIL_PRESSURE -> snapshot.oilPressureBar
         FUEL_PRESSURE -> snapshot.fuelPressureBar

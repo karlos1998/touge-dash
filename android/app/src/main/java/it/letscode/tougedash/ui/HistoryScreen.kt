@@ -352,6 +352,7 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
                 }
                 item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint)) }
                 item { TelemetryChart(appText("Temperatures", "Temperatury"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
+                item { TelemetryChart("EGT", chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.EGT1 to TougeOrange, TelemetryMetric.EGT2 to TougeRed)) }
                 item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
             }
             if (annotations.isNotEmpty()) item { AnnotationSection(annotations, session!!.startedAt) }
@@ -920,6 +921,7 @@ private fun RouteMap(samples: List<TelemetrySampleEntity>) {
 private fun TelemetryMetric.from(value: TelemetrySampleEntity): Double = when (this) {
     TelemetryMetric.RPM -> value.rpm; TelemetryMetric.BOOST -> value.boostBar; TelemetryMetric.MAP -> value.mapKpa
     TelemetryMetric.THROTTLE -> value.throttlePercent; TelemetryMetric.COOLANT -> value.coolantCelsius; TelemetryMetric.INTAKE -> value.intakeCelsius
+    TelemetryMetric.EGT1 -> value.egt1Celsius; TelemetryMetric.EGT2 -> value.egt2Celsius
     TelemetryMetric.OIL_TEMPERATURE -> value.oilTemperatureCelsius; TelemetryMetric.OIL_PRESSURE -> value.oilPressureBar; TelemetryMetric.FUEL_PRESSURE -> value.fuelPressureBar
     TelemetryMetric.AFR -> value.afr; TelemetryMetric.LAMBDA -> value.lambda; TelemetryMetric.BATTERY_VOLTAGE -> value.batteryVoltage
     TelemetryMetric.IGNITION -> value.ignitionDegrees; TelemetryMetric.INJECTOR_DUTY -> value.injectorDutyPercent; TelemetryMetric.SPEED -> value.speedKph

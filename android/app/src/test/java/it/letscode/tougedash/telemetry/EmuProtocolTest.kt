@@ -31,12 +31,16 @@ class EmuProtocolTest {
         val accumulator = EmuTelemetryAccumulator()
         listOf(
             EmuFrame(1, 6420), EmuFrame(14, 101), EmuFrame(2, 219), EmuFrame(12, 124),
+            EmuFrame(3, 200), EmuFrame(8, 914), EmuFrame(9, 887),
             EmuFrame(21, 67), EmuFrame(22, 104), EmuFrame(24, 91), EmuFrame(28, 512)
         ).forEach(accumulator::apply)
         with(accumulator.snapshot) {
             assertEquals(6420.0, rpm, 0.001)
             assertEquals(1.18, boostBar, 0.001)
             assertEquals(12.4, afr, 0.001)
+            assertEquals(100.0, throttlePercent, 0.001)
+            assertEquals(914.0, egt1Celsius, 0.001)
+            assertEquals(887.0, egt2Celsius, 0.001)
             assertEquals(4.1875, oilPressureBar, 0.001)
             assertEquals(104.0, oilTemperatureCelsius, 0.001)
             assertEquals(91.0, coolantCelsius, 0.001)

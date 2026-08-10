@@ -68,6 +68,8 @@ class TelemetryService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var samplingJob: Job? = null
     private var controlCharacteristic: BluetoothGattCharacteristic? = null
+    private val notificationQueue = ArrayDeque<BluetoothGattCharacteristic>()
+    private val telemetryCharacteristics = mutableSetOf<Pair<UUID, Int>>()
     private var sppSocket: BluetoothSocket? = null
     private var sppConnectionJob: Job? = null
     private var scanning = false
@@ -196,6 +198,8 @@ class TelemetryService : Service() {
                 it.close()
             }
             controlCharacteristic = null
+            notificationQueue.clear()
+            telemetryCharacteristics.clear()
             container.ecuControls.transportChanged(false)
         }
         if (reconnectAttempt >= 2 && reconnectAttempt % 2 == 0 && beginSppConnection(currentAdapter)) return
@@ -238,6 +242,8 @@ class TelemetryService : Service() {
             it.close()
         }
         controlCharacteristic = null
+        notificationQueue.clear()
+        telemetryCharacteristics.clear()
         container.ecuControls.connectionChanged(false)
         stopSampling()
         updateConnection(ConnectionState.Idle, message = local("Stopped", "Zatrzymano"))
@@ -431,7 +437,7 @@ class TelemetryService : Service() {
                 lastAddress = gatt.device.address
                 updateConnection(ConnectionState.Connected, gatt.device.name ?: "EMULOGGER", gatt.device.address)
                 container.ecuControls.connectionChanged(true)
-                TelemetryRuntime.diagnostic("Connected; discovering FFE0")
+                TelemetryRuntime.diagnostic("Connected; discovering telemetry characteristics")
                 if (!gatt.discoverServices()) failActiveConnection(gatt, "Service discovery was rejected")
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 failActiveConnection(gatt, "Disconnected, GATT status $status")
@@ -450,40 +456,35 @@ class TelemetryService : Service() {
                 failActiveConnection(gatt, "Service discovery failed ($status)")
                 return
             }
-            val service: BluetoothGattService? = gatt.getService(EMU_SERVICE_UUID)
-            val characteristic = service?.getCharacteristic(EMU_CHARACTERISTIC_UUID)
-            if (characteristic == null) {
-                TelemetryRuntime.diagnostic("FFE1 not found")
-                failActiveConnection(gatt, "FFE1 not found")
+            val candidates = gatt.services.flatMap { service ->
+                service.characteristics.onEach { characteristic ->
+                    TelemetryRuntime.diagnostic(
+                        "GATT ${service.uuid}/${characteristic.uuid} properties=${characteristic.properties} instance=${characteristic.instanceId}"
+                    )
+                }.filter(::supportsNotifications)
+            }.sortedByDescending { it.uuid == NUS_TX_UUID }
+            if (candidates.isEmpty()) {
+                failActiveConnection(gatt, "No notifiable telemetry characteristic found")
                 return
             }
-            val supportsNotify = characteristic.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
-            val supportsIndicate = characteristic.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
-            if (!supportsNotify && !supportsIndicate) {
-                failActiveConnection(gatt, "FFE1 does not support notifications")
-                return
-            }
-            if (!gatt.setCharacteristicNotification(characteristic, true)) {
-                failActiveConnection(gatt, "FFE1 notification setup rejected")
-                return
-            }
-            val descriptor = characteristic.getDescriptor(CCCD_UUID)
-            if (descriptor == null || !writeNotificationDescriptor(gatt, descriptor)) {
-                failActiveConnection(gatt, "FFE1 notification descriptor rejected")
-                return
-            }
+            notificationQueue.clear()
+            notificationQueue.addAll(candidates)
+            telemetryCharacteristics.clear()
+            telemetryCharacteristics.addAll(candidates.map(::characteristicKey))
             val nusControl = gatt.getService(NUS_SERVICE_UUID)?.getCharacteristic(NUS_RX_UUID)
                 ?.takeIf(::supportsWrite)
-            val emuControl = characteristic.takeIf(::supportsWrite)
+            val emuControl = gatt.getService(EMU_SERVICE_UUID)?.getCharacteristic(EMU_CHARACTERISTIC_UUID)
+                ?.takeIf(::supportsWrite)
             controlCharacteristic = nusControl ?: emuControl
             val approvedControl = controlCharacteristic
             container.ecuControls.transportChanged(approvedControl != null) { data ->
                 approvedControl != null && writeControlFrame(gatt, approvedControl, data)
             }
             TelemetryRuntime.diagnostic(
-                if (approvedControl == null) "Discovered FFE1; ECU control is read-only"
-                else "Discovered FFE1; approved ECU control ${approvedControl.uuid}"
+                if (approvedControl == null) "Discovered ${candidates.size} telemetry channel(s); ECU control is read-only"
+                else "Discovered ${candidates.size} telemetry channel(s); approved ECU control ${approvedControl.uuid}"
             )
+            subscribeNextCharacteristic(gatt)
         }
 
         override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
@@ -492,22 +493,14 @@ class TelemetryService : Service() {
                 abandonForMissingPermission(gatt)
                 return
             }
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                failActiveConnection(gatt, "FFE1 subscription failed ($status)")
-                return
-            }
-            reconnectAttempt = 0
-            connectionReady = true
-            connectionTimeoutJob?.cancel()
-            connectionTimeoutJob = null
-            TelemetryRuntime.diagnostic("Subscribed to FFE1")
             val characteristic = descriptor.characteristic
-            if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_READ != 0) {
-                runCatching { gatt.readCharacteristic(characteristic) }.onFailure {
-                    TelemetryRuntime.diagnostic("Initial FFE1 read rejected: ${it.message ?: it.javaClass.simpleName}")
-                }
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                TelemetryRuntime.diagnostic("Subscribed to ${characteristic.service.uuid}/${characteristic.uuid}")
+            } else {
+                TelemetryRuntime.diagnostic("Subscription failed for ${characteristic.uuid} ($status); trying remaining channels")
+                telemetryCharacteristics.remove(characteristicKey(characteristic))
             }
-            startSampling(gatt.device.address, gatt.device.name ?: "EMULOGGER")
+            subscribeNextCharacteristic(gatt)
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
@@ -567,7 +560,7 @@ class TelemetryService : Service() {
         characteristic: BluetoothGattCharacteristic,
         value: ByteArray
     ) {
-        if (!connectionSlot.isActive(gatt) || characteristic.uuid != EMU_CHARACTERISTIC_UUID || value.isEmpty()) return
+        if (!connectionSlot.isActive(gatt) || characteristicKey(characteristic) !in telemetryCharacteristics || value.isEmpty()) return
         if (!hasBluetoothPermission()) {
             abandonForMissingPermission(gatt)
             return
@@ -581,6 +574,8 @@ class TelemetryService : Service() {
         connectionTimeoutJob = null
         connectionReady = false
         controlCharacteristic = null
+        notificationQueue.clear()
+        telemetryCharacteristics.clear()
         container.ecuControls.connectionChanged(false)
         stopSampling()
         runCatching { gatt.close() }
@@ -625,6 +620,8 @@ class TelemetryService : Service() {
         connectionReady = false
         TelemetryRuntime.diagnostic(reason)
         controlCharacteristic = null
+        notificationQueue.clear()
+        telemetryCharacteristics.clear()
         container.ecuControls.connectionChanged(false)
         stopSampling()
         runCatching { gatt.disconnect() }
@@ -640,6 +637,44 @@ class TelemetryService : Service() {
         val properties = characteristic.properties
         return properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0 ||
             properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0
+    }
+
+    private fun supportsNotifications(characteristic: BluetoothGattCharacteristic): Boolean {
+        val properties = characteristic.properties
+        return properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0 ||
+            properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
+    }
+
+    private fun characteristicKey(characteristic: BluetoothGattCharacteristic) =
+        characteristic.uuid to characteristic.instanceId
+
+    private fun subscribeNextCharacteristic(gatt: BluetoothGatt) {
+        if (!connectionSlot.isActive(gatt)) return
+        while (notificationQueue.isNotEmpty()) {
+            val characteristic = notificationQueue.removeFirst()
+            if (!gatt.setCharacteristicNotification(characteristic, true)) {
+                telemetryCharacteristics.remove(characteristicKey(characteristic))
+                TelemetryRuntime.diagnostic("Notification setup rejected for ${characteristic.uuid}")
+                continue
+            }
+            val descriptor = characteristic.getDescriptor(CCCD_UUID)
+            if (descriptor == null || !writeNotificationDescriptor(gatt, descriptor)) {
+                telemetryCharacteristics.remove(characteristicKey(characteristic))
+                TelemetryRuntime.diagnostic("CCCD setup rejected for ${characteristic.uuid}")
+                continue
+            }
+            return
+        }
+        if (telemetryCharacteristics.isEmpty()) {
+            failActiveConnection(gatt, "All telemetry subscriptions failed")
+            return
+        }
+        reconnectAttempt = 0
+        connectionReady = true
+        connectionTimeoutJob?.cancel()
+        connectionTimeoutJob = null
+        TelemetryRuntime.diagnostic("Telemetry ready on ${telemetryCharacteristics.size} notification channel(s)")
+        startSampling(gatt.device.address, gatt.device.name ?: "EMULOGGER")
     }
 
     private fun writeControlFrame(
@@ -739,6 +774,7 @@ class TelemetryService : Service() {
             id = UUID.randomUUID().toString(), sessionId = sessionId, recordedAt = now,
             rpm = rpm, boostBar = boostBar, mapKpa = mapKpa, throttlePercent = throttlePercent,
             coolantCelsius = coolantCelsius, intakeCelsius = intakeCelsius,
+            egt1Celsius = egt1Celsius, egt2Celsius = egt2Celsius,
             oilTemperatureCelsius = oilTemperatureCelsius, oilPressureBar = oilPressureBar,
             fuelPressureBar = fuelPressureBar, afr = afr, lambda = lambda, batteryVoltage = batteryVoltage,
             ignitionDegrees = ignitionDegrees, injectorDutyPercent = injectorDutyPercent, speedKph = speedKph,
@@ -852,6 +888,7 @@ class TelemetryService : Service() {
         val EMU_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
         val NUS_SERVICE_UUID: UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
         val NUS_RX_UUID: UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+        val NUS_TX_UUID: UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
     }

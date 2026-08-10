@@ -147,6 +147,7 @@ class HistoryRepository(private val dao: TougeDashDao, private val context: Cont
             id = UUID.randomUUID().toString(), sessionId = sessionId, recordedAt = now,
             rpm = rpm, boostBar = boostBar, mapKpa = mapKpa, throttlePercent = throttlePercent,
             coolantCelsius = coolantCelsius, intakeCelsius = intakeCelsius,
+            egt1Celsius = egt1Celsius, egt2Celsius = egt2Celsius,
             oilTemperatureCelsius = oilTemperatureCelsius, oilPressureBar = oilPressureBar,
             fuelPressureBar = fuelPressureBar, afr = afr, lambda = lambda,
             batteryVoltage = batteryVoltage, ignitionDegrees = ignitionDegrees,

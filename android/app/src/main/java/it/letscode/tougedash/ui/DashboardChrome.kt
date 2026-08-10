@@ -139,7 +139,7 @@ internal fun TelemetryGlyph(metric: TelemetryMetric, tint: Color, modifier: Modi
 private fun metricIcon(metric: TelemetryMetric): ImageVector = when (metric) {
     TelemetryMetric.BOOST -> Icons.Default.Air
     TelemetryMetric.RPM, TelemetryMetric.SPEED -> Icons.Default.Speed
-    TelemetryMetric.COOLANT, TelemetryMetric.INTAKE, TelemetryMetric.OIL_TEMPERATURE -> Icons.Default.Thermostat
+    TelemetryMetric.COOLANT, TelemetryMetric.INTAKE, TelemetryMetric.EGT1, TelemetryMetric.EGT2, TelemetryMetric.OIL_TEMPERATURE -> Icons.Default.Thermostat
     TelemetryMetric.BATTERY_VOLTAGE -> Icons.Default.BatteryChargingFull
     TelemetryMetric.FUEL_PRESSURE -> Icons.Default.LocalGasStation
     TelemetryMetric.THROTTLE, TelemetryMetric.IGNITION -> Icons.Default.Tune

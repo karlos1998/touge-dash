@@ -56,10 +56,12 @@ class EmuTelemetryAccumulator {
         snapshot = when (frame.channel) {
             1 -> snapshot.copy(rpm = raw.toDouble(), updatedAt = now)
             2 -> snapshot.copy(mapKpa = raw.toDouble(), boostBar = (raw - barometricKpa) / 100.0, updatedAt = now)
-            3 -> snapshot.copy(throttlePercent = unsigned8(raw), updatedAt = now)
+            3 -> snapshot.copy(throttlePercent = unsigned8(raw) / 2.0, updatedAt = now)
             4 -> snapshot.copy(intakeCelsius = signed8(raw), updatedAt = now)
             5 -> snapshot.copy(batteryVoltage = raw / 37.0, updatedAt = now)
             6 -> snapshot.copy(ignitionDegrees = signed8(raw) / 2.0, updatedAt = now)
+            8 -> snapshot.copy(egt1Celsius = raw.toDouble(), updatedAt = now)
+            9 -> snapshot.copy(egt2Celsius = raw.toDouble(), updatedAt = now)
             12 -> snapshot.copy(afr = unsigned8(raw) / 10.0, updatedAt = now)
             14 -> {
                 barometricKpa = unsigned8(raw)

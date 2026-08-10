@@ -24,6 +24,8 @@ data class CapturedTelemetryPoint(
     val throttlePercent: Double,
     val coolantCelsius: Double,
     val intakeCelsius: Double,
+    val egt1Celsius: Double = 0.0,
+    val egt2Celsius: Double = 0.0,
     val oilTemperatureCelsius: Double,
     val oilPressureBar: Double,
     val fuelPressureBar: Double,
@@ -133,6 +135,7 @@ class IncidentCaptureEngine(
     private fun TelemetrySnapshot.toCaptured(now: Long, location: RecordedLocation?) = CapturedTelemetryPoint(
         recordedAt = now, rpm = rpm, boostBar = boostBar, mapKpa = mapKpa,
         throttlePercent = throttlePercent, coolantCelsius = coolantCelsius, intakeCelsius = intakeCelsius,
+        egt1Celsius = egt1Celsius, egt2Celsius = egt2Celsius,
         oilTemperatureCelsius = oilTemperatureCelsius, oilPressureBar = oilPressureBar,
         fuelPressureBar = fuelPressureBar, afr = afr, lambda = lambda, batteryVoltage = batteryVoltage,
         ignitionDegrees = ignitionDegrees, injectorDutyPercent = injectorDutyPercent, speedKph = speedKph,

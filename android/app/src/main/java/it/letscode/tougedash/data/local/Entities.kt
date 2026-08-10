@@ -60,6 +60,8 @@ data class TelemetrySampleEntity(
     val throttlePercent: Double,
     val coolantCelsius: Double,
     val intakeCelsius: Double,
+    val egt1Celsius: Double = 0.0,
+    val egt2Celsius: Double = 0.0,
     val oilTemperatureCelsius: Double,
     val oilPressureBar: Double,
     val fuelPressureBar: Double,

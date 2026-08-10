@@ -549,6 +549,8 @@ private fun TelemetryMetric.sampleValue(value: TelemetrySampleEntity): Double = 
     TelemetryMetric.THROTTLE -> value.throttlePercent
     TelemetryMetric.COOLANT -> value.coolantCelsius
     TelemetryMetric.INTAKE -> value.intakeCelsius
+    TelemetryMetric.EGT1 -> value.egt1Celsius
+    TelemetryMetric.EGT2 -> value.egt2Celsius
     TelemetryMetric.OIL_TEMPERATURE -> value.oilTemperatureCelsius
     TelemetryMetric.OIL_PRESSURE -> value.oilPressureBar
     TelemetryMetric.FUEL_PRESSURE -> value.fuelPressureBar
