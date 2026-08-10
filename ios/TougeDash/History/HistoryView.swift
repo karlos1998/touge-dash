@@ -1746,13 +1746,6 @@ private struct HistoryChartCard: View {
                         .fill(Color.clear)
                         .contentShape(Rectangle())
                         .simultaneousGesture(
-                            DragGesture(minimumDistance: 8)
-                                .onChanged { value in
-                                    guard abs(value.translation.width) >= abs(value.translation.height) else { return }
-                                    selectTimestamp(at: value.location, proxy: proxy, geometry: geometry)
-                                }
-                        )
-                        .simultaneousGesture(
                             SpatialTapGesture()
                                 .onEnded { value in
                                     selectTimestamp(at: value.location, proxy: proxy, geometry: geometry)
