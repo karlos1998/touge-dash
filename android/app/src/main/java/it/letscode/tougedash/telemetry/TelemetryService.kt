@@ -437,13 +437,22 @@ class TelemetryService : Service() {
                 lastAddress = gatt.device.address
                 updateConnection(ConnectionState.Connected, gatt.device.name ?: "EMULOGGER", gatt.device.address)
                 container.ecuControls.connectionChanged(true)
-                TelemetryRuntime.diagnostic("Connected; discovering telemetry characteristics")
-                if (!gatt.discoverServices()) failActiveConnection(gatt, "Service discovery was rejected")
+                val priorityAccepted = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                TelemetryRuntime.diagnostic("BLE high connection priority requested: $priorityAccepted")
+                val mtuAccepted = gatt.requestMtu(EDASH_MTU)
+                TelemetryRuntime.diagnostic("BLE MTU $EDASH_MTU requested: $mtuAccepted")
+                if (!mtuAccepted) discoverTelemetryServices(gatt)
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 failActiveConnection(gatt, "Disconnected, GATT status $status")
             } else if (status != BluetoothGatt.GATT_SUCCESS) {
                 failActiveConnection(gatt, "GATT error $status, state $newState")
             }
+        }
+
+        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
+            if (!connectionSlot.isActive(gatt)) return
+            TelemetryRuntime.diagnostic("BLE MTU $mtu (status $status)")
+            discoverTelemetryServices(gatt)
         }
 
         override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
@@ -456,13 +465,19 @@ class TelemetryService : Service() {
                 failActiveConnection(gatt, "Service discovery failed ($status)")
                 return
             }
-            val candidates = gatt.services.flatMap { service ->
+            val discoveredCharacteristics = gatt.services.flatMap { service ->
                 service.characteristics.onEach { characteristic ->
                     TelemetryRuntime.diagnostic(
                         "GATT ${service.uuid}/${characteristic.uuid} properties=${characteristic.properties} instance=${characteristic.instanceId}"
                     )
-                }.filter(::supportsNotifications)
-            }.sortedByDescending { it.uuid == NUS_TX_UUID }
+                }
+            }
+            val notifiable = discoveredCharacteristics.filter(::supportsNotifications)
+            // eDash selects the EMU FFE1 stream explicitly. Android's Generic Attribute
+            // Service Changed indication is Bluetooth metadata, not ECU telemetry.
+            val candidates = notifiable.filter { it.uuid == EMU_CHARACTERISTIC_UUID }.ifEmpty {
+                notifiable.filter { it.uuid == NUS_TX_UUID }.ifEmpty { notifiable.take(1) }
+            }
             if (candidates.isEmpty()) {
                 failActiveConnection(gatt, "No notifiable telemetry characteristic found")
                 return
@@ -647,6 +662,12 @@ class TelemetryService : Service() {
 
     private fun characteristicKey(characteristic: BluetoothGattCharacteristic) =
         characteristic.uuid to characteristic.instanceId
+
+    private fun discoverTelemetryServices(gatt: BluetoothGatt) {
+        if (!connectionSlot.isActive(gatt)) return
+        TelemetryRuntime.diagnostic("BLE link configured; discovering telemetry characteristics")
+        if (!gatt.discoverServices()) failActiveConnection(gatt, "Service discovery was rejected")
+    }
 
     private fun subscribeNextCharacteristic(gatt: BluetoothGatt) {
         if (!connectionSlot.isActive(gatt)) return
@@ -884,6 +905,7 @@ class TelemetryService : Service() {
         private const val CHANNEL_ID = "live_telemetry"
         private const val NOTIFICATION_ID = 42
         private const val CONNECTION_TIMEOUT_MILLIS = 45_000L
+        private const val EDASH_MTU = 185
         val EMU_SERVICE_UUID: UUID = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
         val EMU_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
         val NUS_SERVICE_UUID: UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
