@@ -95,7 +95,14 @@ class AppContainer(val application: Application) {
     val videoRecordingSettings = VideoRecordingSettings(application)
     val cameraRecordingController = CameraRecordingController(application, videoRepository, videoRecordingSettings)
     val authRepository = CloudAuthRepository(application, json)
-    val cloudSyncRepository = CloudSyncRepository(application, dao, authRepository, json, alertRepository)
+    val cloudSyncRepository = CloudSyncRepository(
+        application,
+        dao,
+        authRepository,
+        json,
+        alertRepository,
+        historyRepository::activeSessionId
+    )
 
     fun initialize() {
         cloudSyncRepository.schedulePeriodic()

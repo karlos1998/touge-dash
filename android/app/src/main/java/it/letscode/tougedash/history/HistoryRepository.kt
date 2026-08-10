@@ -99,7 +99,8 @@ class HistoryRepository(private val dao: TougeDashDao, private val context: Cont
             minimumOilPressureBar = minimumOil,
             containsLocation = session.containsLocation || location != null,
             syncState = SyncState.PENDING_UPLOAD,
-            syncError = null
+            syncError = null,
+            revision = session.revision + 1
         )
         setActive(session)
         if (pending.size >= 20) flushLocked(session)

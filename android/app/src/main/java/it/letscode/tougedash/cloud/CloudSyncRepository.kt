@@ -47,7 +47,8 @@ class CloudSyncRepository(
     private val dao: TougeDashDao,
     private val api: CloudAuthRepository,
     private val json: Json,
-    private val alerts: AlertRepository
+    private val alerts: AlertRepository,
+    private val activeSessionId: suspend () -> String? = { null }
 ) {
     @Serializable
     data class DriveTag(val id: String, val name: String, val color: String)
@@ -191,7 +192,10 @@ class CloudSyncRepository(
             val vehicles = dao.vehiclesOnce().map { discover(it) }
             vehicles.forEach { vehicle ->
                 val remoteId = vehicle.remoteId ?: return@forEach
-                dao.pendingSessions(25).filter { it.vehicleHardwareId == vehicle.localHardwareId }.forEach {
+                val activeId = activeSessionId()
+                dao.pendingSessions(25).filter {
+                    it.vehicleHardwareId == vehicle.localHardwareId && it.id != activeId
+                }.forEach {
                     uploadSession(it, remoteId)
                     if (it.metadataDirty) {
                         val refreshed = dao.sessionOnce(it.id) ?: it
@@ -242,7 +246,7 @@ class CloudSyncRepository(
 
     fun schedule() {
         val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        WorkManager.getInstance(context).enqueueUniqueWork(WORK_NOW, ExistingWorkPolicy.KEEP, OneTimeWorkRequestBuilder<CloudSyncWorker>().setConstraints(constraints).build())
+        WorkManager.getInstance(context).enqueueUniqueWork(WORK_NOW, ExistingWorkPolicy.APPEND_OR_REPLACE, OneTimeWorkRequestBuilder<CloudSyncWorker>().setConstraints(constraints).build())
     }
 
     fun schedulePeriodic() {
