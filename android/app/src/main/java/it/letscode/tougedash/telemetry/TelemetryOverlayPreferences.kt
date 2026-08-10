@@ -14,6 +14,11 @@ enum class TelemetryOverlayMode {
 
 data class TelemetryOverlayPosition(val x: Int, val y: Int)
 
+object TelemetryOverlayVisibilityPolicy {
+    fun shouldShow(enabled: Boolean, canDrawOverlays: Boolean, appVisible: Boolean): Boolean =
+        enabled && canDrawOverlays && !appVisible
+}
+
 object TelemetryOverlayPreferences {
     private const val PREFERENCES = "telemetry-overlay"
     private const val ENABLED = "enabled"

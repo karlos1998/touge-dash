@@ -19,6 +19,8 @@ object TelemetryRuntime {
     val diagnostics = mutableDiagnostics.asStateFlow()
     private val mutableChartPoints = MutableStateFlow<List<TimedTelemetry>>(emptyList())
     val chartPoints = mutableChartPoints.asStateFlow()
+    private val mutableAppVisible = MutableStateFlow(false)
+    val appVisible = mutableAppVisible.asStateFlow()
     private val driveSplitRequested = AtomicBoolean(false)
     private var lastChartPointAt = 0L
 
@@ -29,6 +31,10 @@ object TelemetryRuntime {
     }
 
     internal fun consumeDriveSplitRequest(): Boolean = driveSplitRequested.getAndSet(false)
+
+    internal fun setAppVisible(visible: Boolean) {
+        mutableAppVisible.value = visible
+    }
 
     internal fun updateSnapshot(value: TelemetrySnapshot) {
         mutableSnapshot.value = value

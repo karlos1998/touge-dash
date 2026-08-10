@@ -14,10 +14,21 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.letscode.tougedash.telemetry.TelemetryService
+import it.letscode.tougedash.telemetry.TelemetryRuntime
 import it.letscode.tougedash.ui.TougeDashApp
 import it.letscode.tougedash.ui.theme.TougeDashTheme
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        TelemetryRuntime.setAppVisible(true)
+    }
+
+    override fun onStop() {
+        if (!isChangingConfigurations) TelemetryRuntime.setAppVisible(false)
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as TougeDashApplication).container

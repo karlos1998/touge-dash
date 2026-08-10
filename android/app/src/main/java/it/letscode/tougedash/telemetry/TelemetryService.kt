@@ -99,8 +99,11 @@ class TelemetryService : Service() {
             notification(local("Searching for EMULOGGER", "Szukanie EMULOGGERA")),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         )
-        if (TelemetryOverlayPreferences.isEnabled(this) && Settings.canDrawOverlays(this)) {
-            overlayController.show()
+        refreshOverlayVisibility()
+        serviceScope.launch(Dispatchers.Main.immediate) {
+            TelemetryRuntime.appVisible.collect {
+                refreshOverlayVisibility()
+            }
         }
         serviceScope.launch {
             while (isActive) {
@@ -137,9 +140,9 @@ class TelemetryService : Service() {
         when (intent?.action) {
             ACTION_STOP -> stopTelemetry()
             ACTION_RESCAN -> startScanning(force = true)
-            ACTION_SHOW_OVERLAY -> overlayController.show()
-            ACTION_HIDE_OVERLAY -> overlayController.hide()
-            ACTION_TOGGLE_OVERLAY -> overlayController.toggle()
+            ACTION_SHOW_OVERLAY -> setOverlayEnabled(true)
+            ACTION_HIDE_OVERLAY -> setOverlayEnabled(false)
+            ACTION_TOGGLE_OVERLAY -> setOverlayEnabled(!TelemetryOverlayPreferences.isEnabled(this))
             else -> startScanning()
         }
         if (intent?.action == ACTION_SHOW_OVERLAY || intent?.action == ACTION_HIDE_OVERLAY ||
@@ -147,6 +150,21 @@ class TelemetryService : Service() {
             updateForegroundNotification(TelemetryRuntime.snapshot.value)
         }
         return START_STICKY
+    }
+
+    private fun setOverlayEnabled(enabled: Boolean) {
+        TelemetryOverlayPreferences.setEnabled(this, enabled)
+        refreshOverlayVisibility()
+    }
+
+    private fun refreshOverlayVisibility() {
+        val shouldShow = TelemetryOverlayVisibilityPolicy.shouldShow(
+            enabled = TelemetryOverlayPreferences.isEnabled(this),
+            canDrawOverlays = Settings.canDrawOverlays(this),
+            appVisible = TelemetryRuntime.appVisible.value
+        )
+        if (shouldShow) overlayController.show() else overlayController.hide(persist = false)
+        updateForegroundNotification(TelemetryRuntime.snapshot.value)
     }
 
     fun startScanning(force: Boolean = false) {
@@ -789,7 +807,10 @@ class TelemetryService : Service() {
         if (Settings.canDrawOverlays(this)) {
             builder.addAction(
                 0,
-                getString(if (overlayController.isVisible) R.string.hide_hud else R.string.show_hud),
+                getString(
+                    if (TelemetryOverlayPreferences.isEnabled(this)) R.string.hide_hud
+                    else R.string.show_hud
+                ),
                 PendingIntent.getService(
                     this,
                     2,
