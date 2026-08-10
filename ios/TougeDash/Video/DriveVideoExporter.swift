@@ -17,6 +17,8 @@ struct VideoTelemetryFrame: Sendable {
     let oilTemperature: Double
     let oilPressure: Double
     let fuelPressure: Double
+    let egt1: Double
+    let egt2: Double
     let afr: Double
     let lambda: Double
     let battery: Double
@@ -35,6 +37,8 @@ struct VideoTelemetryFrame: Sendable {
         oilTemperature = sample.oilTemperatureCelsius
         oilPressure = sample.oilPressureBar
         fuelPressure = sample.fuelPressureBar
+        egt1 = sample.egt1Celsius
+        egt2 = sample.egt2Celsius
         afr = sample.afr
         lambda = sample.lambda
         battery = sample.batteryVoltage
@@ -54,6 +58,8 @@ struct VideoTelemetryFrame: Sendable {
         case .oilTemperature: oilTemperature
         case .oilPressure: oilPressure
         case .fuelPressure: fuelPressure
+        case .egt1: egt1
+        case .egt2: egt2
         case .afr: afr
         case .lambda: lambda
         case .batteryVoltage: battery

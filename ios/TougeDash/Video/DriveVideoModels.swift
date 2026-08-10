@@ -388,6 +388,8 @@ extension DashboardMetric {
         case .throttle: sample.throttlePercent
         case .coolant: sample.coolantCelsius
         case .intake: sample.intakeCelsius
+        case .egt1: sample.egt1Celsius
+        case .egt2: sample.egt2Celsius
         case .oilTemperature: sample.oilTemperatureCelsius
         case .oilPressure: sample.oilPressureBar
         case .fuelPressure: sample.fuelPressureBar

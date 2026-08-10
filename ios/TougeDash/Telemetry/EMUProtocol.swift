@@ -60,10 +60,12 @@ struct EMUTelemetryAccumulator: Sendable {
         case 2:
             snapshot.mapKPa = Double(raw)
             snapshot.boostBar = (snapshot.mapKPa - fallbackBarometricKPa) / 100
-        case 3: snapshot.throttlePercent = unsigned8(raw)
+        case 3: snapshot.throttlePercent = unsigned8(raw) / 2
         case 4: snapshot.intakeCelsius = signed8(raw)
         case 5: snapshot.batteryVoltage = Double(raw) / 37
         case 6: snapshot.ignitionDegrees = signed8(raw) / 2
+        case 8: snapshot.egt1Celsius = Double(raw)
+        case 9: snapshot.egt2Celsius = Double(raw)
         case 12: snapshot.afr = unsigned8(raw) / 10
         case 14:
             fallbackBarometricKPa = unsigned8(raw)

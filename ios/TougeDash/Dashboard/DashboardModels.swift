@@ -7,6 +7,8 @@ enum DashboardMetric: String, Codable, CaseIterable, Identifiable, Sendable {
     case throttle
     case coolant
     case intake
+    case egt1
+    case egt2
     case oilTemperature
     case oilPressure
     case fuelPressure
@@ -27,6 +29,8 @@ enum DashboardMetric: String, Codable, CaseIterable, Identifiable, Sendable {
         case .throttle: localized("Przepustnica")
         case .coolant: localized("Temperatura płynu")
         case .intake: localized("Temperatura dolotu")
+        case .egt1: "EGT 1"
+        case .egt2: "EGT 2"
         case .oilTemperature: localized("Temperatura oleju")
         case .oilPressure: localized("Ciśnienie oleju")
         case .fuelPressure: localized("Ciśnienie paliwa")
@@ -47,6 +51,8 @@ enum DashboardMetric: String, Codable, CaseIterable, Identifiable, Sendable {
         case .throttle: "TPS"
         case .coolant: "COOLANT"
         case .intake: "IAT"
+        case .egt1: "EGT 1"
+        case .egt2: "EGT 2"
         case .oilTemperature: "OIL TEMP"
         case .oilPressure: "OIL P"
         case .fuelPressure: "FUEL"
@@ -65,7 +71,7 @@ enum DashboardMetric: String, Codable, CaseIterable, Identifiable, Sendable {
         case .boost, .oilPressure, .fuelPressure: "bar"
         case .map: "kPa"
         case .throttle, .injectorDuty: "%"
-        case .coolant, .intake, .oilTemperature: "°C"
+        case .coolant, .intake, .egt1, .egt2, .oilTemperature: "°C"
         case .afr: "AFR"
         case .lambda: "λ"
         case .batteryVoltage: "V"
@@ -82,6 +88,7 @@ enum DashboardMetric: String, Codable, CaseIterable, Identifiable, Sendable {
         case .throttle: "pedal.accelerator"
         case .coolant: "thermometer.high"
         case .intake: "thermometer.low"
+        case .egt1, .egt2: "flame.fill"
         case .oilTemperature: "thermometer.medium"
         case .oilPressure: "oilcan.fill"
         case .fuelPressure: "fuelpump.fill"
@@ -109,6 +116,7 @@ enum DashboardMetric: String, Codable, CaseIterable, Identifiable, Sendable {
         case .throttle, .injectorDuty: 0...100
         case .coolant: 0...130
         case .intake: -20...100
+        case .egt1, .egt2: 0...1_100
         case .oilTemperature: 0...150
         case .oilPressure: 0...10
         case .fuelPressure: 0...10
@@ -128,6 +136,8 @@ enum DashboardMetric: String, Codable, CaseIterable, Identifiable, Sendable {
         case .throttle: snapshot.throttlePercent
         case .coolant: snapshot.coolantCelsius
         case .intake: snapshot.intakeCelsius
+        case .egt1: snapshot.egt1Celsius
+        case .egt2: snapshot.egt2Celsius
         case .oilTemperature: snapshot.oilTemperatureCelsius
         case .oilPressure: snapshot.oilPressureBar
         case .fuelPressure: snapshot.fuelPressureBar

@@ -395,6 +395,8 @@ struct CapturedTelemetryPoint: Codable, Hashable, Identifiable, Sendable {
     let throttlePercent: Double
     let coolantCelsius: Double
     let intakeCelsius: Double
+    let egt1Celsius: Double?
+    let egt2Celsius: Double?
     let oilTemperatureCelsius: Double
     let oilPressureBar: Double
     let fuelPressureBar: Double
@@ -424,6 +426,8 @@ struct CapturedTelemetryPoint: Codable, Hashable, Identifiable, Sendable {
         throttlePercent = snapshot.throttlePercent
         coolantCelsius = snapshot.coolantCelsius
         intakeCelsius = snapshot.intakeCelsius
+        egt1Celsius = snapshot.egt1Celsius
+        egt2Celsius = snapshot.egt2Celsius
         oilTemperatureCelsius = snapshot.oilTemperatureCelsius
         oilPressureBar = snapshot.oilPressureBar
         fuelPressureBar = snapshot.fuelPressureBar
@@ -525,6 +529,8 @@ final class TelemetryHistorySample {
     var throttlePercent: Double
     var coolantCelsius: Double
     var intakeCelsius: Double
+    var egt1Celsius: Double = 0
+    var egt2Celsius: Double = 0
     var oilTemperatureCelsius: Double
     var oilPressureBar: Double
     var fuelPressureBar: Double
@@ -560,6 +566,8 @@ final class TelemetryHistorySample {
         throttlePercent = snapshot.throttlePercent
         coolantCelsius = snapshot.coolantCelsius
         intakeCelsius = snapshot.intakeCelsius
+        egt1Celsius = snapshot.egt1Celsius
+        egt2Celsius = snapshot.egt2Celsius
         oilTemperatureCelsius = snapshot.oilTemperatureCelsius
         oilPressureBar = snapshot.oilPressureBar
         fuelPressureBar = snapshot.fuelPressureBar

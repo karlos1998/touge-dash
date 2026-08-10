@@ -8,6 +8,8 @@ struct TelemetrySnapshot: Codable, Hashable, Sendable {
     var throttlePercent: Double = 0
     var coolantCelsius: Double = 0
     var intakeCelsius: Double = 0
+    var egt1Celsius: Double = 0
+    var egt2Celsius: Double = 0
     var oilTemperatureCelsius: Double = 0
     var oilPressureBar: Double = 0
     var fuelPressureBar: Double = 0
@@ -31,6 +33,8 @@ struct TelemetrySnapshot: Codable, Hashable, Sendable {
         throttlePercent: 84,
         coolantCelsius: 91,
         intakeCelsius: 34,
+        egt1Celsius: 914,
+        egt2Celsius: 887,
         oilTemperatureCelsius: 104,
         oilPressureBar: 4.2,
         fuelPressureBar: 3.4,

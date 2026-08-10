@@ -1008,6 +1008,19 @@ private struct DriveSessionDetailView: View {
                         )
 
                         HistoryChartCard(
+                            title: "EGT",
+                            subtitle: "Temperatura spalin",
+                            unit: "°C",
+                            samples: chartSamples,
+                            attempts: accelerationAttempts,
+                            series: [
+                                HistoryChartSeries(name: "EGT 1", color: .tougeOrange, value: { $0.egt1Celsius }),
+                                HistoryChartSeries(name: "EGT 2", color: .tougeRed, value: { $0.egt2Celsius })
+                            ],
+                            selectedTime: $selectedTime
+                        )
+
+                        HistoryChartCard(
                             title: "CIŚNIENIA",
                             subtitle: "Boost i ciśnienie oleju",
                             unit: "bar",

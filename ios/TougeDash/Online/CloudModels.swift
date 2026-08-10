@@ -249,6 +249,8 @@ struct CloudSampleUpload: Encodable, Sendable {
     let throttlePercent: Double
     let coolantCelsius: Double
     let intakeCelsius: Double
+    let egt1Celsius: Double
+    let egt2Celsius: Double
     let oilTemperatureCelsius: Double
     let oilPressureBar: Double
     let fuelPressureBar: Double
@@ -273,6 +275,8 @@ struct CloudLiveUpload: Encodable, Sendable {
     let throttlePercent: Double
     let coolantCelsius: Double
     let intakeCelsius: Double
+    let egt1Celsius: Double
+    let egt2Celsius: Double
     let oilTemperatureCelsius: Double
     let oilPressureBar: Double
     let fuelPressureBar: Double
