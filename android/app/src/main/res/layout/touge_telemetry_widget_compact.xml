@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/touge_widget_background"
+    android:clipToOutline="true"
+    android:gravity="center_vertical"
+    android:orientation="vertical"
+    android:padding="13dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="sans-serif-black"
+            android:text="TOUGE"
+            android:textColor="#26D7E5"
+            android:textSize="9sp" />
+        <TextView
+            android:id="@+id/widget_connection"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:text="OFFLINE"
+            android:textColor="#81939D"
+            android:textSize="7sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_rpm"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fontFamily="sans-serif-black"
+        android:gravity="center_vertical"
+        android:includeFontPadding="false"
+        android:maxLines="1"
+        android:text="0"
+        android:textColor="#FFFFFF"
+        android:textSize="38sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="bottom"
+        android:orientation="horizontal">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="BOOST" android:textColor="#81939D" android:textSize="7sp" android:fontFamily="sans-serif-black" />
+            <TextView android:id="@+id/widget_boost" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.00 bar" android:textColor="#26D7E5" android:textSize="12sp" android:fontFamily="sans-serif-black" />
+        </LinearLayout>
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:orientation="vertical">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="OIL T" android:textColor="#81939D" android:textSize="7sp" android:fontFamily="sans-serif-black" />
+            <TextView android:id="@+id/widget_oil_temperature" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0°C" android:textColor="#FFA53D" android:textSize="12sp" android:fontFamily="sans-serif-black" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

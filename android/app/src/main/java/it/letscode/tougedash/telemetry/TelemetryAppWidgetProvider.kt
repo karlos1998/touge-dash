@@ -18,7 +18,16 @@ class TelemetryAppWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, appWidgetIds: IntArray) {
         val snapshot = TelemetryRuntime.snapshot.value
         val connection = TelemetryRuntime.connection.value
-        appWidgetIds.forEach { manager.updateAppWidget(it, views(context, snapshot, connection)) }
+        appWidgetIds.forEach { update(context, manager, it, snapshot, connection) }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        manager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: android.os.Bundle
+    ) {
+        update(context, manager, appWidgetId, TelemetryRuntime.snapshot.value, TelemetryRuntime.connection.value)
     }
 
     companion object {
@@ -26,21 +35,44 @@ class TelemetryAppWidgetProvider : AppWidgetProvider() {
             val manager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, TelemetryAppWidgetProvider::class.java)
             manager.getAppWidgetIds(component).forEach {
-                manager.updateAppWidget(it, views(context, snapshot, connection))
+                update(context, manager, it, snapshot, connection)
             }
+        }
+
+        private fun update(
+            context: Context,
+            manager: AppWidgetManager,
+            appWidgetId: Int,
+            snapshot: TelemetrySnapshot,
+            connection: TelemetryConnection
+        ) {
+            val minimumWidth = manager.getAppWidgetOptions(appWidgetId)
+                .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+            manager.updateAppWidget(
+                appWidgetId,
+                views(context, snapshot, connection, compact = minimumWidth < 220)
+            )
         }
 
         private fun views(
             context: Context,
             snapshot: TelemetrySnapshot,
-            connection: TelemetryConnection
-        ) = RemoteViews(context.packageName, R.layout.touge_telemetry_widget).apply {
+            connection: TelemetryConnection,
+            compact: Boolean
+        ) = RemoteViews(
+            context.packageName,
+            if (compact) R.layout.touge_telemetry_widget_compact else R.layout.touge_telemetry_widget
+        ).apply {
             setTextViewText(R.id.widget_rpm, snapshot.rpm.roundToInt().toString())
             setTextViewText(R.id.widget_boost, "%.2f bar".format(snapshot.boostBar))
-            setTextViewText(R.id.widget_oil_pressure, "%.1f bar".format(snapshot.oilPressureBar))
-            setTextViewText(R.id.widget_oil_temperature, "%.0f°C".format(snapshot.oilTemperatureCelsius))
-            setTextViewText(R.id.widget_coolant, "%.0f°C".format(snapshot.coolantCelsius))
-            setTextViewText(R.id.widget_afr, "%.1f".format(snapshot.afr))
+            if (compact) {
+                setTextViewText(R.id.widget_oil_temperature, "%.0f°C".format(snapshot.oilTemperatureCelsius))
+            } else {
+                setTextViewText(R.id.widget_oil_pressure, "%.1f bar".format(snapshot.oilPressureBar))
+                setTextViewText(R.id.widget_oil_temperature, "%.0f°C".format(snapshot.oilTemperatureCelsius))
+                setTextViewText(R.id.widget_coolant, "%.0f°C".format(snapshot.coolantCelsius))
+                setTextViewText(R.id.widget_afr, "%.1f".format(snapshot.afr))
+            }
             setTextViewText(
                 R.id.widget_connection,
                 when {
