@@ -685,6 +685,8 @@ final class DriveIncident {
     var triggerBoostBar: Double
     var triggerAFR: Double
     var triggerSpeedKPH: Double
+    var triggerFuelPressureBar: Double = 0
+    var conditionDurationSeconds: Double = 0
     var latitude: Double?
     var longitude: Double?
     var encodedSamples: Data
@@ -702,6 +704,7 @@ final class DriveIncident {
         thresholdValue: Double,
         triggerValue: Double,
         triggerUnit: String,
+        conditionDuration: TimeInterval = 0,
         samples: [CapturedTelemetryPoint]
     ) {
         self.id = id
@@ -727,6 +730,8 @@ final class DriveIncident {
         triggerBoostBar = trigger?.boostBar ?? 0
         triggerAFR = trigger?.afr ?? 0
         triggerSpeedKPH = trigger?.speedKPH ?? 0
+        triggerFuelPressureBar = trigger?.fuelPressureBar ?? 0
+        conditionDurationSeconds = max(0, conditionDuration)
         latitude = trigger?.latitude
         longitude = trigger?.longitude
         encodedSamples = (try? JSONEncoder().encode(samples)) ?? Data()

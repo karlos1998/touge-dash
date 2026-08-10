@@ -51,7 +51,13 @@ class IncidentCaptureEngine(
     private val sampleRate: Int = 25
 ) {
     private data class Match(val kind: IncidentKind, val severity: IncidentSeverity, val value: Double, val threshold: Double, val unit: String, val duration: Double)
-    private data class Capture(val match: Match, val triggeredAt: Long, val points: MutableList<CapturedTelemetryPoint>)
+    private data class Capture(
+        val match: Match,
+        val triggeredAt: Long,
+        val conditionStartedAt: Long,
+        var conditionEndedAt: Long?,
+        val points: MutableList<CapturedTelemetryPoint>
+    )
     private val ring = ArrayDeque<CapturedTelemetryPoint>()
     private val candidates = mutableMapOf<IncidentKind, Long>()
     private val lastAlerts = mutableMapOf<IncidentKind, Long>()
@@ -63,14 +69,17 @@ class IncidentCaptureEngine(
         val point = snapshot.toCaptured(now, location)
         ring += point
         while (ring.size > preSeconds * sampleRate) ring.removeFirst()
-        captures.values.forEach { it.points += point }
+        captures.values.forEach {
+            it.points += point
+            if (it.conditionEndedAt == null && !isActive(it.match.kind, snapshot)) it.conditionEndedAt = now
+        }
 
         matches(snapshot).forEach { match ->
             val activeSince = if (isActive(match.kind, snapshot)) candidates.getOrPut(match.kind) { now } else null
             if (activeSince == null) candidates.remove(match.kind)
             val cooldownReady = now - (lastAlerts[match.kind] ?: 0L) >= rules.cooldownSeconds * 1_000L
             if (activeSince != null && now - activeSince >= (match.duration * 1_000).toLong() && cooldownReady && match.kind !in captures) {
-                val capture = Capture(match, now, ring.toMutableList())
+                val capture = Capture(match, now, activeSince, null, ring.toMutableList())
                 captures[match.kind] = capture
                 lastAlerts[match.kind] = now
                 alertSink(ActiveAlert(match.kind, match.severity, now, match.value, match.threshold, match.unit))
@@ -103,7 +112,10 @@ class IncidentCaptureEngine(
                 triggerValue = capture.match.value, thresholdValue = capture.match.threshold,
                 triggerUnit = capture.match.unit, triggerRpm = trigger?.rpm ?: 0.0,
                 triggerBoostBar = trigger?.boostBar ?: 0.0, triggerAfr = trigger?.afr ?: 0.0,
-                triggerSpeedKph = trigger?.speedKph ?: 0.0, latitude = trigger?.latitude,
+                triggerSpeedKph = trigger?.speedKph ?: 0.0,
+                triggerFuelPressureBar = trigger?.fuelPressureBar ?: 0.0,
+                conditionDurationMillis = ((capture.conditionEndedAt ?: last) - capture.conditionStartedAt).coerceAtLeast(0),
+                latitude = trigger?.latitude,
                 longitude = trigger?.longitude, encodedSamples = json.encodeToString(capture.points),
                 syncState = SyncState.PENDING_UPLOAD
             )

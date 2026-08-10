@@ -286,6 +286,7 @@ class CloudSyncRepository(
                     put("triggeredAt", iso(incident.triggeredAt)); put("captureStartedAt", iso(incident.captureStartedAt)); put("captureEndedAt", iso(incident.captureEndedAt)); put("revision", incident.revision)
                     put("sampleCount", incident.sampleCount.coerceAtLeast(1)); put("sampleRateHz", incident.sampleRateHz.coerceAtLeast(.1)); put("triggerValue", incident.triggerValue); put("thresholdValue", incident.thresholdValue); put("triggerUnit", incident.triggerUnit)
                     put("triggerRpm", incident.triggerRpm); put("triggerBoostBar", incident.triggerBoostBar); put("triggerAfr", incident.triggerAfr); put("triggerSpeedKph", incident.triggerSpeedKph)
+                    put("triggerFuelPressureBar", incident.triggerFuelPressureBar); put("conditionDurationMillis", incident.conditionDurationMillis)
                     incident.latitude?.let { put("latitude", it) }; incident.longitude?.let { put("longitude", it) }
                     put("samples", buildJsonArray { values.forEach { add(capturedJson(it)) } })
                 }

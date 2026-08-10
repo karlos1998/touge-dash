@@ -119,6 +119,8 @@ data class IncidentEntity(
     val triggerBoostBar: Double,
     val triggerAfr: Double,
     val triggerSpeedKph: Double,
+    val triggerFuelPressureBar: Double,
+    val conditionDurationMillis: Long,
     val latitude: Double?,
     val longitude: Double?,
     val encodedSamples: String,

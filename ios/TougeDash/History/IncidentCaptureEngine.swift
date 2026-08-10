@@ -44,6 +44,7 @@ struct IncidentCaptureEngine: Sendable {
         let thresholdValue: Double
         let triggerValue: Double
         let triggerUnit: String
+        let conditionDuration: TimeInterval
         let samples: [CapturedTelemetryPoint]
     }
 
@@ -61,6 +62,8 @@ struct IncidentCaptureEngine: Sendable {
         let match: RuleMatch
         let triggeredAt: Date
         let finishAt: Date
+        let conditionStartedAt: Date
+        var conditionEndedAt: Date?
         var samples: [CapturedTelemetryPoint]
     }
 
@@ -98,6 +101,9 @@ struct IncidentCaptureEngine: Sendable {
         let matches = matchingRules(for: point)
         let matchingKinds = Set(matches.map(\.kind))
         for kind in IncidentKind.allCases where !matchingKinds.contains(kind) {
+            if activeCaptures[kind]?.conditionEndedAt == nil {
+                activeCaptures[kind]?.conditionEndedAt = point.timestamp
+            }
             conditionStartedAt.removeValue(forKey: kind)
         }
         for match in matches {
@@ -115,10 +121,11 @@ struct IncidentCaptureEngine: Sendable {
                 match: match,
                 triggeredAt: point.timestamp,
                 finishAt: point.timestamp.addingTimeInterval(configuration.postTriggerDuration),
+                conditionStartedAt: startedAt,
+                conditionEndedAt: nil,
                 samples: preTriggerBuffer
             )
             lastTriggeredAt[match.kind] = point.timestamp
-            conditionStartedAt.removeValue(forKey: match.kind)
         }
         return completed.sorted { $0.triggeredAt < $1.triggeredAt }
     }
@@ -153,6 +160,11 @@ struct IncidentCaptureEngine: Sendable {
             thresholdValue: capture.match.threshold,
             triggerValue: capture.match.value,
             triggerUnit: capture.match.unit,
+            conditionDuration: max(
+                0,
+                (capture.conditionEndedAt ?? capture.samples.last?.timestamp ?? capture.triggeredAt)
+                    .timeIntervalSince(capture.conditionStartedAt)
+            ),
             samples: capture.samples
         )
     }
@@ -308,6 +320,7 @@ final class TelemetryIncidentRecorder: ObservableObject {
                 thresholdValue: capture.thresholdValue,
                 triggerValue: capture.triggerValue,
                 triggerUnit: capture.triggerUnit,
+                conditionDuration: capture.conditionDuration,
                 samples: capture.samples
             ))
         }

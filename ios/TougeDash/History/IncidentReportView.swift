@@ -246,6 +246,11 @@ private struct IncidentHeroCard: View {
                 IncidentSummaryValue(title: "BOOST", value: incident.triggerBoostBar, unit: "bar", tint: .tougeCyan)
             }
 
+            HStack(spacing: 8) {
+                IncidentSummaryValue(title: "CZAS TRWANIA", value: incident.conditionDurationSeconds, unit: "s", tint: .tougeRed)
+                IncidentSummaryValue(title: "CIŚNIENIE PALIWA", value: incident.triggerFuelPressureBar, unit: "bar", tint: .tougeMint)
+            }
+
             HStack {
                 Label(localized("30 s przed"), systemImage: "backward.end.fill")
                 Spacer()

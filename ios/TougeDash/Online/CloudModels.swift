@@ -92,6 +92,8 @@ struct CloudIncidentUpload: Encodable, Sendable {
     let triggerBoostBar: Double
     let triggerAfr: Double
     let triggerSpeedKph: Double
+    let triggerFuelPressureBar: Double
+    let conditionDurationMillis: Int64
     let latitude: Double?
     let longitude: Double?
     let samples: [CloudSampleUpload]

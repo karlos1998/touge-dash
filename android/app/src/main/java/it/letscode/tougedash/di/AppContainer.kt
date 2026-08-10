@@ -74,6 +74,12 @@ class AppContainer(val application: Application) {
                 db.execSQL("ALTER TABLE telemetry_samples ADD COLUMN egt2Celsius REAL NOT NULL DEFAULT 0")
             }
         })
+        .addMigrations(object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE incidents ADD COLUMN triggerFuelPressureBar REAL NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE incidents ADD COLUMN conditionDurationMillis INTEGER NOT NULL DEFAULT 0")
+            }
+        })
         .build()
     val dao = database.dao()
     val runtime = TelemetryRuntime

@@ -848,6 +848,8 @@ final class CloudSyncManager: ObservableObject {
                 triggerBoostBar: incident.triggerBoostBar,
                 triggerAfr: incident.triggerAFR,
                 triggerSpeedKph: incident.triggerSpeedKPH,
+                triggerFuelPressureBar: incident.triggerFuelPressureBar,
+                conditionDurationMillis: Int64((incident.conditionDurationSeconds * 1_000).rounded()),
                 latitude: incident.latitude,
                 longitude: incident.longitude,
                 samples: chunk.map(makeUpload)

@@ -127,6 +127,48 @@ final class IncidentCaptureEngineTests: XCTestCase {
         XCTAssertEqual(incident.samples.count, Set(incident.samples.map(\.id)).count)
     }
 
+    func testLeanIncidentStoresContinuousDurationAndTriggerFuelPressure() {
+        var configuration = IncidentCaptureEngine.Configuration.standard
+        configuration.sampleInterval = 0.04
+        configuration.preTriggerDuration = 0.2
+        configuration.postTriggerDuration = 0.7
+        configuration.leanDuration = 0.2
+        var engine = IncidentCaptureEngine(configuration: configuration)
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var completed: [IncidentCaptureEngine.CompletedIncident] = []
+
+        for index in 0..<32 {
+            var snapshot = safeSnapshot
+            if (5..<20).contains(index) {
+                snapshot.boostBar = 0.9
+                snapshot.afr = 14.1
+                snapshot.fuelPressureBar = 3.15
+            }
+            completed += engine.ingest(CapturedTelemetryPoint(
+                snapshot: snapshot,
+                timestamp: start.addingTimeInterval(Double(index) * 0.041)
+            ))
+        }
+
+        let capture = try! XCTUnwrap(completed.first)
+        XCTAssertEqual(capture.kind, .leanUnderBoost)
+        XCTAssertEqual(capture.conditionDuration, 0.615, accuracy: 0.05)
+        let incident = DriveIncident(
+            vehicleID: UUID(),
+            sessionID: UUID(),
+            kind: capture.kind,
+            severity: capture.severity,
+            triggeredAt: capture.triggeredAt,
+            thresholdValue: capture.thresholdValue,
+            triggerValue: capture.triggerValue,
+            triggerUnit: capture.triggerUnit,
+            conditionDuration: capture.conditionDuration,
+            samples: capture.samples
+        )
+        XCTAssertEqual(incident.conditionDurationSeconds, capture.conditionDuration, accuracy: 0.001)
+        XCTAssertEqual(incident.triggerFuelPressureBar, 3.15, accuracy: 0.001)
+    }
+
     func testAllRequestedSafetyRulesTrigger() {
         XCTAssertEqual(trigger { snapshot in
             snapshot.rpm = 4_000

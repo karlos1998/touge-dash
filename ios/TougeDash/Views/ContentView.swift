@@ -255,24 +255,32 @@ struct ProductCreditFooter: View {
     var compact = false
 
     private let website = URL(string: "https://letscode.it")!
+    private var version: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "v\(short) (\(build))"
+    }
 
     var body: some View {
         Link(destination: website) {
-            HStack(spacing: compact ? 3 : 4) {
-                Text(localized("Stworzono z"))
-                Image(systemName: "heart.fill")
-                    .font(.system(size: compact ? 7 : 8, weight: .bold))
-                    .foregroundStyle(Color.tougeRed)
-                Text(localized("przez"))
-                Text("Let's Code It — Karol Sójka")
-                    .foregroundStyle(Color.tougeCyan)
+            VStack(spacing: compact ? 1 : 3) {
+                HStack(spacing: compact ? 3 : 4) {
+                    Text(localized("Stworzono z"))
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: compact ? 7 : 8, weight: .bold))
+                        .foregroundStyle(Color.tougeRed)
+                    Text(localized("przez"))
+                    Text("Let's Code It — Karol Sójka")
+                        .foregroundStyle(Color.tougeCyan)
+                }
+                Text(version)
             }
             .font(.system(size: compact ? 7 : 9, weight: .semibold))
             .foregroundStyle(.tertiary)
             .lineLimit(1)
             .minimumScaleFactor(0.7)
         }
-        .accessibilityLabel(localized("Stworzono z sercem przez Let's Code It — Karol Sójka"))
+        .accessibilityLabel("\(localized("Stworzono z sercem przez Let's Code It — Karol Sójka")), \(version)")
     }
 }
 

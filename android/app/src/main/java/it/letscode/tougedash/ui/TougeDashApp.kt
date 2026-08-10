@@ -701,10 +701,17 @@ private fun MoreScreen(container: AppContainer) {
             CloudAccountCard(container)
             if (BuildConfig.DEBUG) Text("DEV API • ${BuildConfig.API_BASE_URL}", color = TougeMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
         }
-        Row(Modifier.fillMaxWidth().clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://letscode.it"))) }.padding(vertical = 18.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.made_by), color = TougeMuted)
-            Text("  ♥  ", color = TougeRed)
-            Text(stringResource(R.string.by_lets_code_it), color = TougeCyan)
+        Column(
+            Modifier.fillMaxWidth().clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://letscode.it"))) }.padding(vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.made_by), color = TougeMuted)
+                Text("  ♥  ", color = TougeRed)
+                Text(stringResource(R.string.by_lets_code_it), color = TougeCyan)
+            }
+            Text("v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", color = TougeMuted, fontSize = 9.sp)
         }
     }
     rename?.let { vehicle -> VehicleNameDialog(container, vehicle) { rename = null } }

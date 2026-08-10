@@ -563,6 +563,10 @@ private fun IncidentReportDialog(incident: IncidentEntity, container: AppContain
                     MiniValue(appText("LIMIT", "PRÓG"), "${incident.thresholdValue} ${incident.triggerUnit}", TougeOrange)
                     MiniValue("RPM", incident.triggerRpm.roundToInt().toString(), TougeCyan)
                 }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    MiniValue(appText("DURATION", "CZAS TRWANIA"), duration(incident.conditionDurationMillis), TougeRed)
+                    MiniValue(appText("FUEL PRESSURE", "CIŚNIENIE PALIWA"), "${"%.2f".format(incident.triggerFuelPressureBar)} bar", TougeMint)
+                }
                 Text(
                     appText(
                         "${points.size} samples • ${duration(incident.captureEndedAt - incident.captureStartedAt)} capture • 30 s before and up to 60 s after the trigger",
