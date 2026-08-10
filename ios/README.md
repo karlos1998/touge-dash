@@ -155,6 +155,13 @@ Touge Dash nie udaje pełnej aplikacji CarPlay i nie wymaga entitlementu z kateg
 - `Touge Dash` jako widget `systemSmall`, który można dodać na ekranie widgetów CarPlay,
 - Live Activity uruchamiana automatycznie razem z aplikacją; system pokazuje ją w CarPlay Dashboard lub jako powiadomienie. Po 15 minutach bez komunikacji z EMULOGGEREM karta, ekran blokady i Dynamic Island są automatycznie wyłączane. Wracają po ponownym połączeniu lub odebraniu telemetrii. Przycisk `Stop card` pozwala ją ręcznie wyłączyć do następnego połączenia.
 
+Zwykły widget WidgetKit jest migawką i iOS sam narzuca mu budżet odświeżeń;
+nie służy do wyświetlania telemetrii co sekundę. Do danych na żywo po
+zablokowaniu iPhone’a i w CarPlay należy używać karty Live Activity. Aplikacja
+ma włączone `bluetooth-central`, state restoration oraz częste aktualizacje
+Live Activity i czeka na utworzenie tej aktywności przed rozpoczęciem skanowania
+BLE.
+
 Live Activity ma układ `ActivityFamily.small` z ciśnieniem i temperaturą oleju,
 boostem, AFR oraz temperaturą płynu chłodniczego. Na iOS 26 aktywność jest
 żądana przed skanowaniem BLE, dzięki czemu początkowe 15 minut wyszukiwania działa

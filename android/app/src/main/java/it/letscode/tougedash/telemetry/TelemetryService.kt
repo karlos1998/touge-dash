@@ -27,6 +27,7 @@ import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -80,6 +81,7 @@ class TelemetryService : Service() {
     private var lastPacketHex: String? = null
     private var lastConnectionPublishAt = 0L
     private var lastForegroundNotificationAt = 0L
+    private lateinit var overlayController: TelemetryOverlayController
     private var lastAddress: String?
         get() = getSharedPreferences(PREFS, MODE_PRIVATE).getString(LAST_DEVICE, null)
         set(value) { getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(LAST_DEVICE, value).apply() }
@@ -87,6 +89,9 @@ class TelemetryService : Service() {
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        overlayController = TelemetryOverlayController(this) {
+            updateForegroundNotification(TelemetryRuntime.snapshot.value)
+        }
         container.locationTracker.start()
         ServiceCompat.startForeground(
             this,
@@ -94,6 +99,15 @@ class TelemetryService : Service() {
             notification(local("Searching for EMULOGGER", "Szukanie EMULOGGERA")),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
         )
+        if (TelemetryOverlayPreferences.isEnabled(this) && Settings.canDrawOverlays(this)) {
+            overlayController.show()
+        }
+        serviceScope.launch {
+            while (isActive) {
+                overlayController.update(TelemetryRuntime.snapshot.value, TelemetryRuntime.connection.value)
+                delay(100)
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -115,6 +129,7 @@ class TelemetryService : Service() {
         stopSampling()
         container.ecuControls.connectionChanged(false)
         container.locationTracker.stop()
+        overlayController.destroy()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -122,7 +137,14 @@ class TelemetryService : Service() {
         when (intent?.action) {
             ACTION_STOP -> stopTelemetry()
             ACTION_RESCAN -> startScanning(force = true)
+            ACTION_SHOW_OVERLAY -> overlayController.show()
+            ACTION_HIDE_OVERLAY -> overlayController.hide()
+            ACTION_TOGGLE_OVERLAY -> overlayController.toggle()
             else -> startScanning()
+        }
+        if (intent?.action == ACTION_SHOW_OVERLAY || intent?.action == ACTION_HIDE_OVERLAY ||
+            intent?.action == ACTION_TOGGLE_OVERLAY) {
+            updateForegroundNotification(TelemetryRuntime.snapshot.value)
         }
         return START_STICKY
     }
@@ -726,17 +748,32 @@ class TelemetryService : Service() {
             snapshot.boostBar
         )
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
+        TelemetryAppWidgetProvider.updateAll(this, snapshot, TelemetryRuntime.connection.value)
     }
 
-    private fun notification(text: String) = NotificationCompat.Builder(this, CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_notification)
-        .setContentTitle("Touge Dash")
-        .setContentText(text)
-        .setOngoing(true)
-        .setOnlyAlertOnce(true)
-        .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-        .addAction(0, getString(R.string.stop), PendingIntent.getService(this, 1, Intent(this, TelemetryService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-        .build()
+    private fun notification(text: String): android.app.Notification {
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Touge Dash")
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+            .addAction(0, getString(R.string.stop), PendingIntent.getService(this, 1, Intent(this, TelemetryService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+        if (Settings.canDrawOverlays(this)) {
+            builder.addAction(
+                0,
+                getString(if (overlayController.isVisible) R.string.hide_hud else R.string.show_hud),
+                PendingIntent.getService(
+                    this,
+                    2,
+                    Intent(this, TelemetryService::class.java).setAction(ACTION_TOGGLE_OVERLAY),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            )
+        }
+        return builder.build()
+    }
 
     private fun createChannel() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
@@ -756,6 +793,9 @@ class TelemetryService : Service() {
     companion object {
         const val ACTION_RESCAN = "it.letscode.tougedash.RESCAN"
         const val ACTION_STOP = "it.letscode.tougedash.STOP"
+        const val ACTION_SHOW_OVERLAY = "it.letscode.tougedash.SHOW_OVERLAY"
+        const val ACTION_HIDE_OVERLAY = "it.letscode.tougedash.HIDE_OVERLAY"
+        const val ACTION_TOGGLE_OVERLAY = "it.letscode.tougedash.TOGGLE_OVERLAY"
         private const val PREFS = "telemetry"
         private const val LAST_DEVICE = "last_device"
         private const val CHANNEL_ID = "live_telemetry"

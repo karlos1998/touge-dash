@@ -5,6 +5,21 @@ import XCTest
 
 final class EMUProtocolTests: XCTestCase {
     @MainActor
+    func testLiveActivityStartsBeforeBackgroundBluetoothScanning() async {
+        var events: [String] = []
+
+        await TelemetryBackgroundBootstrapper.start {
+            events.append("activity")
+            await Task.yield()
+            events.append("activity-ready")
+        } bluetooth: {
+            events.append("bluetooth")
+        }
+
+        XCTAssertEqual(events, ["activity", "activity-ready", "bluetooth"])
+    }
+
+    @MainActor
     func testLocalHistoryRetentionKeepsTenNewestSessionsAndIncidentsWithTheirChildren() throws {
         let container = try ModelContainer(
             for: DriveSession.self,

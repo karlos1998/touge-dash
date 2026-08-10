@@ -55,6 +55,13 @@ final class TelemetryActivityManager: ObservableObject {
         }
     }
 
+    func updateNow(_ snapshot: TelemetrySnapshot, connectionLabel: String) async {
+        updateTask?.cancel()
+        updateTask = nil
+        pendingUpdate = nil
+        await updateImmediately(snapshot, connectionLabel: connectionLabel)
+    }
+
     private func drainPendingUpdates() async {
         while !Task.isCancelled, pendingUpdate != nil {
             let remainingDelay = minimumUpdateInterval - Date().timeIntervalSince(lastUpdate)

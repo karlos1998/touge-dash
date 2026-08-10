@@ -375,6 +375,15 @@ private struct ControlBar: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(Color.tougeMint)
             }
+
+            if controller.activityManager.isRunning {
+                Label(
+                    "CarPlay LIVE używa Live Activity · zwykły widget odświeża iOS we własnym tempie",
+                    systemImage: "wave.3.right"
+                )
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.tougeCyan)
+            }
         }
     }
 }

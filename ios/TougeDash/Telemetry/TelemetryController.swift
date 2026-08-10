@@ -23,6 +23,17 @@ enum TelemetryActivityInactivityPolicy {
 }
 
 @MainActor
+enum TelemetryBackgroundBootstrapper {
+    static func start(
+        liveActivity: () async -> Void,
+        bluetooth: () -> Void
+    ) async {
+        await liveActivity()
+        bluetooth()
+    }
+}
+
+@MainActor
 final class TelemetryController: ObservableObject {
     @Published private(set) var snapshot = SharedTelemetryStore.load()
     @Published private(set) var parserStats = EMUParserStats()
@@ -135,7 +146,9 @@ final class TelemetryController: ObservableObject {
                 self.accelerationEngine.reset()
             }
             if self.activityManager.isRunning {
-                self.activityManager.enqueueUpdate(self.snapshot, connectionLabel: state.label)
+                Task {
+                    await self.activityManager.updateNow(self.snapshot, connectionLabel: state.label)
+                }
             }
             self.objectWillChange.send()
         }
@@ -150,6 +163,28 @@ final class TelemetryController: ObservableObject {
             .throttle(for: .milliseconds(100), scheduler: RunLoop.main, latest: true)
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.activityManager.isRunning else { return }
+                    await self.activityManager.updateNow(
+                        self.snapshot,
+                        connectionLabel: self.connectionLabel
+                    )
+                }
+            }
+            .store(in: &cancellables)
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, self.activityManager.isRunning else { return }
+                    await self.activityManager.updateNow(
+                        self.snapshot,
+                        connectionLabel: self.connectionLabel
+                    )
+                }
+            }
+            .store(in: &cancellables)
         Task { [weak self] in
             guard let self else { return }
             #if DEBUG
@@ -158,12 +193,20 @@ final class TelemetryController: ObservableObject {
             }
             #endif
             self.ensureActivityInactivityMonitor()
-            self.requestActivityReconciliation()
             // On iOS 26 an active Live Activity gives CoreBluetooth the same
             // privileges in the background that it has in the foreground.
-            // Begin scanning after requesting ActivityKit so the initial
-            // 15-minute connection window also works with the phone locked.
-            self.bluetooth.startScanning()
+            // Await ActivityKit before scanning instead of merely scheduling
+            // both operations on separate tasks.
+            await TelemetryBackgroundBootstrapper.start {
+                guard self.shouldRunTelemetryActivity else { return }
+                await self.activityManager.start(
+                    with: self.snapshot,
+                    connectionLabel: self.connectionLabel
+                )
+            } bluetooth: {
+                self.bluetooth.startScanning()
+            }
+            self.requestActivityReconciliation()
         }
         watchBridge.enqueue(snapshot)
         #if DEBUG
