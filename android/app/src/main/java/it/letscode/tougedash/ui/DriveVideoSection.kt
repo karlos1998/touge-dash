@@ -198,7 +198,11 @@ private fun VideoAlignmentEditor(
     val portraitVideo = initial.pixelHeight > initial.pixelWidth
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(templates, templateId) {
-        templates.firstOrNull { it.entity.id == templateId }?.let {
+        (templates.firstOrNull { it.entity.id == templateId } ?: templates.firstOrNull())?.let {
+            if (templateId != it.entity.id) {
+                templateId = it.entity.id
+                value = value.copy(overlayTemplateId = it.entity.id)
+            }
             overlayDefinition = it.definition.copy(elements = it.definition.resolvedElements())
             selectedElementId = overlayDefinition.elements.firstOrNull()?.id
         }
@@ -267,7 +271,12 @@ private fun VideoAlignmentEditor(
                 templates.forEach { item ->
                     FilterChip(
                         selected = templateId == item.entity.id,
-                        onClick = { templateId = item.entity.id; overlayDefinition = item.definition; value = value.copy(overlayTemplateId = item.entity.id) },
+                        onClick = {
+                            templateId = item.entity.id
+                            overlayDefinition = item.definition.copy(elements = item.definition.resolvedElements())
+                            selectedElementId = overlayDefinition.elements.firstOrNull()?.id
+                            value = value.copy(overlayTemplateId = item.entity.id)
+                        },
                         label = { Text(item.entity.name) }
                     )
                 }

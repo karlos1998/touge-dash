@@ -6,7 +6,6 @@ import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -472,9 +471,9 @@ private fun TelemetryChart(
     val sharedScale = series.map { it.first.unit }.distinct().size == 1
     val domains = remember(samples, series) {
         if (sharedScale) {
-            val domain = chartDomain(series.flatMap { (metric, _) -> samples.map { metric.from(it) } })
+            val domain = chartDomain(series.flatMap { (metric, _) -> samples.map { metric.from(it) } }, series.map { it.first })
             series.associate { it.first to domain }
-        } else series.associate { (metric, _) -> metric to chartDomain(samples.map { metric.from(it) }) }
+        } else series.associate { (metric, _) -> metric to chartDomain(samples.map { metric.from(it) }, listOf(metric)) }
     }
     val selectAtFraction: (Float) -> Unit = { fraction ->
         selectTimestamp(startedAt + (sessionDuration * fraction.coerceIn(0f, 1f)).toLong())
@@ -497,21 +496,6 @@ private fun TelemetryChart(
                             selectAtFraction((point.x - left) / (size.width - left - right).coerceAtLeast(1f))
                         }
                     }
-                    .pointerInput(startedAt, endedAt) {
-                        detectHorizontalDragGestures(
-                            onDragStart = { point ->
-                                val left = 43.dp.toPx()
-                                val right = if (sharedScale || series.size == 1) 8.dp.toPx() else 43.dp.toPx()
-                                selectAtFraction((point.x - left) / (size.width - left - right).coerceAtLeast(1f))
-                            },
-                            onHorizontalDrag = { change, _ ->
-                                change.consume()
-                                val left = 43.dp.toPx()
-                                val right = if (sharedScale || series.size == 1) 8.dp.toPx() else 43.dp.toPx()
-                                selectAtFraction((change.position.x - left) / (size.width - left - right).coerceAtLeast(1f))
-                            }
-                        )
-                    }
             ) {
                 if (samples.size < 2) return@Canvas
                 val left = 43.dp.toPx()
@@ -533,13 +517,13 @@ private fun TelemetryChart(
                     val primaryValue = primaryDomain.second - (primaryDomain.second - primaryDomain.first) * fraction
                     labelPaint.textAlign = AndroidPaint.Align.RIGHT
                     labelPaint.color = series.first().second.toArgbWithAlpha(.82f)
-                    drawContext.canvas.nativeCanvas.drawText(axisValue(primaryValue, series.first().first), left - 5.dp.toPx(), y + labelPaint.textSize * .35f, labelPaint)
+                    drawContext.canvas.nativeCanvas.drawText(axisValue(primaryValue, series.first().first, primaryDomain), left - 5.dp.toPx(), y + labelPaint.textSize * .35f, labelPaint)
                     if (!sharedScale && series.size > 1) {
                         val secondaryDomain = domains.getValue(series[1].first)
                         val secondaryValue = secondaryDomain.second - (secondaryDomain.second - secondaryDomain.first) * fraction
                         labelPaint.textAlign = AndroidPaint.Align.LEFT
                         labelPaint.color = series[1].second.toArgbWithAlpha(.82f)
-                        drawContext.canvas.nativeCanvas.drawText(axisValue(secondaryValue, series[1].first), left + plotWidth + 5.dp.toPx(), y + labelPaint.textSize * .35f, labelPaint)
+                        drawContext.canvas.nativeCanvas.drawText(axisValue(secondaryValue, series[1].first, secondaryDomain), left + plotWidth + 5.dp.toPx(), y + labelPaint.textSize * .35f, labelPaint)
                     }
                 }
                 repeat(3) { index ->
@@ -587,13 +571,29 @@ private fun TelemetryChart(
     }
 }
 
-private fun chartDomain(values: List<Double>): Pair<Double, Double> {
+private fun chartDomain(values: List<Double>, metrics: List<TelemetryMetric>): Pair<Double, Double> {
     val finite = values.filter(Double::isFinite)
     val minimum = finite.minOrNull() ?: 0.0
     val maximum = finite.maxOrNull() ?: 1.0
-    val span = (maximum - minimum).coerceAtLeast(0.1)
-    val padding = span * .1
-    return (minimum - padding) to (maximum + padding)
+    val minimumSpan = metrics.maxOfOrNull { metric ->
+        when (metric) {
+            TelemetryMetric.BOOST, TelemetryMetric.OIL_PRESSURE, TelemetryMetric.FUEL_PRESSURE -> .1
+            TelemetryMetric.RPM -> 1_000.0
+            TelemetryMetric.SPEED -> 20.0
+            TelemetryMetric.EGT1, TelemetryMetric.EGT2 -> 100.0
+            TelemetryMetric.OIL_TEMPERATURE, TelemetryMetric.COOLANT, TelemetryMetric.INTAKE -> 10.0
+            else -> 1.0
+        }
+    } ?: 1.0
+    val span = (maximum - minimum).coerceAtLeast(minimumSpan) * 1.1
+    val center = (minimum + maximum) / 2.0
+    var lower = center - span / 2.0
+    var upper = center + span / 2.0
+    if (minimum >= 0 && metrics.all { it.defaultMin >= 0 } && lower < 0) {
+        upper -= lower
+        lower = 0.0
+    }
+    return lower to upper
 }
 
 private fun nearestSample(samples: List<TelemetrySampleEntity>, timestamp: Long): TelemetrySampleEntity? {
@@ -611,8 +611,9 @@ private fun nearestSample(samples: List<TelemetrySampleEntity>, timestamp: Long)
     }
 }
 
-private fun axisValue(value: Double, metric: TelemetryMetric): String = when (metric) {
-    TelemetryMetric.BOOST, TelemetryMetric.OIL_PRESSURE, TelemetryMetric.FUEL_PRESSURE -> "%.1f".format(value)
+private fun axisValue(value: Double, metric: TelemetryMetric, domain: Pair<Double, Double>): String = when {
+    metric == TelemetryMetric.BOOST || metric == TelemetryMetric.OIL_PRESSURE || metric == TelemetryMetric.FUEL_PRESSURE -> "%.2f".format(value)
+    domain.second - domain.first < 2 -> "%.1f".format(value)
     else -> value.roundToInt().toString()
 }
 
