@@ -998,6 +998,7 @@ private struct DriveSessionDetailView: View {
                             title: "TEMPERATURY",
                             subtitle: "Olej i płyn chłodniczy",
                             unit: "°C",
+                            startedAt: session.startedAt,
                             samples: chartSamples,
                             attempts: accelerationAttempts,
                             series: [
@@ -1011,6 +1012,7 @@ private struct DriveSessionDetailView: View {
                             title: "EGT",
                             subtitle: "Temperatura spalin",
                             unit: "°C",
+                            startedAt: session.startedAt,
                             samples: chartSamples,
                             attempts: accelerationAttempts,
                             series: [
@@ -1024,6 +1026,7 @@ private struct DriveSessionDetailView: View {
                             title: "CIŚNIENIA",
                             subtitle: "Boost i ciśnienie oleju",
                             unit: "bar",
+                            startedAt: session.startedAt,
                             samples: chartSamples,
                             attempts: accelerationAttempts,
                             series: [
@@ -1037,6 +1040,7 @@ private struct DriveSessionDetailView: View {
                             title: "PRĘDKOŚĆ",
                             subtitle: "Prędkość pojazdu",
                             unit: "km/h",
+                            startedAt: session.startedAt,
                             samples: chartSamples,
                             attempts: accelerationAttempts,
                             series: [HistoryChartSeries(name: "Prędkość", color: .tougeIce, value: { $0.speedKPH })],
@@ -1047,6 +1051,7 @@ private struct DriveSessionDetailView: View {
                             title: "OBROTY SILNIKA",
                             subtitle: "RPM w czasie",
                             unit: "rpm",
+                            startedAt: session.startedAt,
                             samples: chartSamples,
                             attempts: accelerationAttempts,
                             series: [HistoryChartSeries(name: "RPM", color: .tougeYellow, value: { $0.rpm })],
@@ -1648,6 +1653,7 @@ private struct HistoryChartCard: View {
     let title: String
     let subtitle: String
     let unit: String
+    let startedAt: Date
     let samples: [TelemetryHistorySample]
     let attempts: [AccelerationAttempt]
     let series: [HistoryChartSeries]
@@ -1659,6 +1665,11 @@ private struct HistoryChartCard: View {
         let span = max(0.1, maximum - minimum)
         let padding = max(unit == "°C" ? 3 : 0.1, span * 0.12)
         return (minimum - padding)...(maximum + padding)
+    }
+
+    private var selectedSample: TelemetryHistorySample? {
+        guard let selectedTime else { return samples.last }
+        return samples.nearest(to: selectedTime)
     }
 
     var body: some View {
@@ -1750,6 +1761,26 @@ private struct HistoryChartCard: View {
                 }
             }
             .frame(height: 210)
+
+            if let selectedSample {
+                HStack(spacing: 12) {
+                    chartMoment(
+                        title: localized("CZAS"),
+                        value: "+" + formatDuration(selectedSample.timestamp.timeIntervalSince(startedAt)),
+                        color: .tougeCyan
+                    )
+                    ForEach(series) { item in
+                        chartMoment(
+                            title: localized(item.name),
+                            value: formatted(item.value(selectedSample)) + " " + unit,
+                            color: item.color
+                        )
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+                .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
+            }
         }
         .padding(16)
         .cardSurface(accent: series.first?.color ?? .tougeCyan)
@@ -1763,6 +1794,30 @@ private struct HistoryChartCard: View {
               xPosition <= frame.width,
               let timestamp: Date = proxy.value(atX: xPosition) else { return }
         selectedTime = timestamp
+    }
+
+    private func formatted(_ value: Double) -> String {
+        switch unit {
+        case "bar": return value.formatted(.number.precision(.fractionLength(2)))
+        case "°C", "km/h", "rpm": return Int(value.rounded()).formatted()
+        default: return value.formatted(.number.precision(.fractionLength(1)))
+        }
+    }
+
+    private func chartMoment(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title.uppercased())
+                .font(.system(size: 7, weight: .black))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: 12, weight: .black, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
