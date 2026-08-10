@@ -73,6 +73,7 @@ interface TougeDashDao {
     @Query("SELECT * FROM alert_configurations WHERE vehicleHardwareId = :hardwareId") suspend fun alertConfigurationOnce(hardwareId: String): AlertConfigurationEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertVideo(value: VideoProjectEntity)
+    @Query("SELECT * FROM video_projects ORDER BY createdAt DESC") fun videos(): Flow<List<VideoProjectEntity>>
     @Query("SELECT * FROM video_projects WHERE sessionId = :sessionId ORDER BY createdAt DESC") fun videos(sessionId: String): Flow<List<VideoProjectEntity>>
     @Query("SELECT * FROM video_projects WHERE sessionId = :sessionId ORDER BY createdAt DESC") suspend fun videosOnce(sessionId: String): List<VideoProjectEntity>
     @Query("SELECT COALESCE(SUM(fileSizeBytes), 0) FROM video_projects") fun videoStorageBytes(): Flow<Long>

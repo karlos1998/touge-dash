@@ -30,6 +30,7 @@ class HistoryRepository(private val dao: TougeDashDao, private val context: Cont
     private var previousLocation: RecordedLocation? = null
 
     val sessions = dao.sessions()
+    val videos = dao.videos()
     val storageBytes = combine(sessions, dao.videoStorageBytes()) { _, _ ->
         localArchiveBytes()
     }.distinctUntilChanged().flowOn(Dispatchers.IO)

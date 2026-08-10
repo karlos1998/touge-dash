@@ -1,9 +1,13 @@
 package it.letscode.tougedash.ui
 
 import android.content.Intent
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +40,7 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -66,6 +71,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.intl.Locale
@@ -78,6 +85,7 @@ import it.letscode.tougedash.data.local.IncidentEntity
 import it.letscode.tougedash.data.local.SyncState
 import it.letscode.tougedash.data.local.TelemetrySampleEntity
 import it.letscode.tougedash.data.local.AccelerationAttemptEntity
+import it.letscode.tougedash.data.local.VideoProjectEntity
 import it.letscode.tougedash.di.AppContainer
 import it.letscode.tougedash.history.CapturedTelemetryPoint
 import it.letscode.tougedash.history.DriveShareRange
@@ -100,6 +108,7 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.UUID
 import kotlin.math.roundToInt
+import kotlin.math.abs
 import it.letscode.tougedash.performance.AccelerationType
 
 @Composable
@@ -110,6 +119,7 @@ fun HistoryScreen(container: AppContainer, selectedId: String?, select: (String)
 @Composable
 private fun SessionList(container: AppContainer, select: (String) -> Unit) {
     val sessions by container.historyRepository.sessions.collectAsState(initial = emptyList())
+    val videos by container.historyRepository.videos.collectAsState(initial = emptyList())
     val localArchiveBytes by container.historyRepository.storageBytes.collectAsState(initial = 0L)
     val activeSession by container.historyRepository.activeSession.collectAsState()
     val connection by container.runtime.connection.collectAsState()
@@ -129,7 +139,7 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
             }
         } else LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             items(sessions, key = { it.id }) { session ->
-                SessionRow(session, sessionTags(container, session), select) { deleteSession = session }
+                SessionRow(session, sessionTags(container, session), videos.filter { it.sessionId == session.id }, select) { deleteSession = session }
             }
             item { LocalArchiveStorageFooter(localArchiveBytes) }
         }
@@ -236,7 +246,7 @@ private fun ManualSessionSplitCard(sampleCount: Int, split: () -> Unit) {
 }
 
 @Composable
-private fun SessionRow(session: DriveSessionEntity, tags: List<it.letscode.tougedash.cloud.CloudSyncRepository.DriveTag>, select: (String) -> Unit, delete: (DriveSessionEntity) -> Unit) {
+private fun SessionRow(session: DriveSessionEntity, tags: List<it.letscode.tougedash.cloud.CloudSyncRepository.DriveTag>, videos: List<VideoProjectEntity>, select: (String) -> Unit, delete: (DriveSessionEntity) -> Unit) {
     val accent = when (session.syncState) {
         SyncState.SYNCED -> TougeMint
         SyncState.FAILED -> TougeRed
@@ -258,6 +268,24 @@ private fun SessionRow(session: DriveSessionEntity, tags: List<it.letscode.touge
             }
             if (tags.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 tags.forEach { tag -> DriveTagChip(tag) }
+            }
+            if (videos.isNotEmpty()) {
+                Row(
+                    Modifier.padding(top = 9.dp).background(TougeCyan.copy(alpha = .1f), RoundedCornerShape(6.dp)).padding(horizontal = 9.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Videocam, null, tint = TougeCyan, modifier = Modifier.size(16.dp))
+                    Text(
+                        appText(
+                            "${videos.size} ${if (videos.size == 1) "recording" else "recordings"} · ${bytes(videos.sumOf { it.fileSizeBytes })}",
+                            "${videos.size} ${if (videos.size == 1) "nagranie" else "nagrania"} · ${bytes(videos.sumOf { it.fileSizeBytes })}"
+                        ),
+                        color = TougeCyan,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 6.dp)
+                    )
+                }
             }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 MiniValue(appText("MAX BOOST", "MAX DOŁADOWANIE"), "${"%.2f".format(session.maxBoostBar)} bar", TougeCyan)
@@ -305,7 +333,7 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
     // chartEligible is only an optimization for long drives. Never let a bad or
     // incomplete eligibility set make an otherwise valid drive look empty.
     val chartSamples = if (samples.size >= 2 || rawSamples.isEmpty()) samples else rawSamples
-    val selected = chartSamples.getOrNull(((chartSamples.lastIndex.coerceAtLeast(0)) * scrubber).roundToInt())
+    val selected = session?.let { nearestSample(chartSamples, it.startedAt + ((it.endedAt - it.startedAt) * scrubber).toLong()) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 30.dp)) {
         item {
             Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -350,10 +378,13 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
                     Slider(scrubber, { scrubber = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
                     Text(appText("Move the time cursor; the page remains vertically scrollable", "Przesuwaj kursor czasu; stronę nadal możesz przewijać pionowo"), color = TougeMuted, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 18.dp))
                 }
-                item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint)) }
-                item { TelemetryChart(appText("Temperatures", "Temperatury"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan)) }
-                item { TelemetryChart("EGT", chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.EGT1 to TougeOrange, TelemetryMetric.EGT2 to TougeRed)) }
-                item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), chartSamples, selected, accelerationAttempts, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint)) }
+                val updateCursor: (Long) -> Unit = { timestamp ->
+                    scrubber = ((timestamp - session!!.startedAt).toFloat() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).coerceIn(0f, 1f)
+                }
+                item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.BOOST to TougeCyan, TelemetryMetric.OIL_PRESSURE to TougeMint), updateCursor) }
+                item { TelemetryChart(appText("Temperatures", "Temperatury"), chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.OIL_TEMPERATURE to TougeOrange, TelemetryMetric.COOLANT to TougeCyan), updateCursor) }
+                item { TelemetryChart("EGT", chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.EGT1 to TougeOrange, TelemetryMetric.EGT2 to TougeRed), updateCursor) }
+                item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.RPM to TougeRed, TelemetryMetric.SPEED to TougeMint), updateCursor) }
             }
             if (annotations.isNotEmpty()) item { AnnotationSection(annotations, session!!.startedAt) }
             item { DriveVideoSection(container, session!!, rawSamples, scrubber) }
@@ -426,44 +457,173 @@ private fun TelemetryCursor(sample: TelemetrySampleEntity?, startedAt: Long) {
 }
 
 @Composable
-private fun TelemetryChart(title: String, samples: List<TelemetrySampleEntity>, selected: TelemetrySampleEntity?, attempts: List<AccelerationAttemptEntity>, series: List<Pair<TelemetryMetric, Color>>) {
+private fun TelemetryChart(
+    title: String,
+    samples: List<TelemetrySampleEntity>,
+    selected: TelemetrySampleEntity?,
+    startedAt: Long,
+    endedAt: Long,
+    attempts: List<AccelerationAttemptEntity>,
+    series: List<Pair<TelemetryMetric, Color>>,
+    selectTimestamp: (Long) -> Unit
+) {
     val language = Locale.current.language
+    val sessionDuration = (endedAt - startedAt).coerceAtLeast(1)
+    val sharedScale = series.map { it.first.unit }.distinct().size == 1
+    val domains = remember(samples, series) {
+        if (sharedScale) {
+            val domain = chartDomain(series.flatMap { (metric, _) -> samples.map { metric.from(it) } })
+            series.associate { it.first to domain }
+        } else series.associate { (metric, _) -> metric to chartDomain(samples.map { metric.from(it) }) }
+    }
+    val selectAtFraction: (Float) -> Unit = { fraction ->
+        selectTimestamp(startedAt + (sessionDuration * fraction.coerceIn(0f, 1f)).toLong())
+    }
     TougePanelSurface(series.firstOrNull()?.second ?: TougeCyan, Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 7.dp)) {
         Column(Modifier.padding(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(title.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Text(series.joinToString("  ") { it.first.localizedName(language) }, color = TougeMuted, fontSize = 9.sp)
             }
-            Canvas(Modifier.fillMaxWidth().height(180.dp).padding(top = 12.dp)) {
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(210.dp)
+                    .padding(top = 8.dp)
+                    .pointerInput(startedAt, endedAt) {
+                        detectTapGestures { point ->
+                            val left = 43.dp.toPx()
+                            val right = if (sharedScale || series.size == 1) 8.dp.toPx() else 43.dp.toPx()
+                            selectAtFraction((point.x - left) / (size.width - left - right).coerceAtLeast(1f))
+                        }
+                    }
+                    .pointerInput(startedAt, endedAt) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { point ->
+                                val left = 43.dp.toPx()
+                                val right = if (sharedScale || series.size == 1) 8.dp.toPx() else 43.dp.toPx()
+                                selectAtFraction((point.x - left) / (size.width - left - right).coerceAtLeast(1f))
+                            },
+                            onHorizontalDrag = { change, _ ->
+                                change.consume()
+                                val left = 43.dp.toPx()
+                                val right = if (sharedScale || series.size == 1) 8.dp.toPx() else 43.dp.toPx()
+                                selectAtFraction((change.position.x - left) / (size.width - left - right).coerceAtLeast(1f))
+                            }
+                        )
+                    }
+            ) {
                 if (samples.size < 2) return@Canvas
-                val firstAt = samples.first().recordedAt
-                val duration = (samples.last().recordedAt - firstAt).coerceAtLeast(1)
+                val left = 43.dp.toPx()
+                val right = if (sharedScale || series.size == 1) 8.dp.toPx() else 43.dp.toPx()
+                val top = 7.dp.toPx()
+                val bottom = 28.dp.toPx()
+                val plotWidth = (size.width - left - right).coerceAtLeast(1f)
+                val plotHeight = (size.height - top - bottom).coerceAtLeast(1f)
+                val labelPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                    color = android.graphics.Color.argb(180, 185, 204, 211)
+                    textSize = 8.dp.toPx()
+                    typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                }
+                repeat(4) { index ->
+                    val fraction = index / 3f
+                    val y = top + plotHeight * fraction
+                    drawLine(Color.White.copy(alpha = .07f), Offset(left, y), Offset(left + plotWidth, y), 1.dp.toPx())
+                    val primaryDomain = domains.getValue(series.first().first)
+                    val primaryValue = primaryDomain.second - (primaryDomain.second - primaryDomain.first) * fraction
+                    labelPaint.textAlign = AndroidPaint.Align.RIGHT
+                    labelPaint.color = series.first().second.toArgbWithAlpha(.82f)
+                    drawContext.canvas.nativeCanvas.drawText(axisValue(primaryValue, series.first().first), left - 5.dp.toPx(), y + labelPaint.textSize * .35f, labelPaint)
+                    if (!sharedScale && series.size > 1) {
+                        val secondaryDomain = domains.getValue(series[1].first)
+                        val secondaryValue = secondaryDomain.second - (secondaryDomain.second - secondaryDomain.first) * fraction
+                        labelPaint.textAlign = AndroidPaint.Align.LEFT
+                        labelPaint.color = series[1].second.toArgbWithAlpha(.82f)
+                        drawContext.canvas.nativeCanvas.drawText(axisValue(secondaryValue, series[1].first), left + plotWidth + 5.dp.toPx(), y + labelPaint.textSize * .35f, labelPaint)
+                    }
+                }
+                repeat(3) { index ->
+                    val fraction = index / 2f
+                    val x = left + plotWidth * fraction
+                    drawLine(Color.White.copy(alpha = .045f), Offset(x, top), Offset(x, top + plotHeight), 1.dp.toPx())
+                    labelPaint.textAlign = when (index) { 0 -> AndroidPaint.Align.LEFT; 2 -> AndroidPaint.Align.RIGHT; else -> AndroidPaint.Align.CENTER }
+                    labelPaint.color = android.graphics.Color.argb(175, 185, 204, 211)
+                    drawContext.canvas.nativeCanvas.drawText(duration((sessionDuration * fraction).toLong()), x, size.height - 5.dp.toPx(), labelPaint)
+                }
                 attempts.forEach { attempt ->
-                    val startX = ((attempt.startedAt - firstAt).toFloat() / duration).coerceIn(0f, 1f) * size.width
-                    val endX = ((attempt.endedAt - firstAt).toFloat() / duration).coerceIn(0f, 1f) * size.width
-                    drawRect(accelerationColor(attempt.type).copy(alpha = .12f), topLeft = Offset(startX, 0f), size = androidx.compose.ui.geometry.Size((endX - startX).coerceAtLeast(2f), size.height))
+                    val startX = left + ((attempt.startedAt - startedAt).toFloat() / sessionDuration).coerceIn(0f, 1f) * plotWidth
+                    val endX = left + ((attempt.endedAt - startedAt).toFloat() / sessionDuration).coerceIn(0f, 1f) * plotWidth
+                    drawRect(accelerationColor(attempt.type).copy(alpha = .12f), topLeft = Offset(startX, top), size = androidx.compose.ui.geometry.Size((endX - startX).coerceAtLeast(2f), plotHeight))
                 }
                 series.forEach { (metric, color) ->
-                    val values = samples.map { metric.from(it).toFloat() }
-                    val min = values.minOrNull() ?: 0f
-                    val max = values.maxOrNull()?.takeIf { it > min } ?: (min + 1f)
+                    val domain = domains.getValue(metric)
                     val path = Path()
-                    values.forEachIndexed { index, value ->
-                        val x = index.toFloat() / values.lastIndex * size.width
-                        val y = size.height * (1 - (value - min) / (max - min))
+                    samples.forEachIndexed { index, sample ->
+                        val value = metric.from(sample)
+                        val x = left + ((sample.recordedAt - startedAt).toFloat() / sessionDuration).coerceIn(0f, 1f) * plotWidth
+                        val y = top + plotHeight * (1 - ((value - domain.first) / (domain.second - domain.first)).toFloat().coerceIn(0f, 1f))
                         if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
                     }
                     drawPath(path, color, style = Stroke(2.5.dp.toPx(), cap = StrokeCap.Round))
                 }
                 selected?.let {
-                    val index = samples.binarySearchBy(it.recordedAt) { point -> point.recordedAt }.coerceAtLeast(0)
-                    val x = index.toFloat() / samples.lastIndex * size.width
-                    drawLine(Color.White.copy(alpha = .7f), Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
+                    val x = left + ((it.recordedAt - startedAt).toFloat() / sessionDuration).coerceIn(0f, 1f) * plotWidth
+                    drawLine(Color.White.copy(alpha = .78f), Offset(x, top), Offset(x, top + plotHeight), 1.dp.toPx())
+                }
+            }
+            selected?.let { point ->
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 4.dp).background(Color.White.copy(alpha = .035f), RoundedCornerShape(6.dp)).padding(horizontal = 9.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MiniValue(appText("TIME", "CZAS"), duration(point.recordedAt - startedAt), TougeCyan)
+                    series.forEach { (metric, color) ->
+                        MiniValue(metric.localizedName(language), "${metricValue(metric.from(point), metric)} ${metric.unit}", color)
+                    }
                 }
             }
         }
     }
 }
+
+private fun chartDomain(values: List<Double>): Pair<Double, Double> {
+    val finite = values.filter(Double::isFinite)
+    val minimum = finite.minOrNull() ?: 0.0
+    val maximum = finite.maxOrNull() ?: 1.0
+    val span = (maximum - minimum).coerceAtLeast(0.1)
+    val padding = span * .1
+    return (minimum - padding) to (maximum + padding)
+}
+
+private fun nearestSample(samples: List<TelemetrySampleEntity>, timestamp: Long): TelemetrySampleEntity? {
+    if (samples.isEmpty()) return null
+    val index = samples.binarySearchBy(timestamp) { it.recordedAt }
+    if (index >= 0) return samples[index]
+    val insertion = -index - 1
+    val before = samples.getOrNull(insertion - 1)
+    val after = samples.getOrNull(insertion)
+    return when {
+        before == null -> after
+        after == null -> before
+        abs(timestamp - before.recordedAt) <= abs(after.recordedAt - timestamp) -> before
+        else -> after
+    }
+}
+
+private fun axisValue(value: Double, metric: TelemetryMetric): String = when (metric) {
+    TelemetryMetric.BOOST, TelemetryMetric.OIL_PRESSURE, TelemetryMetric.FUEL_PRESSURE -> "%.1f".format(value)
+    else -> value.roundToInt().toString()
+}
+
+private fun metricValue(value: Double, metric: TelemetryMetric): String = "%.${metric.precision}f".format(value)
+
+private fun Color.toArgbWithAlpha(alpha: Float): Int = android.graphics.Color.argb(
+    (alpha.coerceIn(0f, 1f) * 255).roundToInt(),
+    (red * 255).roundToInt(),
+    (green * 255).roundToInt(),
+    (blue * 255).roundToInt()
+)
 
 @Composable
 private fun AccelerationSection(values: List<AccelerationAttemptEntity>, startedAt: Long, select: (AccelerationAttemptEntity) -> Unit) {
