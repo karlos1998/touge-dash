@@ -537,20 +537,36 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertFalse(BluetoothTelemetryAccessPolicy.allowsCharacteristicWrites)
     }
 
-    func testTelemetryActivityExpiresAfterFifteenMinutesWithoutCommunication() {
+    func testTelemetryActivityExpiresAfterFiveMinutesWithoutCommunication() {
         let lastCommunication = Date(timeIntervalSince1970: 1_800_000_000)
 
         XCTAssertEqual(
             TelemetryActivityInactivityPolicy.deadline(after: lastCommunication),
-            lastCommunication.addingTimeInterval(15 * 60)
+            lastCommunication.addingTimeInterval(5 * 60)
         )
         XCTAssertFalse(TelemetryActivityInactivityPolicy.isExpired(
             lastCommunicationAt: lastCommunication,
-            now: lastCommunication.addingTimeInterval((15 * 60) - 0.001)
+            now: lastCommunication.addingTimeInterval((5 * 60) - 0.001)
         ))
         XCTAssertTrue(TelemetryActivityInactivityPolicy.isExpired(
             lastCommunicationAt: lastCommunication,
-            now: lastCommunication.addingTimeInterval(15 * 60)
+            now: lastCommunication.addingTimeInterval(5 * 60)
+        ))
+    }
+
+    func testTelemetryActivityRestoresTheRealLastSampleTimeInsteadOfResettingTheTimeout() {
+        let lastCommunication = Date(timeIntervalSince1970: 1_800_000_000)
+        var restoredSnapshot = TelemetrySnapshot()
+        restoredSnapshot.updatedAt = lastCommunication
+
+        let restoredDate = TelemetryActivityInactivityPolicy.restoredLastCommunication(
+            from: restoredSnapshot
+        )
+
+        XCTAssertEqual(restoredDate, lastCommunication)
+        XCTAssertTrue(TelemetryActivityInactivityPolicy.isExpired(
+            lastCommunicationAt: restoredDate,
+            now: lastCommunication.addingTimeInterval(5 * 60)
         ))
     }
 

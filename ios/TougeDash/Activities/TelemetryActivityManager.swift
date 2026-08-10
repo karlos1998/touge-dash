@@ -35,7 +35,10 @@ final class TelemetryActivityManager: ObservableObject {
         do {
             activity = try Activity.request(
                 attributes: attributes,
-                content: ActivityContent(state: state, staleDate: .now.addingTimeInterval(2)),
+                content: ActivityContent(
+                    state: state,
+                    staleDate: .now.addingTimeInterval(TelemetryActivityInactivityPolicy.timeout)
+                ),
                 pushType: nil
             )
             lastUpdate = .now
@@ -85,7 +88,7 @@ final class TelemetryActivityManager: ObservableObject {
         await activity.update(
             ActivityContent(
                 state: state,
-                staleDate: .now.addingTimeInterval(2),
+                staleDate: .now.addingTimeInterval(TelemetryActivityInactivityPolicy.timeout),
                 relevanceScore: snapshot.hasCriticalWarning ? 100 : 50
             )
         )

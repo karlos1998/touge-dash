@@ -11,7 +11,11 @@ enum TelemetryUpdateCadence {
 }
 
 enum TelemetryActivityInactivityPolicy {
-    static let timeout: TimeInterval = 15 * 60
+    static let timeout: TimeInterval = 5 * 60
+
+    static func restoredLastCommunication(from snapshot: TelemetrySnapshot) -> Date {
+        snapshot.updatedAt
+    }
 
     static func deadline(after lastCommunicationAt: Date) -> Date {
         lastCommunicationAt.addingTimeInterval(timeout)
@@ -35,7 +39,7 @@ enum TelemetryBackgroundBootstrapper {
 
 @MainActor
 final class TelemetryController: ObservableObject {
-    @Published private(set) var snapshot = SharedTelemetryStore.load()
+    @Published private(set) var snapshot: TelemetrySnapshot
     @Published private(set) var parserStats = EMUParserStats()
     @Published private(set) var receivedBytes = 0
     @Published var showingDevicePicker = false
@@ -65,7 +69,7 @@ final class TelemetryController: ObservableObject {
     private var totalReceivedBytes = 0
     private var pendingRawSnapshot: TelemetrySnapshot?
     private var telemetryDrainTask: Task<Void, Never>?
-    private var lastTelemetryCommunication = Date.now
+    private var lastTelemetryCommunication: Date
     private var activityInactivityTask: Task<Void, Never>?
     private var activityReconciliationTask: Task<Void, Never>?
     private var activityStateVersion = 0
@@ -78,6 +82,11 @@ final class TelemetryController: ObservableObject {
         videoRecorder: DriveVideoRecorder,
         accelerationEngine: AccelerationEngine
     ) {
+        let restoredSnapshot = SharedTelemetryStore.load()
+        snapshot = restoredSnapshot
+        lastTelemetryCommunication = TelemetryActivityInactivityPolicy.restoredLastCommunication(
+            from: restoredSnapshot
+        )
         self.historyRecorder = historyRecorder
         self.incidentRecorder = incidentRecorder
         self.cloudSync = cloudSync
