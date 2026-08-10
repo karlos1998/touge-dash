@@ -15,22 +15,28 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Pause
@@ -49,6 +55,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -68,12 +75,15 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -200,72 +210,136 @@ private fun VideoAlignmentEditor(
     val telemetrySecond = value.telemetryTrimStartSeconds + (position / 1000.0 - value.videoTrimStartSeconds).coerceAtLeast(0.0)
     val first = samples.firstOrNull()?.recordedAt ?: 0
     val sample = samples.nearestTo((first + telemetrySecond * 1000).toLong())
-    AlertDialog(
-        onDismissRequest = dismiss,
-        title = { Text(appText("Align video with telemetry", "Dopasuj film do telemetrii")) },
-        text = {
-            Column {
-                Box(Modifier.fillMaxWidth().height(220.dp).background(Color.Black).onSizeChanged { previewSize = it }) {
-                    AndroidView(factory = { PlayerView(it).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxWidth().height(220.dp))
-                    sample?.let { current ->
-                        EditableHudPreview(
-                            sample = current,
-                            definition = overlayDefinition,
-                            portrait = portraitVideo,
-                            canvasSize = previewSize,
-                            selectedElementId = selectedElementId,
-                            select = { selectedElementId = it },
-                            transform = { id, dx, dy, zoom ->
-                                overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements.map { element ->
-                                    if (element.id != id || previewSize.width == 0 || previewSize.height == 0) element
-                                    else {
-                                        val old = element.position(portraitVideo)
-                                        element
-                                            .positioned(portraitVideo, OverlayPosition(old.x + dx / previewSize.width, old.y + dy / previewSize.height))
-                                            .resized(zoom)
-                                    }
-                                })
-                            }
-                        )
-                    }
-                    IconButton(onClick = { if (player.isPlaying) player.pause() else { if (position / 1000.0 !in value.videoTrimStartSeconds..(value.videoTrimStartSeconds + value.exportDurationSeconds)) player.seekTo((value.videoTrimStartSeconds * 1000).toLong()); player.play() } }, modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .45f), RoundedCornerShape(30.dp))) {
-                        Icon(if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White)
-                    }
+    val preview: @Composable BoxScope.() -> Unit = {
+        AndroidView(
+            factory = { PlayerView(it).apply { useController = false; this.player = player } },
+            modifier = Modifier.fillMaxSize()
+        )
+        sample?.let { current ->
+            EditableHudPreview(
+                sample = current,
+                definition = overlayDefinition,
+                portrait = portraitVideo,
+                canvasSize = previewSize,
+                selectedElementId = selectedElementId,
+                select = { selectedElementId = it },
+                transform = { id, dx, dy, zoom ->
+                    overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements.map { element ->
+                        if (element.id != id || previewSize.width == 0 || previewSize.height == 0) element
+                        else {
+                            val old = element.position(portraitVideo)
+                            element
+                                .positioned(portraitVideo, OverlayPosition(old.x + dx / previewSize.width, old.y + dy / previewSize.height))
+                                .resized(zoom)
+                        }
+                    })
                 }
-                Text("${appText("VIDEO START", "POCZĄTEK FILMU")}  ${videoDuration(value.videoTrimStartSeconds)}", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 12.dp))
-                Slider(value.videoTrimStartSeconds.toFloat(), { new -> value = value.copy(videoTrimStartSeconds = new.toDouble()); player.seekTo((new * 1000).toLong()) }, valueRange = 0f..(value.durationSeconds - value.exportDurationSeconds).coerceAtLeast(.01).toFloat())
-                Text("${appText("TELEMETRY START", "POCZĄTEK TELEMETRII")}  ${videoDuration(value.telemetryTrimStartSeconds)} ${appText("of", "z")} ${videoDuration(driveDuration)}", color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Slider(value.telemetryTrimStartSeconds.toFloat(), { value = value.copy(telemetryTrimStartSeconds = it.toDouble()) }, valueRange = 0f..(driveDuration - value.exportDurationSeconds).coerceAtLeast(.01).toFloat())
-                val maxDuration = minOf(value.durationSeconds - value.videoTrimStartSeconds, driveDuration - value.telemetryTrimStartSeconds).coerceAtLeast(.1)
-                Text("${appText("EXPORT LENGTH", "DŁUGOŚĆ EKSPORTU")}  ${videoDuration(value.exportDurationSeconds)}", color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                Slider(value.exportDurationSeconds.coerceAtMost(maxDuration).toFloat(), { value = value.copy(exportDurationSeconds = it.toDouble()) }, valueRange = .1f..maxDuration.coerceAtLeast(.11).toFloat())
-                Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    templates.forEach { item ->
-                        FilterChip(
-                            selected = templateId == item.entity.id,
-                            onClick = { templateId = item.entity.id; overlayDefinition = item.definition; value = value.copy(overlayTemplateId = item.entity.id) },
-                            label = { Text(item.entity.name) }
-                        )
+            )
+        }
+        IconButton(
+            onClick = {
+                if (player.isPlaying) player.pause()
+                else {
+                    if (position / 1000.0 !in value.videoTrimStartSeconds..(value.videoTrimStartSeconds + value.exportDurationSeconds)) {
+                        player.seekTo((value.videoTrimStartSeconds * 1000).toLong())
                     }
+                    player.play()
                 }
-                Text(appText("Drag HUD elements with one finger and pinch with two fingers to resize. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD jednym palcem, a dwoma palcami zmieniaj ich rozmiar. Układ pionowy i poziomy zapisuje się osobno."), color = TougeMuted, fontSize = 10.sp)
-                OutlinedButton(
-                    onClick = { templates.firstOrNull { it.entity.id == templateId }?.let { container.videoRepository.updateOverlayTemplate(it.copy(definition = overlayDefinition)) } },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(appText("Save layout in this template", "Zapisz układ w tym szablonie")) }
-                OutlinedButton(
-                    onClick = { editingTemplate = templates.firstOrNull { it.entity.id == templateId }?.copy(definition = overlayDefinition) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Icon(Icons.Default.Tune, null); Text(appText(" Edit HUD parameters", " Edytuj parametry HUD")) }
-                Text(appText("The upper timeline is the selected video. The lower one chooses the matching fragment of the recorded drive.", "Górna oś to wybrany film. Dolna wybiera pasujący fragment zapisanego przejazdu."), color = TougeMuted, fontSize = 10.sp)
+            },
+            modifier = Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = .45f), RoundedCornerShape(30.dp))
+        ) {
+            Icon(if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White)
+        }
+    }
+    val controls: @Composable () -> Unit = {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Text("${appText("VIDEO START", "POCZĄTEK FILMU")}  ${videoDuration(value.videoTrimStartSeconds)}", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Slider(value.videoTrimStartSeconds.toFloat(), { new -> value = value.copy(videoTrimStartSeconds = new.toDouble()); player.seekTo((new * 1000).toLong()) }, valueRange = 0f..(value.durationSeconds - value.exportDurationSeconds).coerceAtLeast(.01).toFloat())
+            Text("${appText("TELEMETRY START", "POCZĄTEK TELEMETRII")}  ${videoDuration(value.telemetryTrimStartSeconds)} ${appText("of", "z")} ${videoDuration(driveDuration)}", color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Slider(value.telemetryTrimStartSeconds.toFloat(), { value = value.copy(telemetryTrimStartSeconds = it.toDouble()) }, valueRange = 0f..(driveDuration - value.exportDurationSeconds).coerceAtLeast(.01).toFloat())
+            val maxDuration = minOf(value.durationSeconds - value.videoTrimStartSeconds, driveDuration - value.telemetryTrimStartSeconds).coerceAtLeast(.1)
+            Text("${appText("EXPORT LENGTH", "DŁUGOŚĆ EKSPORTU")}  ${videoDuration(value.exportDurationSeconds)}", color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Slider(value.exportDurationSeconds.coerceAtMost(maxDuration).toFloat(), { value = value.copy(exportDurationSeconds = it.toDouble()) }, valueRange = .1f..maxDuration.coerceAtLeast(.11).toFloat())
+            Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                templates.forEach { item ->
+                    FilterChip(
+                        selected = templateId == item.entity.id,
+                        onClick = { templateId = item.entity.id; overlayDefinition = item.definition; value = value.copy(overlayTemplateId = item.entity.id) },
+                        label = { Text(item.entity.name) }
+                    )
+                }
             }
-        },
-        confirmButton = {
-            Button(onClick = { save(value.copy(overlayTemplateId = templateId)); container.videoRepository.export(value.copy(overlayTemplateId = templateId), samples, overlayDefinition); dismiss() }) { Icon(Icons.Default.Download, null); Text(appText(" Export to gallery", " Eksportuj do galerii")) }
-        },
-        dismissButton = { TextButton(onClick = { save(value.copy(overlayTemplateId = templateId)); dismiss() }) { Text(appText("Save project", "Zapisz projekt")) } }
-    )
+            Text(appText("Drag HUD elements with one finger and pinch with two fingers to resize. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD jednym palcem, a dwoma palcami zmieniaj ich rozmiar. Układ pionowy i poziomy zapisuje się osobno."), color = TougeMuted, fontSize = 10.sp)
+            OutlinedButton(
+                onClick = { templates.firstOrNull { it.entity.id == templateId }?.let { container.videoRepository.updateOverlayTemplate(it.copy(definition = overlayDefinition)) } },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(appText("Save layout in this template", "Zapisz układ w tym szablonie")) }
+            OutlinedButton(
+                onClick = { editingTemplate = templates.firstOrNull { it.entity.id == templateId }?.copy(definition = overlayDefinition) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Icon(Icons.Default.Tune, null); Text(appText(" Edit HUD parameters", " Edytuj parametry HUD")) }
+            Text(appText("The upper timeline is the selected video. The lower one chooses the matching fragment of the recorded drive.", "Górna oś to wybrany film. Dolna wybiera pasujący fragment zapisanego przejazdu."), color = TougeMuted, fontSize = 10.sp)
+        }
+    }
+    Dialog(
+        onDismissRequest = dismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        Surface(Modifier.fillMaxSize(), color = Color(0xFF071116)) {
+            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = dismiss) { Icon(Icons.Default.Close, appText("Close", "Zamknij")) }
+                    Column(Modifier.weight(1f)) {
+                        Text(appText("VIDEO + TELEMETRY", "WIDEO + TELEMETRIA"), color = TougeCyan, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        Text(appText("Align and arrange HUD", "Dopasuj film i ustaw HUD"), fontWeight = FontWeight.Black)
+                    }
+                    TextButton(onClick = { save(value.copy(overlayTemplateId = templateId)); dismiss() }) {
+                        Text(appText("Save", "Zapisz"))
+                    }
+                }
+                BoxWithConstraints(
+                    Modifier.fillMaxWidth().weight(1f).background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val aspect = initial.pixelWidth.coerceAtLeast(1).toFloat() / initial.pixelHeight.coerceAtLeast(1)
+                    val stageModifier = if (maxWidth.value / maxHeight.value > aspect) {
+                        Modifier.fillMaxHeight().aspectRatio(aspect)
+                    } else {
+                        Modifier.fillMaxWidth().aspectRatio(aspect)
+                    }
+                    Box(stageModifier.background(Color.Black).onSizeChanged { previewSize = it }, content = preview)
+                }
+                Box(Modifier.fillMaxWidth().heightIn(max = 350.dp).background(TougePanel)) { controls() }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { save(value.copy(overlayTemplateId = templateId)); dismiss() },
+                        modifier = Modifier.weight(1f)
+                    ) { Text(appText("Save project", "Zapisz projekt")) }
+                    Button(
+                        onClick = {
+                            val exportValue = value.copy(overlayTemplateId = templateId)
+                            save(exportValue)
+                            container.videoRepository.export(exportValue, samples, overlayDefinition)
+                            dismiss()
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Download, null)
+                        Text(appText(" Export", " Eksportuj"))
+                    }
+                }
+            }
+        }
+    }
     editingTemplate?.let { current ->
         HudTemplateEditor(
             initial = current,
@@ -306,6 +380,9 @@ private fun BoxScope.EditableHudPreview(
     select: (String) -> Unit,
     transform: (String, Float, Float, Float) -> Unit
 ) {
+    val density = LocalDensity.current
+    val previewWidthDp = with(density) { canvasSize.width.toDp().value }
+    val fitScale = (previewWidthDp / if (portrait) 430f else 760f).coerceIn(.34f, .9f)
     definition.elements.forEach { element ->
         val position = element.position(portrait)
         HudElementPreview(
@@ -319,7 +396,7 @@ private fun BoxScope.EditableHudPreview(
                 .graphicsLayer {
                     translationX = position.x * canvasSize.width - 55.dp.toPx()
                     translationY = position.y * canvasSize.height - 33.dp.toPx()
-                    val previewScale = .45f + element.effectiveScale * .32f
+                    val previewScale = (fitScale * element.effectiveScale).coerceIn(.24f, 1.5f)
                     scaleX = previewScale
                     scaleY = previewScale
                 }
