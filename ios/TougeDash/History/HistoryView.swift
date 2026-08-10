@@ -305,7 +305,7 @@ struct HistoryView: View {
         let successMessage = candidate.successMessage
         pendingDeletion = nil
         withAnimation(.easeOut(duration: 0.18)) {
-            deletingItems.insert(key)
+            _ = deletingItems.insert(key)
         }
 
         do {
@@ -328,7 +328,7 @@ struct HistoryView: View {
             }
         } catch {
             withAnimation(.easeOut(duration: 0.2)) {
-                deletingItems.remove(key)
+                _ = deletingItems.remove(key)
             }
             deletionError = error.localizedDescription
         }
