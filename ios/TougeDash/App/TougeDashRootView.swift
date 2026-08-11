@@ -55,12 +55,9 @@ struct TougeDashRootView: View {
                 .tag(0)
 
             HistoryView(
-                locationTracker: controller.locationTracker,
                 cloudAccount: cloudAccount,
                 cloudSync: cloudSync,
-                videoRecorder: videoRecorder,
                 videoOverlays: videoOverlays,
-                segmentSettings: controller.historyRecorder.segmentSettings,
                 activeSessionID: controller.historyRecorder.activeSessionID,
                 canSplitActiveDrive: controller.isConnected && controller.historyRecorder.activeSessionID != nil,
                 onSplitActiveDrive: controller.splitActiveDrive,
@@ -78,6 +75,19 @@ struct TougeDashRootView: View {
                     Label("Alerty", systemImage: "exclamationmark.shield.fill")
                 }
                 .tag(2)
+
+            AppSettingsView(
+                locationTracker: controller.locationTracker,
+                cloudAccount: cloudAccount,
+                cloudSync: cloudSync,
+                videoRecorder: videoRecorder,
+                segmentSettings: controller.historyRecorder.segmentSettings
+            )
+                .toolbarVisibility(compactLandscape ? .hidden : .automatic, for: .tabBar)
+                .tabItem {
+                    Label("Ustawienia", systemImage: "gearshape.fill")
+                }
+                .tag(3)
         }
         .tint(.tougeCyan)
         .preferredColorScheme(.dark)
@@ -96,5 +106,60 @@ struct TougeDashRootView: View {
             Task { await cloudSync.accountDidChange() }
         }
         .onReceive(controller.$snapshot) { dashboardBuffer.record($0) }
+    }
+}
+
+private struct AppSettingsView: View {
+    @ObservedObject var locationTracker: LocationTrackingService
+    @ObservedObject var cloudAccount: CloudAccountService
+    @ObservedObject var cloudSync: CloudSyncManager
+    @ObservedObject var videoRecorder: DriveVideoRecorder
+    @ObservedObject var segmentSettings: DriveSegmentSettingsStore
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                DashboardBackground()
+
+                ScrollView(showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        settingsSection(
+                            title: localized("KONTO I SYNCHRONIZACJA"),
+                            subtitle: localized("Touge Dash Cloud i dane online")
+                        )
+                        CloudSyncCard(account: cloudAccount, sync: cloudSync)
+
+                        settingsSection(
+                            title: localized("REJESTROWANIE PRZEJAZDÓW"),
+                            subtitle: localized("Trasa GPS, podział sesji i kamera")
+                        )
+                        LocationRecordingCard(locationTracker: locationTracker)
+                        DriveSegmentationCard(settings: segmentSettings)
+                        DriveVideoRecordingCard(recorder: videoRecorder)
+
+                        ProductCreditFooter()
+                            .padding(.top, 8)
+                    }
+                    .frame(maxWidth: 1_000)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                }
+            }
+            .navigationTitle(localized("Ustawienia"))
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private func settingsSection(title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 13, weight: .black))
+                .tracking(1.4)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 4)
     }
 }

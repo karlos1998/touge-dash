@@ -10,12 +10,9 @@ struct HistoryView: View {
     @Query private var sessions: [DriveSession]
     @Query private var incidents: [DriveIncident]
     @Query private var videos: [DriveVideoRecording]
-    let locationTracker: LocationTrackingService
     let cloudAccount: CloudAccountService
     let cloudSync: CloudSyncManager
-    let videoRecorder: DriveVideoRecorder
     let videoOverlays: VideoOverlayTemplateStore
-    let segmentSettings: DriveSegmentSettingsStore
     let activeSessionID: UUID?
     let canSplitActiveDrive: Bool
     let onSplitActiveDrive: () -> Bool
@@ -30,12 +27,9 @@ struct HistoryView: View {
     @State private var localArchiveBytes: Int64 = 0
 
     init(
-        locationTracker: LocationTrackingService,
         cloudAccount: CloudAccountService,
         cloudSync: CloudSyncManager,
-        videoRecorder: DriveVideoRecorder,
         videoOverlays: VideoOverlayTemplateStore,
-        segmentSettings: DriveSegmentSettingsStore,
         activeSessionID: UUID?,
         canSplitActiveDrive: Bool,
         onSplitActiveDrive: @escaping () -> Bool,
@@ -59,12 +53,9 @@ struct HistoryView: View {
         videoDescriptor.fetchLimit = HistoryPresentationPolicy.maximumVisibleVideoRecords
         _videos = Query(videoDescriptor)
 
-        self.locationTracker = locationTracker
         self.cloudAccount = cloudAccount
         self.cloudSync = cloudSync
-        self.videoRecorder = videoRecorder
         self.videoOverlays = videoOverlays
-        self.segmentSettings = segmentSettings
         self.activeSessionID = activeSessionID
         self.canSplitActiveDrive = canSplitActiveDrive
         self.onSplitActiveDrive = onSplitActiveDrive
@@ -78,16 +69,11 @@ struct HistoryView: View {
 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 14) {
-                        CloudSyncCard(account: cloudAccount, sync: cloudSync)
                         if canSplitActiveDrive {
                             ManualSessionSplitCard {
                                 showingSplitConfirmation = true
                             }
                         }
-                        DriveSegmentationCard(settings: segmentSettings)
-                        LocationRecordingCard(locationTracker: locationTracker)
-                        DriveVideoRecordingCard(recorder: videoRecorder)
-
                         if !incidents.isEmpty {
                             HStack {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -335,7 +321,7 @@ struct HistoryView: View {
     }
 }
 
-private struct DriveSegmentationCard: View {
+struct DriveSegmentationCard: View {
     @ObservedObject var settings: DriveSegmentSettingsStore
 
     var body: some View {
@@ -639,7 +625,7 @@ private struct ManualSessionSplitCard: View {
     }
 }
 
-private struct LocationRecordingCard: View {
+struct LocationRecordingCard: View {
     @ObservedObject var locationTracker: LocationTrackingService
 
     private var isEnabled: Binding<Bool> {
