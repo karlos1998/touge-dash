@@ -25,8 +25,8 @@ android {
         applicationId = "it.letscode.tougedash"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "1.8.4"
+        versionCode = 19
+        versionName = "1.8.5"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "API_BASE_URL", "\"https://touge-dash-engine.letscode.it\"")
