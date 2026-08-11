@@ -467,7 +467,7 @@ private fun DashboardLogoMark(modifier: Modifier = Modifier) {
 @Composable
 internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, landscape: Boolean, rules: VehicleAlertRules = VehicleAlertRules()) {
     val accent = widget.accent.color()
-    val kind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
+    val kind = dashboardDisplayKind(widget, landscape)
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
     val fontScale = LocalDensity.current.fontScale
     val compactLandscape = landscape && screenHeightDp < 600

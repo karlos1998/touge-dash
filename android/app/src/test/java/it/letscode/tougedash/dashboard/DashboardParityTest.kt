@@ -4,6 +4,7 @@ import it.letscode.tougedash.model.DashboardDefinition
 import it.letscode.tougedash.model.DashboardTemplate
 import it.letscode.tougedash.model.DashboardWidget
 import it.letscode.tougedash.model.DashboardWidgetKind
+import it.letscode.tougedash.ui.dashboardDisplayKind
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -75,5 +76,14 @@ class DashboardParityTest {
 
         assertEquals(null, decoded.pageOrder)
         assertEquals(10, decoded.widgets.size)
+    }
+
+    @Test
+    fun `hero card adapts its presentation to available portrait width`() {
+        val hero = DashboardTemplate.factory().definition.widgets.first()
+
+        assertEquals(DashboardWidgetKind.HERO, dashboardDisplayKind(hero.copy(portraitSpan = 12), landscape = false))
+        assertEquals(DashboardWidgetKind.VALUE, dashboardDisplayKind(hero.copy(portraitSpan = 6), landscape = false))
+        assertEquals(DashboardWidgetKind.COMPACT, dashboardDisplayKind(hero.copy(portraitSpan = 4), landscape = false))
     }
 }

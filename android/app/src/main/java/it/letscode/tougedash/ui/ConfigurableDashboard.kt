@@ -2,16 +2,12 @@ package it.letscode.tougedash.ui
 
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -38,14 +35,16 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
@@ -68,13 +67,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import it.letscode.tougedash.di.AppContainer
 import it.letscode.tougedash.model.DashboardAccent
 import it.letscode.tougedash.model.DashboardDefinition
@@ -98,6 +98,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 fun ConfigurableDashboardScreen(
@@ -116,6 +117,8 @@ fun ConfigurableDashboardScreen(
     var templateMenu by remember { mutableStateOf(false) }
     var renameTemplate by remember { mutableStateOf<DashboardTemplate?>(null) }
     var deleteTemplate by remember { mutableStateOf<DashboardTemplate?>(null) }
+    var deleteWidget by remember { mutableStateOf<Pair<DashboardTemplate, DashboardWidget>?>(null) }
+    var selectedWidget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var restoreFactory by remember { mutableStateOf(false) }
     val authSession by container.authRepository.session.collectAsState()
     val alertRules by container.alertRepository.rules(hardwareId ?: "local-default").collectAsState(initial = VehicleAlertRules())
@@ -128,6 +131,8 @@ fun ConfigurableDashboardScreen(
     )
     val visibleTemplateId = templates.getOrNull(pagerState.currentPage)?.id ?: template.id
     var pageIndicatorVisible by remember { mutableStateOf(false) }
+    val selectedTemplate = templates.firstOrNull { it.id == selectedWidget?.first }
+    val selectedCard = selectedTemplate?.definition?.widgets?.firstOrNull { it.id == selectedWidget?.second }
 
     LaunchedEffect(template.id, templateIds) {
         val destination = templates.indexOfFirst { it.id == template.id }
@@ -149,6 +154,9 @@ fun ConfigurableDashboardScreen(
             kotlinx.coroutines.delay(2500)
             pageIndicatorVisible = false
         }
+    }
+    LaunchedEffect(editing, visibleTemplateId) {
+        if (!editing || selectedWidget?.first != visibleTemplateId) selectedWidget = null
     }
     val showPage: (String) -> Unit = { id ->
         val destination = templates.indexOfFirst { it.id == id }
@@ -179,8 +187,27 @@ fun ConfigurableDashboardScreen(
                     DropdownMenuItem(text = { Text(appText("Delete screen", "Usuń ekran"), color = TougeRed) }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = TougeRed) }, enabled = templates.size > 1, onClick = { templateMenu = false; deleteTemplate = template })
                     DropdownMenuItem(text = { Text(appText("Restore factory screen", "Przywróć ekran fabryczny")) }, leadingIcon = { Icon(Icons.Default.Restore, null) }, onClick = { templateMenu = false; restoreFactory = true })
                 }
-                Text(appText("Drag cards to arrange", "Przeciągaj karty"), Modifier.padding(start = 10.dp), color = TougeCyan, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                Text(appText("Select a card", "Wybierz kartę"), Modifier.padding(start = 10.dp), color = TougeCyan, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
             }
+            if (selectedTemplate != null && selectedCard != null) DashboardCardEditToolbar(
+                widget = selectedCard,
+                landscape = landscape,
+                resize = { direction ->
+                    val resized = resizeWidget(selectedCard, landscape, direction)
+                    if (resized != selectedCard) scope.launch {
+                        saveWidgets(
+                            container,
+                            selectedTemplate,
+                            selectedTemplate.definition.widgets.map { if (it.id == resized.id) resized else it }
+                        )
+                    }
+                },
+                move = { direction -> scope.launch {
+                    saveWidgets(container, selectedTemplate, moveWidget(selectedTemplate.definition.widgets, selectedCard.id, direction, landscape))
+                } },
+                edit = { editorTarget = selectedTemplate to selectedCard },
+                remove = { deleteWidget = selectedTemplate to selectedCard }
+            )
         }
         Box(Modifier.weight(1f)) {
             HorizontalPager(
@@ -206,8 +233,8 @@ fun ConfigurableDashboardScreen(
                         EditableDashboardCard(
                             widget, snapshot, chartPoints, performance, alertRules, landscape, editing,
                             ecuControlState, container.ecuControls,
-                            edit = { editorTarget = pageTemplate to widget },
-                            remove = { scope.launch { saveWidgets(container, pageTemplate, pageTemplate.definition.widgets.filterNot { it.id == widget.id }) } },
+                            selected = selectedWidget == (pageTemplate.id to widget.id),
+                            select = { selectedWidget = pageTemplate.id to widget.id },
                             move = { direction -> scope.launch { saveWidgets(container, pageTemplate, moveWidget(pageTemplate.definition.widgets, widget.id, direction, landscape)) } }
                         )
                     }
@@ -265,6 +292,21 @@ fun ConfigurableDashboardScreen(
             text = { Text(appText("This screen will be removed from this device and cloud synchronization.", "Ten ekran zostanie usunięty z urządzenia i synchronizacji online."), color = TougeMuted) },
             confirmButton = { Button(onClick = { scope.launch { container.dashboardRepository.delete(current) }; deleteTemplate = null }) { Text(appText("Delete", "Usuń")) } },
             dismissButton = { TextButton(onClick = { deleteTemplate = null }) { Text(appText("Cancel", "Anuluj")) } }
+        )
+    }
+    deleteWidget?.let { (targetTemplate, widget) ->
+        AlertDialog(
+            onDismissRequest = { deleteWidget = null },
+            title = { Text(appText("Delete this card?", "Usunąć tę kartę?")) },
+            text = { Text(appText("You can add it again later from the dashboard editor.", "Później możesz dodać ją ponownie w edytorze dashboardu."), color = TougeMuted) },
+            confirmButton = {
+                Button(onClick = {
+                    scope.launch { saveWidgets(container, targetTemplate, targetTemplate.definition.widgets.filterNot { it.id == widget.id }) }
+                    selectedWidget = null
+                    deleteWidget = null
+                }) { Text(appText("Delete", "Usuń")) }
+            },
+            dismissButton = { TextButton(onClick = { deleteWidget = null }) { Text(appText("Cancel", "Anuluj")) } }
         )
     }
     if (restoreFactory) AlertDialog(
@@ -338,6 +380,81 @@ private fun RenameDashboardDialog(template: DashboardTemplate, dismiss: () -> Un
 }
 
 @Composable
+private fun DashboardCardEditToolbar(
+    widget: DashboardWidget,
+    landscape: Boolean,
+    resize: (Int) -> Unit,
+    move: (Int) -> Unit,
+    edit: () -> Unit,
+    remove: () -> Unit
+) {
+    val span = if (landscape) widget.landscapeSpan else widget.portraitSpan
+    val name = widget.title?.takeIf { it.isNotBlank() }
+        ?: widget.metrics.firstOrNull()?.localizedName()
+        ?: widget.kind.localizedName()
+    val actionSize = if (landscape) 28.dp else 32.dp
+    Row(
+        Modifier.fillMaxWidth()
+            .padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 2.dp else 0.dp)
+            .background(Color.Black.copy(alpha = .5f), CutCornerShape(10.dp))
+            .border(1.dp, TougeCyan.copy(alpha = .24f), CutCornerShape(10.dp))
+            .padding(horizontal = 8.dp, vertical = if (landscape) 5.dp else 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(if (landscape) 4.dp else 5.dp)
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(name.uppercase(), fontSize = if (landscape) 8.sp else 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            Text(appText("WIDTH", "SZEROKOŚĆ"), color = TougeMuted, fontSize = 7.sp, fontWeight = FontWeight.Black, letterSpacing = .6.sp)
+        }
+        Row(
+            Modifier.background(Color.White.copy(alpha = .055f), RoundedCornerShape(9.dp)).padding(2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            DashboardEditorAction(
+                Icons.Default.Remove,
+                appText("Make narrower", "Zmniejsz szerokość"),
+                actionSize,
+                enabled = smallerSpan(widget, landscape) != span,
+                action = { resize(-1) }
+            )
+            Box(Modifier.size(width = if (landscape) 34.dp else 40.dp, height = actionSize), contentAlignment = Alignment.Center) {
+                Text("$span/12", color = TougeCyan, fontSize = if (landscape) 8.sp else 9.sp, fontWeight = FontWeight.Black)
+            }
+            DashboardEditorAction(
+                Icons.Default.Add,
+                appText("Make wider", "Zwiększ szerokość"),
+                actionSize,
+                enabled = largerSpan(widget, landscape) != span,
+                action = { resize(1) }
+            )
+        }
+        DashboardEditorAction(Icons.AutoMirrored.Filled.ArrowBack, appText("Move earlier", "Przesuń wcześniej"), actionSize) { move(-1) }
+        DashboardEditorAction(Icons.AutoMirrored.Filled.ArrowForward, appText("Move later", "Przesuń dalej"), actionSize) { move(1) }
+        DashboardEditorAction(Icons.Default.Tune, appText("Card settings", "Ustawienia karty"), actionSize, tint = TougeCyan, action = edit)
+        DashboardEditorAction(Icons.Default.Delete, appText("Delete card", "Usuń kartę"), actionSize, tint = TougeRed, action = remove)
+    }
+}
+
+@Composable
+private fun DashboardEditorAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    size: androidx.compose.ui.unit.Dp,
+    enabled: Boolean = true,
+    tint: Color = Color.White.copy(alpha = .82f),
+    action: () -> Unit
+) {
+    Box(
+        Modifier.size(size)
+            .background(Color.White.copy(alpha = if (enabled) .055f else .018f), RoundedCornerShape(8.dp))
+            .clickable(enabled = enabled, onClick = action),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, description, tint = tint.copy(alpha = if (enabled) 1f else .25f), modifier = Modifier.size(size * .52f))
+    }
+}
+
+@Composable
 private fun EditableDashboardCard(
     widget: DashboardWidget,
     snapshot: TelemetrySnapshot,
@@ -348,28 +465,25 @@ private fun EditableDashboardCard(
     editing: Boolean,
     ecuControlState: EcuControlState,
     ecuControls: EcuControlCoordinator,
-    edit: () -> Unit,
-    remove: () -> Unit,
+    selected: Boolean,
+    select: () -> Unit,
     move: (Int) -> Unit
 ) {
-    val rotation = if (editing) {
-        val transition = rememberInfiniteTransition(label = "edit wiggle")
-        val animated by transition.animateFloat(-.45f, .45f, infiniteRepeatable(tween(120), RepeatMode.Reverse), label = "wiggle")
-        animated
+    var dragX by remember { mutableFloatStateOf(0f) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    val selectionModifier = if (selected) Modifier.border(2.dp, TougeCyan, CutCornerShape(16.dp)) else Modifier
+    val editInteractionModifier = if (editing) {
+        Modifier.clickable(onClick = select)
     } else {
-        0f
+        Modifier
     }
-    var drag by remember { mutableFloatStateOf(0f) }
     Box(
-        Modifier.rotate(rotation).pointerInput(editing, widget.id) {
-            if (editing) detectDragGesturesAfterLongPress(
-                onDragEnd = { if (abs(drag) > 35) move(if (drag > 0) 1 else -1); drag = 0f },
-                onDragCancel = { drag = 0f },
-                onDrag = { change, amount -> change.consume(); drag += amount.y + amount.x }
-            )
-        }
+        selectionModifier.then(editInteractionModifier)
+            .offset { IntOffset(dragX.roundToInt(), dragY.roundToInt()) }
+            .zIndex(if (dragging) 2f else 0f)
     ) {
-        val effectiveKind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
+        val effectiveKind = dashboardDisplayKind(widget, landscape)
         when (effectiveKind) {
             DashboardWidgetKind.CHART -> ChartCard(widget, snapshot, chartPoints, landscape)
             DashboardWidgetKind.PERFORMANCE -> PerformanceCard(widget, performance, landscape)
@@ -378,15 +492,40 @@ private fun EditableDashboardCard(
             else -> DashboardCard(widget, snapshot, landscape, alertRules)
         }
         if (editing) {
-            Row(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(7.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(30.dp).background(TougeRed.copy(alpha = .88f), CircleShape).border(1.dp, Color.White.copy(alpha = .18f), CircleShape).clickable(onClick = remove), contentAlignment = Alignment.Center) { Icon(Icons.Default.Close, null, tint = Color.White, modifier = Modifier.size(15.dp)) }
-                Box(Modifier.weight(1f))
-                Row(Modifier.background(Color.Black.copy(alpha = .72f), RoundedCornerShape(18.dp)).border(1.dp, Color.White.copy(alpha = .14f), RoundedCornerShape(18.dp)).padding(horizontal = 9.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DragHandle, null, tint = Color.White.copy(alpha = .8f), modifier = Modifier.size(15.dp))
-                    if (!landscape && widget.portraitSpan == 12) Text(appText(" DRAG", " PRZECIĄGNIJ"), color = Color.White.copy(alpha = .8f), fontSize = 7.sp, fontWeight = FontWeight.Black, letterSpacing = .6.sp)
+            Box(
+                Modifier.align(Alignment.TopCenter).padding(top = 5.dp)
+                    .size(width = if (landscape) 38.dp else 44.dp, height = if (landscape) 25.dp else 30.dp)
+                    .pointerInput(widget.id) {
+                        detectDragGestures(
+                            onDragStart = { dragX = 0f; dragY = 0f; dragging = true },
+                            onDragEnd = {
+                                val primary = if (abs(dragX) > abs(dragY)) dragX else dragY
+                                if (abs(primary) > 24.dp.toPx()) {
+                                    val steps = (abs(primary) / 120.dp.toPx()).toInt().coerceAtLeast(1).coerceAtMost(6)
+                                    move(if (primary > 0) steps else -steps)
+                                }
+                                dragX = 0f
+                                dragY = 0f
+                                dragging = false
+                            },
+                            onDragCancel = { dragX = 0f; dragY = 0f; dragging = false },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                dragX += amount.x
+                                dragY += amount.y
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    Modifier.size(width = if (landscape) 26.dp else 30.dp, height = if (landscape) 15.dp else 18.dp)
+                    .background(if (selected || dragging) TougeCyan else Color.Black.copy(alpha = .72f), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.DragHandle, null, tint = if (selected || dragging) Color.Black else Color.White.copy(alpha = .76f), modifier = Modifier.size(if (landscape) 13.dp else 15.dp))
                 }
-                Box(Modifier.weight(1f))
-                Box(Modifier.size(30.dp).background(TougeCyan.copy(alpha = .9f), CircleShape).border(1.dp, Color.White.copy(alpha = .18f), CircleShape).clickable(onClick = edit), contentAlignment = Alignment.Center) { Icon(Icons.Default.Edit, null, tint = Color.Black, modifier = Modifier.size(15.dp)) }
             }
         }
     }
@@ -567,10 +706,12 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                         )
                     }
                 }
-                Text(appText("PORTRAIT WIDTH", "SZEROKOŚĆ W PIONIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                SpanSelector(value.portraitSpan) { value = value.copy(portraitSpan = it) }
-                Text(appText("LANDSCAPE WIDTH", "SZEROKOŚĆ W POZIOMIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                SpanSelector(value.landscapeSpan) { value = value.copy(landscapeSpan = it) }
+                Text(
+                    appText("Size and position are changed directly on the dashboard.", "Rozmiar i pozycję zmienisz bezpośrednio na dashboardzie."),
+                    color = TougeMuted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium
+                )
                 if (value.kind != DashboardWidgetKind.ECU_SWITCH && value.kind != DashboardWidgetKind.ECU_ROTARY) {
                     Text(appText("LANDSCAPE PRESENTATION", "WIDOK W POZIOMIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -601,20 +742,6 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun SpanSelector(selected: Int, changed: (Int) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        listOf(0, 2, 3, 4, 6, 12).forEach { span ->
-            FilterChip(
-                selected = selected == span,
-                onClick = { changed(span) },
-                label = { Text(if (span == 0) appText("Hidden", "Ukryty") else if (span == 12) appText("Full", "Pełna") else "$span/12") }
-            )
-        }
-    }
-}
-
 private fun maximumMetricCount(kind: DashboardWidgetKind): Int = when (kind) {
     DashboardWidgetKind.HERO -> 4
     DashboardWidgetKind.GROUP -> 3
@@ -640,6 +767,43 @@ private fun MetricDropdown(selected: TelemetryMetric, changed: (TelemetryMetric)
 
 private suspend fun saveWidgets(container: AppContainer, template: DashboardTemplate, widgets: List<DashboardWidget>) {
     container.dashboardRepository.save(template.copy(definition = DashboardDefinition(widgets, template.definition.pageOrder), modifiedAt = System.currentTimeMillis()), select = true)
+}
+
+private fun dashboardSpanSteps(widget: DashboardWidget, landscape: Boolean): List<Int> {
+    val configuredKind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
+    val minimum = when (configuredKind) {
+        DashboardWidgetKind.GROUP -> if (landscape) 6 else 12
+        DashboardWidgetKind.GAUGE, DashboardWidgetKind.CHART, DashboardWidgetKind.PERFORMANCE,
+        DashboardWidgetKind.ECU_SWITCH, DashboardWidgetKind.ECU_ROTARY -> if (landscape) 3 else 6
+        DashboardWidgetKind.COMPACT -> if (landscape) 2 else 3
+        else -> if (landscape) 2 else 3
+    }
+    return listOf(2, 3, 4, 6, 12).filter { it >= minimum }
+}
+
+private fun smallerSpan(widget: DashboardWidget, landscape: Boolean): Int {
+    val current = if (landscape) widget.landscapeSpan else widget.portraitSpan
+    return dashboardSpanSteps(widget, landscape).lastOrNull { it < current } ?: current
+}
+
+private fun largerSpan(widget: DashboardWidget, landscape: Boolean): Int {
+    val current = if (landscape) widget.landscapeSpan else widget.portraitSpan
+    return dashboardSpanSteps(widget, landscape).firstOrNull { it > current } ?: current
+}
+
+private fun resizeWidget(widget: DashboardWidget, landscape: Boolean, direction: Int): DashboardWidget {
+    val resized = if (direction < 0) smallerSpan(widget, landscape) else largerSpan(widget, landscape)
+    return if (landscape) widget.copy(landscapeSpan = resized) else widget.copy(portraitSpan = resized)
+}
+
+internal fun dashboardDisplayKind(widget: DashboardWidget, landscape: Boolean): DashboardWidgetKind {
+    val configuredKind = if (landscape) widget.wideKind ?: widget.kind else widget.kind
+    val span = if (landscape) widget.landscapeSpan else widget.portraitSpan
+    return when {
+        configuredKind == DashboardWidgetKind.HERO && span < 12 -> if (span <= 4) DashboardWidgetKind.COMPACT else DashboardWidgetKind.VALUE
+        configuredKind == DashboardWidgetKind.VALUE && span <= 4 -> DashboardWidgetKind.COMPACT
+        else -> configuredKind
+    }
 }
 
 private fun moveWidget(values: List<DashboardWidget>, id: String, direction: Int, landscape: Boolean): List<DashboardWidget> {
