@@ -34,9 +34,10 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
@@ -118,7 +119,7 @@ fun TougeDashApp(
     var tab by remember { mutableIntStateOf(0) }
     var showConnection by remember { mutableStateOf(false) }
     var selectedSessionId by remember { mutableStateOf<String?>(null) }
-    var showCamera by remember { mutableStateOf(false) }
+    var showDashboardNavigation by remember { mutableStateOf(false) }
     var dashboardEditing by remember { mutableStateOf(false) }
     var vehicleToName by remember { mutableStateOf<VehicleEntity?>(null) }
     val vehicles by container.dao.vehicles().collectAsState(initial = emptyList())
@@ -168,55 +169,26 @@ fun TougeDashApp(
         containerColor = Color.Transparent,
         contentColor = Color(0xFFF2FAFC),
         bottomBar = {
-            NavigationBar(
-                containerColor = Color(0xF20A1218),
-                tonalElevation = 0.dp,
-                // NavigationBar adds the system navigation-bar inset to its own
-                // content height. A fixed outer height makes that inset consume
-                // the space reserved for icons and labels on three-button devices.
-                modifier = Modifier.border(width = 1.dp, color = Color.White.copy(alpha = .06f))
-            ) {
-                listOf(
-                    Triple(R.string.dashboard, Icons.Default.DirectionsCar, 0),
-                    Triple(R.string.history, Icons.Default.History, 1),
-                    Triple(R.string.alerts, Icons.Default.Notifications, 2),
-                    Triple(R.string.more, Icons.Default.MoreHoriz, 3)
-                ).forEach { item ->
-                    NavigationBarItem(
-                        selected = tab == item.third,
-                        onClick = { tab = item.third },
-                        icon = { Icon(item.second, null, modifier = Modifier.size(if (landscape) 19.dp else 24.dp)) },
-                        label = { Text(stringResource(item.first), fontSize = if (landscape) 9.sp else 12.sp, fontWeight = if (tab == item.third) FontWeight.Black else FontWeight.SemiBold) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = TougeCyan,
-                            selectedTextColor = Color.White,
-                            indicatorColor = TougeCyan.copy(alpha = .12f),
-                            unselectedIconColor = TougeMuted,
-                            unselectedTextColor = TougeMuted
-                        )
-                    )
-                }
-            }
+            if (tab != 0) AppNavigationBar(tab, landscape) { tab = it }
         }
     ) { padding ->
         DashboardBackdrop(Modifier.padding(padding)) {
             Column(Modifier.fillMaxSize()) {
-                if (landscape) CompactAppHeader(
-                    connection,
-                    { showConnection = true },
-                    { showCamera = true },
-                    showDashboardEditor = tab == 0,
+                if (tab == 0) DriverDashboardHeader(
+                    connection = connection,
+                    landscape = landscape,
+                    onConnection = { showConnection = true },
                     dashboardEditing = dashboardEditing,
-                    toggleDashboardEditor = { dashboardEditing = !dashboardEditing }
-                )
-                else AppHeader(
-                    connection,
-                    { showConnection = true },
-                    { showCamera = true },
-                    showDashboardEditor = tab == 0,
-                    dashboardEditing = dashboardEditing,
-                    toggleDashboardEditor = { dashboardEditing = !dashboardEditing }
-                )
+                    toggleDashboardEditor = { dashboardEditing = !dashboardEditing },
+                    navigationExpanded = showDashboardNavigation,
+                    showNavigation = { showDashboardNavigation = true },
+                    hideNavigation = { showDashboardNavigation = false },
+                    navigate = {
+                        showDashboardNavigation = false
+                        tab = it
+                    }
+                ) else if (landscape) CompactAppHeader(connection) { showConnection = true }
+                else AppHeader(connection) { showConnection = true }
                 when (tab) {
                     0 -> ConfigurableDashboardScreen(container, snapshot, connection.hardwareId, dashboardEditing)
                     1 -> HistoryScreen(container, selectedSessionId, { selectedSessionId = it }, { selectedSessionId = null })
@@ -227,7 +199,6 @@ fun TougeDashApp(
         }
     }
     if (showConnection) ConnectionDialog(connection, { showConnection = false }, requestPermissions, rescan)
-    if (showCamera) DriveCameraScreen(container, { showCamera = false })
     vehicleToName?.let { vehicle ->
         VehicleNameDialog(container, vehicle) {
             namePrompts.edit().putBoolean(vehicle.localHardwareId, true).apply()
@@ -237,13 +208,114 @@ fun TougeDashApp(
 }
 
 @Composable
+private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, navigate: (Int) -> Unit) {
+    NavigationBar(
+        containerColor = Color(0xF20A1218),
+        tonalElevation = 0.dp,
+        modifier = Modifier.border(width = 1.dp, color = Color.White.copy(alpha = .06f))
+    ) {
+        listOf(
+            Triple(R.string.dashboard, Icons.Default.DirectionsCar, 0),
+            Triple(R.string.history, Icons.Default.History, 1),
+            Triple(R.string.alerts, Icons.Default.Notifications, 2),
+            Triple(R.string.more, Icons.Default.MoreHoriz, 3)
+        ).forEach { item ->
+            NavigationBarItem(
+                selected = selectedTab == item.third,
+                onClick = { navigate(item.third) },
+                icon = { Icon(item.second, null, modifier = Modifier.size(if (landscape) 19.dp else 24.dp)) },
+                label = { Text(stringResource(item.first), fontSize = if (landscape) 9.sp else 12.sp, fontWeight = if (selectedTab == item.third) FontWeight.Black else FontWeight.SemiBold) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = TougeCyan,
+                    selectedTextColor = Color.White,
+                    indicatorColor = TougeCyan.copy(alpha = .12f),
+                    unselectedIconColor = TougeMuted,
+                    unselectedTextColor = TougeMuted
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun DriverDashboardHeader(
+    connection: TelemetryConnection,
+    landscape: Boolean,
+    onConnection: () -> Unit,
+    dashboardEditing: Boolean,
+    toggleDashboardEditor: () -> Unit,
+    navigationExpanded: Boolean,
+    showNavigation: () -> Unit,
+    hideNavigation: () -> Unit,
+    navigate: (Int) -> Unit
+) {
+    val controlSize = if (landscape) 30.dp else 34.dp
+    val touchSize = if (landscape) 38.dp else 44.dp
+    Row(
+        Modifier.fillMaxWidth().height(if (landscape) 38.dp else 44.dp).padding(horizontal = if (landscape) 14.dp else 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            Modifier.clickable(onClick = onConnection)
+                .background(Color.Black.copy(alpha = .34f), RoundedCornerShape(18.dp))
+                .border(1.dp, if (connection.state == ConnectionState.Connected) TougeMint.copy(alpha = .3f) else Color.White.copy(alpha = .09f), RoundedCornerShape(18.dp))
+                .padding(horizontal = 10.dp, vertical = if (landscape) 5.dp else 7.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
+            Text(
+                connection.deviceName ?: connection.state.localizedLabel().uppercase(),
+                Modifier.padding(start = 7.dp),
+                fontSize = if (landscape) 9.sp else 10.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+        Spacer(Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 10.dp)) {
+            Box(
+                Modifier.size(touchSize).clickable(onClick = toggleDashboardEditor),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    Modifier.size(controlSize).background(if (dashboardEditing) TougeCyan else Color.Black.copy(alpha = .34f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if (dashboardEditing) Icons.Default.Done else Icons.Default.Edit,
+                        null,
+                        tint = if (dashboardEditing) Color.Black else TougeCyan,
+                        modifier = Modifier.size(if (landscape) 16.dp else 18.dp)
+                    )
+                }
+            }
+            Box(Modifier.size(touchSize), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier.size(controlSize).background(Color.Black.copy(alpha = .34f), CircleShape).clickable(onClick = showNavigation),
+                    contentAlignment = Alignment.Center
+                ) { Icon(Icons.Default.MoreHoriz, stringResource(R.string.more), tint = Color.White, modifier = Modifier.size(if (landscape) 18.dp else 20.dp)) }
+                DropdownMenu(expanded = navigationExpanded, onDismissRequest = hideNavigation) {
+                    listOf(
+                        Triple(R.string.history, Icons.Default.History, 1),
+                        Triple(R.string.alerts, Icons.Default.Notifications, 2),
+                        Triple(R.string.more, Icons.Default.MoreHoriz, 3)
+                    ).forEach { item ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(item.first), fontWeight = FontWeight.SemiBold) },
+                            leadingIcon = { Icon(item.second, null, tint = TougeCyan) },
+                            onClick = { navigate(item.third) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AppHeader(
     connection: TelemetryConnection,
-    onConnection: () -> Unit,
-    camera: () -> Unit,
-    showDashboardEditor: Boolean,
-    dashboardEditing: Boolean,
-    toggleDashboardEditor: () -> Unit
+    onConnection: () -> Unit
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -256,14 +328,6 @@ private fun AppHeader(
             Text("TOUGE DASH", fontSize = 18.sp, fontWeight = FontWeight.Black, letterSpacing = 2.1.sp)
             Text("EMU BLACK  /  DRIVER DISPLAY", color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp, maxLines = 1)
         }
-        if (showDashboardEditor) IconButton(
-            onClick = toggleDashboardEditor,
-            modifier = Modifier.size(38.dp).background(if (dashboardEditing) TougeCyan else Color.White.copy(alpha = .045f), CutCornerShape(8.dp))
-        ) { Icon(if (dashboardEditing) Icons.Default.Done else Icons.Default.Edit, null, tint = if (dashboardEditing) Color.Black else TougeCyan, modifier = Modifier.size(19.dp)) }
-        IconButton(
-            onClick = camera,
-            modifier = Modifier.padding(start = 6.dp).size(38.dp).background(Color.White.copy(alpha = .045f), CutCornerShape(8.dp))
-        ) { Icon(Icons.Default.Videocam, null, tint = TougeMuted, modifier = Modifier.size(20.dp)) }
         Row(Modifier.padding(start = 8.dp).clickable(onClick = onConnection).background(Color.White.copy(alpha = .05f), RoundedCornerShape(22.dp)).border(1.dp, if (connection.state == ConnectionState.Connected) TougeMint.copy(alpha = .32f) else Color.White.copy(alpha = .09f), RoundedCornerShape(22.dp)).padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
             Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 7.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -274,21 +338,13 @@ private fun AppHeader(
 @Composable
 private fun CompactAppHeader(
     connection: TelemetryConnection,
-    onConnection: () -> Unit,
-    camera: () -> Unit,
-    showDashboardEditor: Boolean,
-    dashboardEditing: Boolean,
-    toggleDashboardEditor: () -> Unit
+    onConnection: () -> Unit
 ) {
     Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(28.dp).background(TougeCyan.copy(alpha = .12f), CutCornerShape(7.dp)), contentAlignment = Alignment.Center) { DashboardLogoMark(Modifier.size(18.dp)) }
         Text("TOUGE DASH", Modifier.padding(start = 10.dp), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
         Text("  /  EMU BLACK", color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
-        if (showDashboardEditor) IconButton(onClick = toggleDashboardEditor, modifier = Modifier.size(30.dp).background(if (dashboardEditing) TougeCyan else Color.Transparent, CutCornerShape(6.dp))) {
-            Icon(if (dashboardEditing) Icons.Default.Done else Icons.Default.Edit, null, tint = if (dashboardEditing) Color.Black else TougeCyan, modifier = Modifier.size(16.dp))
-        }
-        IconButton(onClick = camera, modifier = Modifier.size(30.dp)) { Icon(Icons.Default.Videocam, null, tint = TougeMuted, modifier = Modifier.size(17.dp)) }
         Row(Modifier.clickable(onClick = onConnection).background(Color.White.copy(alpha = .05f), RoundedCornerShape(18.dp)).border(1.dp, Color.White.copy(alpha = .09f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
             Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 6.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold)

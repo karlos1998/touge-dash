@@ -1,5 +1,7 @@
 package it.letscode.tougedash.ui
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -124,6 +127,7 @@ fun ConfigurableDashboardScreen(
         pageCount = { templates.size.coerceAtLeast(1) }
     )
     val visibleTemplateId = templates.getOrNull(pagerState.currentPage)?.id ?: template.id
+    var pageIndicatorVisible by remember { mutableStateOf(false) }
 
     LaunchedEffect(template.id, templateIds) {
         val destination = templates.indexOfFirst { it.id == template.id }
@@ -137,6 +141,14 @@ fun ConfigurableDashboardScreen(
             .collectLatest { page ->
                 templates.getOrNull(page)?.let { container.dashboardRepository.select(it.id) }
             }
+    }
+    LaunchedEffect(pagerState.isScrollInProgress) {
+        if (pagerState.isScrollInProgress) {
+            pageIndicatorVisible = true
+        } else if (pageIndicatorVisible) {
+            kotlinx.coroutines.delay(2500)
+            pageIndicatorVisible = false
+        }
     }
     val showPage: (String) -> Unit = { id ->
         val destination = templates.indexOfFirst { it.id == id }
@@ -170,51 +182,60 @@ fun ConfigurableDashboardScreen(
                 Text(appText("Drag cards to arrange", "Przeciągaj karty"), Modifier.padding(start = 10.dp), color = TougeCyan, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
             }
         }
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.weight(1f),
-            userScrollEnabled = !editing,
-            key = { page -> templates.getOrNull(page)?.id ?: page }
-        ) { page ->
-            val pageTemplate = templates.getOrNull(page) ?: template
-            val gridState = rememberLazyGridState()
-            LaunchedEffect(landscape) { gridState.scrollToItem(0) }
-            val widgets = pageTemplate.definition.widgets
-                .filter { (if (landscape) it.landscapeSpan else it.portraitSpan) > 0 }
-                .sortedBy { if (landscape) it.landscapeOrder else it.portraitOrder }
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(12),
-                state = gridState,
-                horizontalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 10.dp),
-                verticalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 12.dp),
-                modifier = Modifier.fillMaxSize().padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 3.dp else 7.dp)
-            ) {
-                items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) { widget ->
-                    EditableDashboardCard(
-                        widget, snapshot, chartPoints, performance, alertRules, landscape, editing,
-                        ecuControlState, container.ecuControls,
-                        edit = { editorTarget = pageTemplate to widget },
-                        remove = { scope.launch { saveWidgets(container, pageTemplate, pageTemplate.definition.widgets.filterNot { it.id == widget.id }) } },
-                        move = { direction -> scope.launch { saveWidgets(container, pageTemplate, moveWidget(pageTemplate.definition.widgets, widget.id, direction, landscape)) } }
-                    )
-                }
-                if (editing) item(span = { GridItemSpan(12) }) {
-                    Button(onClick = { editorTarget = pageTemplate to DashboardWidget(kind = DashboardWidgetKind.VALUE, metrics = listOf(TelemetryMetric.RPM), portraitSpan = 6, landscapeSpan = 4, portraitOrder = pageTemplate.definition.widgets.size) }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, null)
-                        Text(appText(" Add card", " Dodaj kartę"))
+        Box(Modifier.weight(1f)) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = !editing,
+                key = { page -> templates.getOrNull(page)?.id ?: page }
+            ) { page ->
+                val pageTemplate = templates.getOrNull(page) ?: template
+                val gridState = rememberLazyGridState()
+                LaunchedEffect(landscape) { gridState.scrollToItem(0) }
+                val widgets = pageTemplate.definition.widgets
+                    .filter { (if (landscape) it.landscapeSpan else it.portraitSpan) > 0 }
+                    .sortedBy { if (landscape) it.landscapeOrder else it.portraitOrder }
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(12),
+                    state = gridState,
+                    horizontalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (landscape) 8.dp else 12.dp),
+                    modifier = Modifier.fillMaxSize().padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 3.dp else 7.dp)
+                ) {
+                    items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) { widget ->
+                        EditableDashboardCard(
+                            widget, snapshot, chartPoints, performance, alertRules, landscape, editing,
+                            ecuControlState, container.ecuControls,
+                            edit = { editorTarget = pageTemplate to widget },
+                            remove = { scope.launch { saveWidgets(container, pageTemplate, pageTemplate.definition.widgets.filterNot { it.id == widget.id }) } },
+                            move = { direction -> scope.launch { saveWidgets(container, pageTemplate, moveWidget(pageTemplate.definition.widgets, widget.id, direction, landscape)) } }
+                        )
+                    }
+                    if (editing) item(span = { GridItemSpan(12) }) {
+                        Button(onClick = { editorTarget = pageTemplate to DashboardWidget(kind = DashboardWidgetKind.VALUE, metrics = listOf(TelemetryMetric.RPM), portraitSpan = 6, landscapeSpan = 4, portraitOrder = pageTemplate.definition.widgets.size) }, modifier = Modifier.fillMaxWidth()) {
+                            Icon(Icons.Default.Add, null)
+                            Text(appText(" Add card", " Dodaj kartę"))
+                        }
                     }
                 }
             }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = editing || (templates.size > 1 && pageIndicatorVisible),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (landscape) 8.dp else 12.dp),
+                enter = fadeIn(tween(120)),
+                exit = fadeOut(tween(650))
+            ) {
+                DashboardPageDots(
+                    templates = templates,
+                    activeId = visibleTemplateId,
+                    editing = editing,
+                    landscape = landscape,
+                    select = showPage,
+                    addLeading = { scope.launch { container.dashboardRepository.createPage(template, true, newPageName) } },
+                    addTrailing = { scope.launch { container.dashboardRepository.createPage(template, false, newPageName) } }
+                )
+            }
         }
-        DashboardPageDots(
-            templates = templates,
-            activeId = visibleTemplateId,
-            editing = editing,
-            landscape = landscape,
-            select = showPage,
-            addLeading = { scope.launch { container.dashboardRepository.createPage(template, true, newPageName) } },
-            addTrailing = { scope.launch { container.dashboardRepository.createPage(template, false, newPageName) } }
-        )
     }
     editorTarget?.let { (targetTemplate, widget) ->
         WidgetEditor(widget, dismiss = { editorTarget = null }) { saved ->
@@ -260,23 +281,26 @@ private fun DashboardPageDots(
     addTrailing: () -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(bottom = if (landscape) 3.dp else 7.dp),
+        Modifier.wrapContentWidth(),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (editing) PageAddButton(addLeading, appText("Add screen on the left", "Dodaj ekran z lewej"), landscape)
         Row(
-            Modifier.padding(horizontal = 9.dp).background(Color.White.copy(alpha = .075f), RoundedCornerShape(30.dp)).border(1.dp, Color.White.copy(alpha = .08f), RoundedCornerShape(30.dp)).padding(horizontal = if (landscape) 11.dp else 15.dp, vertical = if (landscape) 6.dp else 9.dp),
+            Modifier.padding(horizontal = if (editing) 9.dp else 0.dp)
+                .background(Color.Black.copy(alpha = .58f), RoundedCornerShape(30.dp))
+                .border(1.dp, Color.White.copy(alpha = .12f), RoundedCornerShape(30.dp))
+                .padding(horizontal = if (landscape) 10.dp else 12.dp, vertical = if (landscape) 5.dp else 6.dp),
             horizontalArrangement = Arrangement.spacedBy(if (landscape) 7.dp else 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             templates.forEach { page ->
                 val active = page.id == activeId
                 Box(
-                    Modifier.size(if (landscape) 18.dp else 22.dp).clickable { select(page.id) },
+                    Modifier.size(if (landscape) 16.dp else 18.dp).clickable(enabled = editing) { select(page.id) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(Modifier.size(if (active) (if (landscape) 9.dp else 11.dp) else (if (landscape) 6.dp else 8.dp)).background(if (active) Color.White else Color.White.copy(alpha = .36f), CircleShape))
+                    Box(Modifier.size(if (active) (if (landscape) 8.dp else 9.dp) else (if (landscape) 5.dp else 6.dp)).background(if (active) TougeCyan else Color.White.copy(alpha = .42f), CircleShape))
                 }
             }
         }
