@@ -181,7 +181,7 @@ fun TougeDashApp(
     }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     Scaffold(
-        containerColor = Color.Transparent,
+        containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
         bottomBar = {
             if (tab != 0) AppNavigationBar(tab, landscape) { tab = it }
