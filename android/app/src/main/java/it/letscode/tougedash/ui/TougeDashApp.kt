@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
@@ -54,6 +55,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -229,18 +231,7 @@ fun TougeDashApp(
 
 @Composable
 private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, overlay: Boolean = false, navigate: (Int) -> Unit) {
-    val overlayShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
-    NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (overlay) .98f else .96f),
-        tonalElevation = 0.dp,
-        windowInsets = if (overlay) WindowInsets(0, 0, 0, 0) else NavigationBarDefaults.windowInsets,
-        modifier = if (overlay) {
-            Modifier.fillMaxWidth().height(if (landscape) 58.dp else 72.dp)
-                .border(width = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = .18f), shape = overlayShape)
-        } else {
-            Modifier.border(width = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = .32f))
-        }
-    ) {
+    val navigationItems: @Composable RowScope.() -> Unit = {
         listOf(
             Triple(R.string.dashboard, Icons.Default.DirectionsCar, 0),
             Triple(R.string.history, Icons.Default.History, 1),
@@ -259,6 +250,30 @@ private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, overlay: Bool
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            )
+        }
+    }
+    if (overlay) {
+        NavigationBar(
+            containerColor = Color.Transparent,
+            tonalElevation = 0.dp,
+            windowInsets = WindowInsets(0, 0, 0, 0),
+            modifier = Modifier.fillMaxWidth().height(if (landscape) 58.dp else 72.dp),
+            content = navigationItems
+        )
+    } else {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = .98f),
+            tonalElevation = 2.dp,
+            shadowElevation = 7.dp
+        ) {
+            NavigationBar(
+                containerColor = Color.Transparent,
+                tonalElevation = 0.dp,
+                windowInsets = NavigationBarDefaults.windowInsets,
+                content = navigationItems
             )
         }
     }
