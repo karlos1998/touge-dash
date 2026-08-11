@@ -11,12 +11,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.letscode.tougedash.telemetry.TelemetryService
 import it.letscode.tougedash.telemetry.TelemetryRuntime
 import it.letscode.tougedash.ui.TougeDashApp
 import it.letscode.tougedash.ui.theme.TougeDashTheme
+import it.letscode.tougedash.ui.theme.AppThemePreference
 
 class MainActivity : ComponentActivity() {
     override fun onStart() {
@@ -34,7 +38,8 @@ class MainActivity : ComponentActivity() {
         val container = (application as TougeDashApplication).container
         container.authRepository.handleUri(intent?.data)
         setContent {
-            TougeDashTheme {
+            var appTheme by remember { mutableStateOf(AppThemePreference.read(this)) }
+            TougeDashTheme(appTheme) {
                 val snapshot by container.runtime.snapshot.collectAsStateWithLifecycle()
                 val connection by container.runtime.connection.collectAsStateWithLifecycle()
                 val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -48,6 +53,11 @@ class MainActivity : ComponentActivity() {
                     container = container,
                     snapshot = snapshot,
                     connection = connection,
+                    appTheme = appTheme,
+                    onAppThemeChanged = {
+                        appTheme = it
+                        AppThemePreference.write(this, it)
+                    },
                     requestPermissions = { permissionLauncher.launch(requestedPermissions()) },
                     rescan = { startTelemetry(TelemetryService.ACTION_RESCAN) }
                 )

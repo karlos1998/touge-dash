@@ -19,12 +19,14 @@ import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
@@ -34,7 +36,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import it.letscode.tougedash.model.TelemetryMetric
-import it.letscode.tougedash.ui.theme.TougeBackground
 import it.letscode.tougedash.ui.theme.TougeBlue
 import it.letscode.tougedash.ui.theme.TougeCyan
 
@@ -62,7 +63,8 @@ internal class CutCornerShape(
 
 @Composable
 internal fun DashboardBackdrop(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
-    Box(modifier.fillMaxSize().background(TougeBackground)) {
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < .5f
+    Box(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Canvas(Modifier.fillMaxSize()) {
             drawCircle(
                 brush = Brush.radialGradient(
@@ -92,7 +94,9 @@ internal fun DashboardBackdrop(modifier: Modifier = Modifier, content: @Composab
                 )
             }
             drawRect(
-                brush = Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .38f)))
+                brush = Brush.verticalGradient(
+                    listOf(Color.Transparent, Color.Black.copy(alpha = if (darkTheme) .38f else .035f))
+                )
             )
         }
         content()
@@ -108,11 +112,18 @@ internal fun TougePanelSurface(
     content: @Composable BoxScope.() -> Unit
 ) {
     val shape = CutCornerShape(cut)
-    val edge = if (warning) Color(0xFFFF3B40).copy(alpha = .62f) else Color.White.copy(alpha = .085f)
-    val colors = if (warning) {
-        listOf(Color(0xFF281216), Color(0xFF0A1015))
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < .5f
+    val edge = if (warning) {
+        MaterialTheme.colorScheme.error.copy(alpha = .62f)
     } else {
-        listOf(Color(0xFF0E171D), Color(0xFF080F14))
+        MaterialTheme.colorScheme.outline.copy(alpha = if (darkTheme) .28f else .65f)
+    }
+    val colors = if (warning) {
+        if (darkTheme) listOf(Color(0xFF281216), Color(0xFF0A1015))
+        else listOf(MaterialTheme.colorScheme.error.copy(alpha = .10f), MaterialTheme.colorScheme.surface)
+    } else {
+        if (darkTheme) listOf(Color(0xFF0E171D), Color(0xFF080F14))
+        else listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant)
     }
     Box(
         modifier
@@ -126,7 +137,7 @@ internal fun TougePanelSurface(
                 .offset(x = 16.dp)
                 .width(54.dp)
                 .height(2.dp)
-                .background(if (warning) Color(0xFFFF3B40) else accent.copy(alpha = .82f))
+                .background(if (warning) MaterialTheme.colorScheme.error else accent.copy(alpha = .82f))
         )
     }
 }

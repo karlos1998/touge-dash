@@ -46,6 +46,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
@@ -98,11 +99,7 @@ import it.letscode.tougedash.telemetry.TelemetryRuntime
 import it.letscode.tougedash.telemetry.TelemetryOverlayPreferences
 import it.letscode.tougedash.telemetry.TelemetryService
 import it.letscode.tougedash.ui.theme.TougeBlue
-import it.letscode.tougedash.ui.theme.TougeCyan
-import it.letscode.tougedash.ui.theme.TougeMint
-import it.letscode.tougedash.ui.theme.TougeMuted
-import it.letscode.tougedash.ui.theme.TougeOrange
-import it.letscode.tougedash.ui.theme.TougeRed
+import it.letscode.tougedash.ui.theme.AppTheme
 import it.letscode.tougedash.video.DriveVideoQuality
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -121,6 +118,8 @@ fun TougeDashApp(
     container: AppContainer,
     snapshot: TelemetrySnapshot,
     connection: TelemetryConnection,
+    appTheme: AppTheme,
+    onAppThemeChanged: (AppTheme) -> Unit,
     requestPermissions: () -> Unit,
     rescan: () -> Unit
 ) {
@@ -181,7 +180,7 @@ fun TougeDashApp(
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     Scaffold(
         containerColor = Color.Transparent,
-        contentColor = Color(0xFFF2FAFC),
+        contentColor = MaterialTheme.colorScheme.onBackground,
         bottomBar = {
             if (tab != 0) AppNavigationBar(tab, landscape) { tab = it }
         }
@@ -204,7 +203,7 @@ fun TougeDashApp(
                     0 -> ConfigurableDashboardScreen(container, snapshot, connection.hardwareId, dashboardEditing)
                     1 -> HistoryScreen(container, selectedSessionId, { selectedSessionId = it }, { selectedSessionId = null })
                     2 -> AlertsScreen(container, connection.hardwareId)
-                    else -> MoreScreen(container)
+                    else -> MoreScreen(container, appTheme, onAppThemeChanged)
                 }
             }
             if (tab == 0 && !dashboardEditing) DashboardNavigationOverlay(
@@ -232,14 +231,14 @@ fun TougeDashApp(
 private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, overlay: Boolean = false, navigate: (Int) -> Unit) {
     val overlayShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     NavigationBar(
-        containerColor = if (overlay) Color(0xFA0A1218) else Color(0xF20A1218),
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = if (overlay) .98f else .96f),
         tonalElevation = 0.dp,
         windowInsets = if (overlay) WindowInsets(0, 0, 0, 0) else NavigationBarDefaults.windowInsets,
         modifier = if (overlay) {
             Modifier.fillMaxWidth().height(if (landscape) 58.dp else 72.dp)
-                .border(width = 1.dp, color = TougeCyan.copy(alpha = .18f), shape = overlayShape)
+                .border(width = 1.dp, color = MaterialTheme.colorScheme.primary.copy(alpha = .18f), shape = overlayShape)
         } else {
-            Modifier.border(width = 1.dp, color = Color.White.copy(alpha = .06f))
+            Modifier.border(width = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = .32f))
         }
     ) {
         listOf(
@@ -254,11 +253,11 @@ private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, overlay: Bool
                 icon = { Icon(item.second, null, modifier = Modifier.size(if (landscape) 19.dp else 24.dp)) },
                 label = { Text(stringResource(item.first), fontSize = if (landscape) 9.sp else 12.sp, fontWeight = if (selectedTab == item.third) FontWeight.Black else FontWeight.SemiBold) },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = TougeCyan,
-                    selectedTextColor = Color.White,
-                    indicatorColor = TougeCyan.copy(alpha = .12f),
-                    unselectedIconColor = TougeMuted,
-                    unselectedTextColor = TougeMuted
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                    indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = .12f),
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             )
         }
@@ -297,20 +296,20 @@ private fun DashboardNavigationOverlay(
                     Modifier.padding(bottom = 4.dp)
                         .width(if (landscape) 92.dp else 112.dp)
                         .height(if (landscape) 24.dp else 30.dp)
-                        .background(Color.Black.copy(alpha = .68f), RoundedCornerShape(18.dp))
-                        .border(1.dp, TougeCyan.copy(alpha = .26f), RoundedCornerShape(18.dp))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .92f), RoundedCornerShape(18.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .26f), RoundedCornerShape(18.dp))
                         .clickable(onClick = reveal),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             appText("NAVIGATION", "NAWIGACJA"),
-                            color = Color.White.copy(alpha = .82f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .82f),
                             fontSize = if (landscape) 7.sp else 8.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = .8.sp
                         )
-                        Text("  ↑", color = TougeCyan, fontSize = if (landscape) 11.sp else 13.sp, fontWeight = FontWeight.Black)
+                        Text("  ↑", color = MaterialTheme.colorScheme.primary, fontSize = if (landscape) 11.sp else 13.sp, fontWeight = FontWeight.Black)
                     }
                 }
             }
@@ -323,7 +322,7 @@ private fun DashboardNavigationOverlay(
         ) {
             Column(
                 Modifier.fillMaxWidth()
-                    .background(Color(0xFA0A1218), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = .98f), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                     .pointerInput(Unit) {
                         var drag = 0f
                         detectVerticalDragGestures(
@@ -339,7 +338,7 @@ private fun DashboardNavigationOverlay(
                     Modifier.fillMaxWidth().height(if (landscape) 18.dp else 24.dp).clickable(onClick = hide),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.KeyboardArrowDown, null, tint = TougeCyan.copy(alpha = .72f), modifier = Modifier.size(if (landscape) 16.dp else 19.dp))
+                    Icon(Icons.Default.KeyboardArrowDown, null, tint = MaterialTheme.colorScheme.primary.copy(alpha = .72f), modifier = Modifier.size(if (landscape) 16.dp else 19.dp))
                 }
                 AppNavigationBar(0, landscape, overlay = true, navigate = navigate)
             }
@@ -364,12 +363,12 @@ private fun DriverDashboardHeader(
     ) {
         Row(
             Modifier.clickable(onClick = onConnection)
-                .background(Color.Black.copy(alpha = .34f), RoundedCornerShape(18.dp))
-                .border(1.dp, if (connection.state == ConnectionState.Connected) TougeMint.copy(alpha = .3f) else Color.White.copy(alpha = .09f), RoundedCornerShape(18.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), RoundedCornerShape(18.dp))
+                .border(1.dp, if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary.copy(alpha = .3f) else MaterialTheme.colorScheme.outline.copy(alpha = .45f), RoundedCornerShape(18.dp))
                 .padding(horizontal = 10.dp, vertical = if (landscape) 5.dp else 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
+            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error, CircleShape))
             Text(
                 connection.deviceName ?: connection.state.localizedLabel().uppercase(),
                 Modifier.padding(start = 7.dp),
@@ -385,13 +384,13 @@ private fun DriverDashboardHeader(
                 contentAlignment = Alignment.Center
             ) {
                 Box(
-                    Modifier.size(controlSize).background(if (dashboardEditing) TougeCyan else Color.Black.copy(alpha = .34f), RoundedCornerShape(10.dp)),
+                    Modifier.size(controlSize).background(if (dashboardEditing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), RoundedCornerShape(10.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         if (dashboardEditing) Icons.Default.Done else Icons.Default.Edit,
                         null,
-                        tint = if (dashboardEditing) Color.Black else TougeCyan,
+                        tint = if (dashboardEditing) Color.Black else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(if (landscape) 16.dp else 18.dp)
                     )
                 }
@@ -401,10 +400,10 @@ private fun DriverDashboardHeader(
                 contentAlignment = Alignment.Center
             ) {
                 Box(
-                    Modifier.size(controlSize).background(Color.Black.copy(alpha = .34f), CircleShape),
+                    Modifier.size(controlSize).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.MoreHoriz, stringResource(R.string.more), tint = Color.White, modifier = Modifier.size(if (landscape) 18.dp else 20.dp))
+                    Icon(Icons.Default.MoreHoriz, stringResource(R.string.more), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(if (landscape) 18.dp else 20.dp))
                 }
             }
         }
@@ -418,17 +417,17 @@ private fun AppHeader(
 ) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(44.dp).background(TougeCyan.copy(alpha = .12f), CutCornerShape(9.dp)).border(1.dp, TougeCyan.copy(alpha = .10f), CutCornerShape(9.dp)),
+            Modifier.size(44.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f), CutCornerShape(9.dp)).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .10f), CutCornerShape(9.dp)),
             contentAlignment = Alignment.Center
         ) {
             DashboardLogoMark(Modifier.size(27.dp))
         }
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Text("TOUGE DASH", fontSize = 18.sp, fontWeight = FontWeight.Black, letterSpacing = 2.1.sp)
-            Text("EMU BLACK  /  DRIVER DISPLAY", color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp, maxLines = 1)
+            Text("EMU BLACK  /  DRIVER DISPLAY", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp, maxLines = 1)
         }
-        Row(Modifier.padding(start = 8.dp).clickable(onClick = onConnection).background(Color.White.copy(alpha = .05f), RoundedCornerShape(22.dp)).border(1.dp, if (connection.state == ConnectionState.Connected) TougeMint.copy(alpha = .32f) else Color.White.copy(alpha = .09f), RoundedCornerShape(22.dp)).padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
+        Row(Modifier.padding(start = 8.dp).clickable(onClick = onConnection).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), RoundedCornerShape(22.dp)).border(1.dp, if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary.copy(alpha = .32f) else MaterialTheme.colorScheme.outline.copy(alpha = .45f), RoundedCornerShape(22.dp)).padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error, CircleShape))
             Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 7.dp), fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
@@ -440,12 +439,12 @@ private fun CompactAppHeader(
     onConnection: () -> Unit
 ) {
     Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(28.dp).background(TougeCyan.copy(alpha = .12f), CutCornerShape(7.dp)), contentAlignment = Alignment.Center) { DashboardLogoMark(Modifier.size(18.dp)) }
+        Box(Modifier.size(28.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f), CutCornerShape(7.dp)), contentAlignment = Alignment.Center) { DashboardLogoMark(Modifier.size(18.dp)) }
         Text("TOUGE DASH", Modifier.padding(start = 10.dp), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-        Text("  /  EMU BLACK", color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        Text("  /  EMU BLACK", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
-        Row(Modifier.clickable(onClick = onConnection).background(Color.White.copy(alpha = .05f), RoundedCornerShape(18.dp)).border(1.dp, Color.White.copy(alpha = .09f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) TougeMint else TougeRed, CircleShape))
+        Row(Modifier.clickable(onClick = onConnection).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), RoundedCornerShape(18.dp)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .45f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error, CircleShape))
             Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 6.dp), fontSize = 9.sp, fontWeight = FontWeight.Bold)
         }
     }
@@ -453,6 +452,7 @@ private fun CompactAppHeader(
 
 @Composable
 private fun DashboardLogoMark(modifier: Modifier = Modifier) {
+    val logoColor = MaterialTheme.colorScheme.primary
     Canvas(modifier) {
         val points = listOf(
             Offset(0f, size.height * .55f), Offset(size.width * .22f, size.height * .55f),
@@ -460,7 +460,7 @@ private fun DashboardLogoMark(modifier: Modifier = Modifier) {
             Offset(size.width * .60f, size.height * .35f), Offset(size.width * .72f, size.height * .55f),
             Offset(size.width, size.height * .55f)
         )
-        points.zipWithNext().forEach { (start, end) -> drawLine(TougeCyan, start, end, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round) }
+        points.zipWithNext().forEach { (start, end) -> drawLine(logoColor, start, end, strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round) }
     }
 }
 
@@ -498,11 +498,11 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
         val verticalPadding = if (kind == DashboardWidgetKind.COMPACT && fittedPortrait) 6.dp else if (kind == DashboardWidgetKind.COMPACT) 9.dp else if (compactLandscape || fittedPortrait) 13.dp else 17.dp
         Box(Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = verticalPadding)) {
             when (kind) {
-                DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, fittedPortrait)
-                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, fittedPortrait, warning)
-                DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, if (warning) TougeRed else accent, compactLandscape, fittedPortrait)
+                DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait)
+                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait, warning)
+                DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait)
                 DashboardWidgetKind.PERFORMANCE -> ValueWidget(TelemetryMetric.SPEED, snapshot, accent, false, compactLandscape, fittedPortrait)
-                else -> ValueWidget(widget.metrics.first(), snapshot, if (warning) TougeRed else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape, fittedPortrait)
+                else -> ValueWidget(widget.metrics.first(), snapshot, if (warning) MaterialTheme.colorScheme.error else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape, fittedPortrait)
             }
         }
     }
@@ -516,8 +516,8 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TelemetryGlyph(metric, TougeMuted, Modifier.size(if (dense) 14.dp else 16.dp))
-                Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = if (dense) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.25.sp)
+                TelemetryGlyph(metric, MaterialTheme.colorScheme.onSurfaceVariant, Modifier.size(if (dense) 14.dp else 16.dp))
+                Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = if (dense) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.25.sp)
             }
             StatusTag(stringResource(R.string.live_data).uppercase(), accent, dense)
         }
@@ -530,7 +530,7 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
             val min = widget.gaugeMinimum ?: metric.defaultMin
             val max = widget.gaugeMaximum ?: metric.defaultMax
             val progress = ((value - min) / (max - min)).coerceIn(0.0, 1.0).toFloat()
-            Box(Modifier.fillMaxWidth().height(if (dense) 7.dp else 9.dp).background(Color.White.copy(alpha = .075f), RoundedCornerShape(5.dp))) {
+            Box(Modifier.fillMaxWidth().height(if (dense) 7.dp else 9.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .075f), RoundedCornerShape(5.dp))) {
                 Box(Modifier.fillMaxWidth(progress.coerceAtLeast(.018f)).fillMaxHeight().background(Brush.horizontalGradient(listOf(TougeBlue.copy(alpha = .75f), accent)), RoundedCornerShape(5.dp)))
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -548,9 +548,9 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
 @Composable
 private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
     Column(Modifier.fillMaxWidth(.3f)) {
-        Text(metric.localizedName(), color = TougeMuted.copy(alpha = .8f), fontSize = if (compact) 6.sp else 7.sp, lineHeight = if (compact) 7.sp else 9.sp, fontWeight = FontWeight.Black, letterSpacing = .7.sp)
+        Text(metric.localizedName(), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .8f), fontSize = if (compact) 6.sp else 7.sp, lineHeight = if (compact) 7.sp else 9.sp, fontWeight = FontWeight.Black, letterSpacing = .7.sp)
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(metric.format(metric.value(snapshot)), color = Color.White, fontSize = if (compact) 11.sp else 13.sp, lineHeight = if (compact) 12.sp else 15.sp, fontWeight = FontWeight.Bold)
+            Text(metric.format(metric.value(snapshot)), color = MaterialTheme.colorScheme.onSurface, fontSize = if (compact) 11.sp else 13.sp, lineHeight = if (compact) 12.sp else 15.sp, fontWeight = FontWeight.Bold)
             Text(metric.unit, Modifier.padding(start = 3.dp, bottom = 1.dp), color = accent, fontSize = if (compact) 7.sp else 8.sp, lineHeight = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Bold)
         }
     }
@@ -562,18 +562,18 @@ private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Build, null, tint = TougeMuted, modifier = Modifier.size(if (dense) 14.dp else 16.dp))
-                Text((widget.title?.takeUnless { it.equals("Engine health", ignoreCase = true) } ?: stringResource(R.string.engine_health)).uppercase(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = if (dense) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.35.sp)
+                Icon(Icons.Default.Build, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(if (dense) 14.dp else 16.dp))
+                Text((widget.title?.takeUnless { it.equals("Engine health", ignoreCase = true) } ?: stringResource(R.string.engine_health)).uppercase(), Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = if (dense) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.35.sp)
             }
-            StatusTag(if (warning) appText("CHECK", "SPRAWDŹ") else appText("NOMINAL", "NOMINALNIE"), if (warning) TougeRed else accent, dense)
+            StatusTag(if (warning) appText("CHECK", "SPRAWDŹ") else appText("NOMINAL", "NOMINALNIE"), if (warning) MaterialTheme.colorScheme.error else accent, dense)
         }
         Row(Modifier.fillMaxWidth().weight(1f).padding(top = if (dense) 2.dp else 18.dp), verticalAlignment = Alignment.Bottom) {
             widget.metrics.take(3).forEachIndexed { index, metric ->
-                if (index > 0) Box(Modifier.fillMaxHeight(.78f).width(1.dp).background(Color.White.copy(alpha = .08f)))
+                if (index > 0) Box(Modifier.fillMaxHeight(.78f).width(1.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .08f)))
                 Column(Modifier.weight(1f).padding(horizontal = if (dense) 8.dp else 12.dp), verticalArrangement = Arrangement.Bottom) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TelemetryGlyph(metric, metricAccent(metric, accent), Modifier.size(if (dense) 10.dp else 15.dp))
-                        Text(metric.localizedName(), Modifier.padding(start = 5.dp), color = TougeMuted, fontSize = if (dense) 6.sp else 8.sp, fontWeight = FontWeight.Black, letterSpacing = .55.sp, maxLines = 1)
+                        Text(metric.localizedName(), Modifier.padding(start = 5.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = if (dense) 6.sp else 8.sp, fontWeight = FontWeight.Black, letterSpacing = .55.sp, maxLines = 1)
                     }
                     Row(verticalAlignment = Alignment.Bottom) {
                         val valueSize = if (compact) 21.sp else if (fittedPortrait) 25.sp else 37.sp
@@ -594,7 +594,7 @@ private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, ac
         verticalArrangement = if (compact) Arrangement.spacedBy(2.dp, Alignment.CenterVertically) else Arrangement.SpaceBetween
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(metric.localizedName(), color = TougeMuted, fontSize = if (compact && fittedPortrait) 8.sp else if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, maxLines = 1)
+            Text(metric.localizedName(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = if (compact && fittedPortrait) 8.sp else if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp, maxLines = 1)
             TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else if (fittedPortrait) 18.dp else 22.dp))
         }
         if (compact) {
@@ -614,7 +614,7 @@ private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, ac
                         Text(metric.unit, Modifier.padding(start = 5.dp, bottom = 5.dp), color = accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
                     }
                 }
-                Text(valueSubtitle(metric, snapshot), color = TougeMuted, fontSize = if (compactLandscape || fittedPortrait) 9.sp else 12.sp, fontWeight = FontWeight.Bold)
+                Text(valueSubtitle(metric, snapshot), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = if (compactLandscape || fittedPortrait) 9.sp else 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -626,14 +626,15 @@ private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
     val min = widget.gaugeMinimum ?: metric.defaultMin
     val max = widget.gaugeMaximum ?: metric.defaultMax
     val progress = ((metric.value(snapshot) - min) / (max - min)).coerceIn(0.0, 1.0).toFloat()
+    val gaugeTrack = MaterialTheme.colorScheme.onSurface.copy(alpha = .07f)
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), color = TougeMuted, fontSize = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+            Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
             TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else 20.dp))
         }
         Box(Modifier.fillMaxSize().padding(top = if (compact) 7.dp else 14.dp), contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxHeight(.88f).aspectRatio(1f)) {
-                drawArc(Color.White.copy(alpha = .07f), 150f, 240f, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
+                drawArc(gaugeTrack, 150f, 240f, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
                 drawArc(Brush.sweepGradient(listOf(TougeBlue, accent)), 150f, 240f * progress, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -657,7 +658,7 @@ private fun StatusTag(title: String, tint: Color, compact: Boolean) {
 
 @Composable
 private fun ScaleText(value: String) {
-    Text(value, color = TougeMuted.copy(alpha = .58f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+    Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .58f), fontSize = 7.sp, fontWeight = FontWeight.Bold)
 }
 
 private fun TelemetryMetric.isWarning(snapshot: TelemetrySnapshot, rules: VehicleAlertRules): Boolean = when (this) {
@@ -671,8 +672,9 @@ private fun TelemetryMetric.isWarning(snapshot: TelemetrySnapshot, rules: Vehicl
     else -> false
 }
 
+@Composable
 private fun metricAccent(metric: TelemetryMetric, fallback: Color): Color = when (metric) {
-    TelemetryMetric.OIL_TEMPERATURE -> TougeOrange
+    TelemetryMetric.OIL_TEMPERATURE -> MaterialTheme.colorScheme.tertiary
     TelemetryMetric.COOLANT -> TougeBlue
     else -> fallback
 }
@@ -687,14 +689,14 @@ private fun valueSubtitle(metric: TelemetryMetric, snapshot: TelemetrySnapshot):
 @Composable
 private fun PlaceholderScreen(title: String, body: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(icon, null, Modifier.size(52.dp), tint = TougeCyan)
+        Icon(icon, null, Modifier.size(52.dp), tint = MaterialTheme.colorScheme.primary)
         Text(title, fontSize = 30.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(top = 16.dp))
-        Text(body, color = TougeMuted, modifier = Modifier.padding(top = 8.dp))
+        Text(body, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
     }
 }
 
 @Composable
-private fun MoreScreen(container: AppContainer) {
+private fun MoreScreen(container: AppContainer, appTheme: AppTheme, onAppThemeChanged: (AppTheme) -> Unit) {
     val context = LocalContext.current
     val vehicles by container.dao.vehicles().collectAsState(initial = emptyList())
     var rename by remember { mutableStateOf<VehicleEntity?>(null) }
@@ -746,11 +748,42 @@ private fun MoreScreen(container: AppContainer) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Column(Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.more), fontSize = 30.sp, fontWeight = FontWeight.Black)
-            TougePanelSurface(TougeCyan, Modifier.fillMaxWidth().padding(top = 14.dp)) {
+            TougePanelSurface(TougeBlue, Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column {
+                        Text(appText("Application theme", "Motyw aplikacji"), fontWeight = FontWeight.Bold)
+                        Text(
+                            appText("Uses the device setting by default", "Domyślnie zgodny z ustawieniem urządzenia"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        AppTheme.entries.forEach { option ->
+                            FilterChip(
+                                selected = appTheme == option,
+                                onClick = { onAppThemeChanged(option) },
+                                label = {
+                                    Text(
+                                        when (option) {
+                                            AppTheme.SYSTEM -> appText("System", "Systemowy")
+                                            AppTheme.LIGHT -> appText("Light", "Jasny")
+                                            AppTheme.DARK -> appText("Dark", "Ciemny")
+                                        },
+                                        maxLines = 1
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+            TougePanelSurface(MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth().padding(top = 14.dp)) {
                 Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(appText("Record route", "Zapisuj trasę"), fontWeight = FontWeight.Bold)
-                        Text(appText("Optional GPS track stored with drive history", "Opcjonalny ślad GPS zapisany z historią przejazdu"), color = TougeMuted, fontSize = 11.sp)
+                        Text(appText("Optional GPS track stored with drive history", "Opcjonalny ślad GPS zapisany z historią przejazdu"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                     }
                     Switch(routeEnabled, { enabled ->
                         if (enabled) locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -758,14 +791,14 @@ private fun MoreScreen(container: AppContainer) {
                     })
                 }
             }
-            TougePanelSurface(TougeCyan, Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            TougePanelSurface(MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth().padding(top = 10.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(stringResource(R.string.telemetry_hud), fontWeight = FontWeight.Bold)
                             Text(
                                 stringResource(R.string.telemetry_hud_description),
-                                color = TougeMuted,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp
                             )
                         }
@@ -797,18 +830,18 @@ private fun MoreScreen(container: AppContainer) {
                     if (!Settings.canDrawOverlays(context)) {
                         Text(
                             stringResource(R.string.telemetry_hud_permission),
-                            color = TougeOrange,
+                            color = MaterialTheme.colorScheme.tertiary,
                             fontSize = 10.sp
                         )
                     }
                 }
             }
-            TougePanelSurface(TougeOrange, Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            TougePanelSurface(MaterialTheme.colorScheme.tertiary, Modifier.fillMaxWidth().padding(top = 10.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(appText("Automatic drive recording", "Automatyczne nagrywanie przejazdu"), fontWeight = FontWeight.Bold)
-                            Text(appText("Starts the phone camera together with telemetry", "Uruchamia kamerę telefonu razem z telemetrią"), color = TougeMuted, fontSize = 11.sp)
+                            Text(appText("Starts the phone camera together with telemetry", "Uruchamia kamerę telefonu razem z telemetrią"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                         }
                         Switch(videoSettings.automaticRecording, { enabled ->
                             if (!enabled) container.videoRecordingSettings.update(videoSettings.copy(automaticRecording = false))
@@ -817,7 +850,7 @@ private fun MoreScreen(container: AppContainer) {
                         })
                     }
                     if (videoSettings.automaticRecording) {
-                        Text(appText("QUALITY", "JAKOŚĆ"), color = TougeOrange, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        Text(appText("QUALITY", "JAKOŚĆ"), color = MaterialTheme.colorScheme.tertiary, fontSize = 9.sp, fontWeight = FontWeight.Black)
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             DriveVideoQuality.entries.forEach { quality ->
                                 FilterChip(
@@ -839,25 +872,25 @@ private fun MoreScreen(container: AppContainer) {
                 }
             }
             if (vehicles.isNotEmpty()) {
-                Text(appText("GARAGE", "GARAŻ"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
+                Text(appText("GARAGE", "GARAŻ"), color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
                 vehicles.forEach { vehicle ->
                     TougePanelSurface(
-                        TougeMint,
+                        MaterialTheme.colorScheme.secondary,
                         Modifier.fillMaxWidth().padding(top = 7.dp).clickable { rename = vehicle }
                     ) {
                         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.DirectionsCar, null, tint = TougeMint)
+                            Icon(Icons.Default.DirectionsCar, null, tint = MaterialTheme.colorScheme.secondary)
                             Column(Modifier.padding(start = 12.dp).weight(1f)) {
                                 Text(vehicle.displayName, fontWeight = FontWeight.Black)
-                                Text(vehicle.localHardwareId, color = TougeMuted, fontSize = 10.sp, maxLines = 1)
+                                Text(vehicle.localHardwareId, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, maxLines = 1)
                             }
-                            Icon(Icons.Default.Edit, null, tint = TougeCyan)
+                            Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
             }
             CloudAccountCard(container)
-            if (BuildConfig.DEBUG) Text("DEV API • ${BuildConfig.API_BASE_URL}", color = TougeMuted, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
+            if (BuildConfig.DEBUG) Text("DEV API • ${BuildConfig.API_BASE_URL}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
         }
         Column(
             Modifier.fillMaxWidth().clickable { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://letscode.it"))) }.padding(vertical = 18.dp),
@@ -865,11 +898,11 @@ private fun MoreScreen(container: AppContainer) {
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.made_by), color = TougeMuted)
-                Text("  ♥  ", color = TougeRed)
-                Text(stringResource(R.string.by_lets_code_it), color = TougeCyan)
+                Text(stringResource(R.string.made_by), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("  ♥  ", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.by_lets_code_it), color = MaterialTheme.colorScheme.primary)
             }
-            Text("v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", color = TougeMuted, fontSize = 9.sp)
+            Text("v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp)
         }
     }
     rename?.let { vehicle -> VehicleNameDialog(container, vehicle) { rename = null } }
@@ -900,7 +933,7 @@ private fun VehicleNameDialog(container: AppContainer, vehicle: VehicleEntity, d
         title = { Text(appText("Name this car", "Nazwij to auto")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(appText("Touge Dash recognizes each car by its Bluetooth interface. You can change this name at any time.", "Touge Dash rozpoznaje każde auto po interfejsie Bluetooth. Nazwę możesz zmienić w dowolnym momencie."), color = TougeMuted)
+                Text(appText("Touge Dash recognizes each car by its Bluetooth interface. You can change this name at any time.", "Touge Dash rozpoznaje każde auto po interfejsie Bluetooth. Nazwę możesz zmienić w dowolnym momencie."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(value, { value = it.take(120) }, label = { Text(appText("Vehicle name", "Nazwa auta")) }, singleLine = true)
             }
         },
@@ -923,23 +956,23 @@ private fun ConnectionDialog(connection: TelemetryConnection, close: () -> Unit,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(connection.deviceName ?: connection.state.localizedLabel(), fontWeight = FontWeight.Bold)
-                connection.hardwareId?.let { Text(it, color = TougeMuted, fontSize = 12.sp) }
+                connection.hardwareId?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
                 connection.message?.let { Text(it) }
-                Text("${appText("Frames", "Ramki")} ${connection.validFrames} • ${appText("checksum", "błędne sumy")} ${connection.badChecksums} • ${appText("dropped", "pominięte bajty")} ${connection.droppedBytes}", color = TougeMuted, fontSize = 12.sp)
+                Text("${appText("Frames", "Ramki")} ${connection.validFrames} • ${appText("checksum", "błędne sumy")} ${connection.badChecksums} • ${appText("dropped", "pominięte bajty")} ${connection.droppedBytes}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 Text(
                     "RX ${connection.receivedPackets} ${appText("packets", "pakietów")} • ${connection.receivedBytes} B",
-                    color = TougeMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 12.sp
                 )
                 connection.lastPacketHex?.let {
-                    Text("LAST RX  $it", color = TougeCyan, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                    Text("LAST RX  $it", color = MaterialTheme.colorScheme.primary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
                 }
                 if (diagnostics.isNotEmpty()) {
-                    Text(appText("DIAGNOSTICS", "DIAGNOSTYKA"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    Text(appText("DIAGNOSTICS", "DIAGNOSTYKA"), color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Black)
                     Text(
                         diagnostics.take(10).reversed().joinToString("\n") { it.substringAfter(": ") },
-                        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = .22f), RoundedCornerShape(7.dp)).padding(9.dp),
-                        color = TougeMuted,
+                        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.onSurface.copy(alpha = .055f), RoundedCornerShape(7.dp)).padding(9.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 9.sp,
                         lineHeight = 12.sp,
                         fontFamily = FontFamily.Monospace
@@ -957,14 +990,15 @@ private fun ConnectionDialog(connection: TelemetryConnection, close: () -> Unit,
     )
 }
 
+@Composable
 internal fun DashboardAccent.color(): Color = when (this) {
-    DashboardAccent.CYAN -> TougeCyan
-    DashboardAccent.MINT -> TougeMint
+    DashboardAccent.CYAN -> MaterialTheme.colorScheme.primary
+    DashboardAccent.MINT -> MaterialTheme.colorScheme.secondary
     DashboardAccent.BLUE, DashboardAccent.ICE -> TougeBlue
-    DashboardAccent.ORANGE -> TougeOrange
+    DashboardAccent.ORANGE -> MaterialTheme.colorScheme.tertiary
     DashboardAccent.YELLOW -> Color(0xFFFFC83D)
-    DashboardAccent.RED -> TougeRed
-    DashboardAccent.WHITE -> Color.White
+    DashboardAccent.RED -> MaterialTheme.colorScheme.error
+    DashboardAccent.WHITE -> MaterialTheme.colorScheme.onBackground
 }
 
 @Composable

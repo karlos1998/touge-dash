@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +47,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import it.letscode.tougedash.di.AppContainer
 import it.letscode.tougedash.ui.theme.TougeCyan
-import it.letscode.tougedash.ui.theme.TougeMuted
 import it.letscode.tougedash.ui.theme.TougeRed
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch

@@ -40,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -64,12 +65,6 @@ import androidx.compose.ui.unit.sp
 import it.letscode.tougedash.BuildConfig
 import it.letscode.tougedash.data.local.SyncState
 import it.letscode.tougedash.di.AppContainer
-import it.letscode.tougedash.ui.theme.TougeCyan
-import it.letscode.tougedash.ui.theme.TougeMint
-import it.letscode.tougedash.ui.theme.TougeMuted
-import it.letscode.tougedash.ui.theme.TougeOrange
-import it.letscode.tougedash.ui.theme.TougePanelLight
-import it.letscode.tougedash.ui.theme.TougeRed
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
@@ -88,7 +83,7 @@ fun CloudAccountCard(container: AppContainer) {
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
 
-    TougePanelSurface(TougeCyan, Modifier.fillMaxWidth().padding(top = 14.dp)) {
+    TougePanelSurface(MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth().padding(top = 14.dp)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             AccountHeading(signedIn = account != null)
 
@@ -96,15 +91,15 @@ fun CloudAccountCard(container: AppContainer) {
                 val current = requireNotNull(account)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
-                        Modifier.size(46.dp).background(TougeCyan.copy(alpha = .12f), CutCornerShape(10.dp)),
+                        Modifier.size(46.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f), CutCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.AccountCircle, null, tint = TougeCyan, modifier = Modifier.size(27.dp))
+                        Icon(Icons.Default.AccountCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(27.dp))
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {
                         Text(current.account.displayName, fontSize = 21.sp, fontWeight = FontWeight.Black)
-                        Text(current.account.email, color = TougeMuted, fontSize = 12.sp)
+                        Text(current.account.email, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -131,22 +126,22 @@ fun CloudAccountCard(container: AppContainer) {
                 val sentBytes = uploading.sumOf { it.syncBytesSent }
                 val totalBytes = uploading.sumOf { it.syncBytesTotal }
                 Column(
-                    Modifier.fillMaxWidth().background(Color.White.copy(alpha = .035f), CutCornerShape(8.dp)).padding(11.dp),
+                    Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.onSurface.copy(alpha = .035f), CutCornerShape(8.dp)).padding(11.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (totalBytes > 0) {
                         LinearProgressIndicator(progress = { (sentBytes.toFloat() / totalBytes).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
-                        Text("${cloudBytes(sentBytes)} / ${cloudBytes(totalBytes)} · $pendingSamples ${appText("samples", "próbek")}", color = TougeMuted, fontSize = 10.sp)
+                        Text("${cloudBytes(sentBytes)} / ${cloudBytes(totalBytes)} · $pendingSamples ${appText("samples", "próbek")}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                     } else if (pendingSessions + pendingIncidents + pendingAnnotations > 0) {
                         Text(
                             "$pendingSessions ${appText("drives", "przejazdów")} · $pendingIncidents ${appText("incidents", "incydentów")} · $pendingAnnotations ${appText("notes", "notatek")} · $pendingSamples ${appText("samples", "próbek")}",
-                            color = TougeOrange,
+                            color = MaterialTheme.colorScheme.tertiary,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Black
                         )
-                        Text(appText("Waiting for upload. Synchronization resumes automatically when the network returns.", "Czekają na wysłanie. Synchronizacja wznowi się automatycznie po powrocie sieci."), color = TougeMuted, fontSize = 10.sp)
+                        Text(appText("Waiting for upload. Synchronization resumes automatically when the network returns.", "Czekają na wysłanie. Synchronizacja wznowi się automatycznie po powrocie sieci."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                     } else {
-                        Text(appText("Cloud data is up to date", "Dane w chmurze są aktualne"), color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                        Text(appText("Cloud data is up to date", "Dane w chmurze są aktualne"), color = MaterialTheme.colorScheme.secondary, fontSize = 10.sp, fontWeight = FontWeight.Black)
                     }
                 }
                 OutlinedButton(
@@ -158,8 +153,8 @@ fun CloudAccountCard(container: AppContainer) {
                     Text(appText(" Profile, vehicles and sharing", " Profil, auta i udostępnianie"), fontWeight = FontWeight.Bold)
                 }
                 TextButton(onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.DeleteForever, null, tint = TougeRed)
-                    Text(appText(" Delete cloud account", " Usuń konto w chmurze"), color = TougeRed)
+                    Icon(Icons.Default.DeleteForever, null, tint = MaterialTheme.colorScheme.error)
+                    Text(appText(" Delete cloud account", " Usuń konto w chmurze"), color = MaterialTheme.colorScheme.error)
                 }
             } else {
                 SignedOutForm(container, working)
@@ -168,15 +163,15 @@ fun CloudAccountCard(container: AppContainer) {
             error?.let {
                 Text(
                     it,
-                    color = TougeRed,
+                    color = MaterialTheme.colorScheme.error,
                     fontSize = 12.sp,
-                    modifier = Modifier.fillMaxWidth().background(TougeRed.copy(alpha = .07f), CutCornerShape(7.dp)).padding(11.dp)
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.error.copy(alpha = .07f), CutCornerShape(7.dp)).padding(11.dp)
                 )
             }
             TextButton(
                 onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(BuildConfig.WEB_BASE_URL + "/privacy"))) },
                 modifier = Modifier.fillMaxWidth()
-            ) { Text(appText("Privacy policy", "Polityka prywatności"), color = TougeCyan) }
+            ) { Text(appText("Privacy policy", "Polityka prywatności"), color = MaterialTheme.colorScheme.primary) }
         }
     }
 
@@ -201,7 +196,7 @@ private fun AccountHeading(signedIn: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(
             appText("ONLINE GARAGE", "GARAŻ ONLINE"),
-            color = TougeCyan,
+            color = MaterialTheme.colorScheme.primary,
             fontSize = 10.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 1.8.sp
@@ -216,7 +211,7 @@ private fun AccountHeading(signedIn: Boolean) {
                 if (signedIn) "Drive synchronization is active." else "Keep drives, vehicles and dashboards synchronized.",
                 if (signedIn) "Synchronizacja przejazdów jest aktywna." else "Synchronizuj przejazdy, auta i dashboardy."
             ),
-            color = TougeMuted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 12.sp
         )
     }
@@ -242,7 +237,7 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
-            Modifier.fillMaxWidth().background(Color.White.copy(alpha = .035f), CutCornerShape(10.dp)).border(1.dp, Color.White.copy(alpha = .07f), CutCornerShape(10.dp)).padding(4.dp),
+            Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.onSurface.copy(alpha = .035f), CutCornerShape(10.dp)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .5f), CutCornerShape(10.dp)).padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             ModeButton(appText("Sign in", "Logowanie"), selected = !register, Modifier.weight(1f)) { register = false }
@@ -292,7 +287,7 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
             shape = CutCornerShape(9.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = TougeCyan, contentColor = Color.Black)
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
         ) {
             Text(
                 if (working) appText("PLEASE WAIT…", "CHWILA…") else if (register) appText("CREATE ACCOUNT", "UTWÓRZ KONTO") else appText("SIGN IN", "ZALOGUJ SIĘ"),
@@ -302,9 +297,9 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            HorizontalDivider(Modifier.weight(1f), color = Color.White.copy(alpha = .08f))
-            Text(appText("  OR  ", "  LUB  "), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            HorizontalDivider(Modifier.weight(1f), color = Color.White.copy(alpha = .08f))
+            HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.outline.copy(alpha = .55f))
+            Text(appText("  OR  ", "  LUB  "), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            HorizontalDivider(Modifier.weight(1f), color = MaterialTheme.colorScheme.outline.copy(alpha = .55f))
         }
 
         Button(
@@ -353,7 +348,7 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
                 "When offline, drives stay on this phone and synchronize after connectivity returns.",
                 "Bez internetu przejazdy zostają w telefonie i zsynchronizują się po odzyskaniu połączenia."
             ),
-            color = TougeMuted,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 11.sp
         )
     }
@@ -371,12 +366,12 @@ private fun openGoogleWebFallback(context: android.content.Context) {
 private fun ModeButton(title: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier
-            .background(if (selected) Color.White.copy(alpha = .09f) else Color.Transparent, CutCornerShape(7.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .12f) else Color.Transparent, CutCornerShape(7.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(title, color = if (selected) Color.White else TougeMuted, fontSize = 12.sp, fontWeight = FontWeight.Black)
+        Text(title, color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -404,12 +399,12 @@ private fun CloudField(
         modifier = Modifier.fillMaxWidth(),
         shape = CutCornerShape(9.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = TougeCyan,
-            unfocusedBorderColor = Color.White.copy(alpha = .09f),
-            focusedContainerColor = TougePanelLight.copy(alpha = .58f),
-            unfocusedContainerColor = TougePanelLight.copy(alpha = .38f),
-            focusedLeadingIconColor = TougeCyan,
-            unfocusedLeadingIconColor = TougeMuted
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = .65f),
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .58f),
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .38f),
+            focusedLeadingIconColor = MaterialTheme.colorScheme.primary,
+            unfocusedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     )
 }
@@ -419,14 +414,14 @@ private fun PasswordStrength(password: String) {
     val strength = passwordStrength(password)
     val valid = password.length in 10..72 && password.any(Char::isLetter) && password.any(Char::isDigit)
     Column(
-        Modifier.fillMaxWidth().background(Color.White.copy(alpha = .03f), CutCornerShape(8.dp)).padding(11.dp),
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.onSurface.copy(alpha = .03f), CutCornerShape(8.dp)).padding(11.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(appText("PASSWORD STRENGTH", "SIŁA HASŁA"), color = TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+            Text(appText("PASSWORD STRENGTH", "SIŁA HASŁA"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
             Text(
                 if (strength < .35f) appText("WEAK", "SŁABE") else if (strength < .7f) appText("GOOD", "DOBRE") else appText("STRONG", "SILNE"),
-                color = if (valid) TougeMint else TougeMuted,
+                color = if (valid) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 9.sp,
                 fontWeight = FontWeight.Black
             )
@@ -434,12 +429,12 @@ private fun PasswordStrength(password: String) {
         LinearProgressIndicator(
             progress = { strength },
             modifier = Modifier.fillMaxWidth().height(4.dp),
-            color = if (valid) TougeMint else TougeRed,
-            trackColor = Color.White.copy(alpha = .07f)
+            color = if (valid) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error,
+            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .07f)
         )
         Text(
             appText("10–72 characters · at least one letter · at least one number", "10–72 znaki · minimum jedna litera · minimum jedna cyfra"),
-            color = if (valid) TougeMint else TougeMuted,
+            color = if (valid) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 10.sp
         )
     }

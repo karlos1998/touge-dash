@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -32,9 +33,6 @@ import it.letscode.tougedash.telemetry.EcuControlError
 import it.letscode.tougedash.telemetry.EcuControlKind
 import it.letscode.tougedash.telemetry.EcuControlSnapshot
 import it.letscode.tougedash.telemetry.EcuControlState
-import it.letscode.tougedash.ui.theme.TougeMint
-import it.letscode.tougedash.ui.theme.TougeMuted
-import it.letscode.tougedash.ui.theme.TougeRed
 
 @Composable
 internal fun EcuSwitchCard(
@@ -57,10 +55,10 @@ internal fun EcuSwitchCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text((widget.title?.takeIf { it.isNotBlank() } ?: "BT SWITCH $channel").uppercase(), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, maxLines = 1)
+                Text((widget.title?.takeIf { it.isNotBlank() } ?: "BT SWITCH $channel").uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, maxLines = 1)
                 Text(
                     when (value) { true -> appText("ON", "WŁĄCZONY"); false -> appText("OFF", "WYŁĄCZONY"); null -> "—" },
-                    color = if (value == true) accent else Color.White,
+                    color = if (value == true) accent else MaterialTheme.colorScheme.onSurface,
                     fontSize = if (landscape) 25.sp else 34.sp,
                     fontWeight = FontWeight.Black
                 )
@@ -68,10 +66,10 @@ internal fun EcuSwitchCard(
             }
             Box(
                 Modifier.size(width = 64.dp, height = 36.dp)
-                    .background(if (value == true) accent.copy(alpha = .3f) else Color.White.copy(alpha = .08f), RoundedCornerShape(20.dp)),
+                    .background(if (value == true) accent.copy(alpha = .3f) else MaterialTheme.colorScheme.onSurface.copy(alpha = .08f), RoundedCornerShape(20.dp)),
                 contentAlignment = if (value == true) Alignment.CenterEnd else Alignment.CenterStart
             ) {
-                Box(Modifier.padding(4.dp).size(28.dp).background(if (value == true) accent else TougeMuted, CircleShape))
+                Box(Modifier.padding(4.dp).size(28.dp).background(if (value == true) accent else MaterialTheme.colorScheme.onSurfaceVariant, CircleShape))
             }
         }
     }
@@ -100,11 +98,11 @@ internal fun EcuRotaryCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text((widget.title?.takeIf { it.isNotBlank() } ?: "BT ROTARY $channel").uppercase(), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, maxLines = 1)
+                    Text((widget.title?.takeIf { it.isNotBlank() } ?: "BT ROTARY $channel").uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, maxLines = 1)
                     Text(value?.toString() ?: "—", color = accent, fontSize = if (landscape) 28.sp else 39.sp, fontWeight = FontWeight.Black)
                     Text(ecuControlStatus(state, pending), color = ecuControlStatusColor(state, pending), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = .55.sp, maxLines = 1)
                 }
-                Text("↕", color = if (state.ready) accent else TougeMuted, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                Text("↕", color = if (state.ready) accent else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 28.sp, fontWeight = FontWeight.Black)
             }
             DropdownMenu(menu, { menu = false }, modifier = Modifier.align(Alignment.TopEnd)) {
                 EcuControlSnapshot.ROTARY_RANGE.forEach { option ->
@@ -135,9 +133,10 @@ private fun ecuControlStatus(state: EcuControlState, pending: Boolean): String =
     else -> appText("CONFIRMED BY EMU", "POTWIERDZONE PRZEZ EMU")
 }
 
+@Composable
 private fun ecuControlStatusColor(state: EcuControlState, pending: Boolean): Color = when {
-    state.error != null -> TougeRed
-    pending -> Color(0xFFFF9D3D)
-    state.ready -> TougeMint
-    else -> TougeMuted
+    state.error != null -> MaterialTheme.colorScheme.error
+    pending -> MaterialTheme.colorScheme.tertiary
+    state.ready -> MaterialTheme.colorScheme.secondary
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }

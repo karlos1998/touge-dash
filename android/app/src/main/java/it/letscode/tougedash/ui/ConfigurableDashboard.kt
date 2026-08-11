@@ -51,6 +51,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -90,10 +91,6 @@ import it.letscode.tougedash.telemetry.EcuControlSnapshot
 import it.letscode.tougedash.telemetry.EcuControlState
 import it.letscode.tougedash.performance.AccelerationRuntimeState
 import it.letscode.tougedash.performance.AccelerationType
-import it.letscode.tougedash.ui.theme.TougeCyan
-import it.letscode.tougedash.ui.theme.TougeMint
-import it.letscode.tougedash.ui.theme.TougeRed
-import it.letscode.tougedash.ui.theme.TougeMuted
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -166,28 +163,28 @@ fun ConfigurableDashboardScreen(
     Column(Modifier.fillMaxSize()) {
         if (editing) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 3.dp else 8.dp).background(TougeCyan.copy(alpha = .065f), CutCornerShape(10.dp)).border(1.dp, TougeCyan.copy(alpha = .32f), CutCornerShape(10.dp)).padding(horizontal = 11.dp, vertical = if (landscape) 6.dp else 9.dp),
+                Modifier.fillMaxWidth().padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 3.dp else 8.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .065f), CutCornerShape(10.dp)).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .32f), CutCornerShape(10.dp)).padding(horizontal = 11.dp, vertical = if (landscape) 6.dp else 9.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    Modifier.weight(1f).clickable { templateMenu = true }.background(Color.White.copy(alpha = .055f), CutCornerShape(7.dp)).border(1.dp, Color.White.copy(alpha = .09f), CutCornerShape(7.dp)).padding(horizontal = 10.dp, vertical = if (landscape) 5.dp else 8.dp)
+                    Modifier.weight(1f).clickable { templateMenu = true }.background(MaterialTheme.colorScheme.onSurface.copy(alpha = .055f), CutCornerShape(7.dp)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .55f), CutCornerShape(7.dp)).padding(horizontal = 10.dp, vertical = if (landscape) 5.dp else 8.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.DashboardCustomize, null, tint = TougeCyan, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.DashboardCustomize, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                         Column(Modifier.padding(start = 8.dp).weight(1f)) {
                             Text(template.localizedName(), fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
-                            if (!landscape) Text(if (authSession == null) appText("ON THIS DEVICE", "NA TYM URZĄDZENIU") else appText("CLOUD SYNC", "SYNCHRONIZACJA ONLINE"), color = if (authSession == null) TougeMuted else TougeMint, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                            if (!landscape) Text(if (authSession == null) appText("ON THIS DEVICE", "NA TYM URZĄDZENIU") else appText("CLOUD SYNC", "SYNCHRONIZACJA ONLINE"), color = if (authSession == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.secondary, fontSize = 7.sp, fontWeight = FontWeight.Black)
                         }
-                        Text("⌄", color = TougeMuted, fontWeight = FontWeight.Black)
+                        Text("⌄", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Black)
                     }
                 }
                 DropdownMenu(expanded = templateMenu, onDismissRequest = { templateMenu = false }) {
                     templates.forEach { item -> DropdownMenuItem(text = { Text(item.localizedName()) }, onClick = { templateMenu = false; showPage(item.id) }) }
                     DropdownMenuItem(text = { Text(appText("Rename screen", "Zmień nazwę ekranu")) }, leadingIcon = { Icon(Icons.Default.DriveFileRenameOutline, null) }, onClick = { templateMenu = false; renameTemplate = template })
-                    DropdownMenuItem(text = { Text(appText("Delete screen", "Usuń ekran"), color = TougeRed) }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = TougeRed) }, enabled = templates.size > 1, onClick = { templateMenu = false; deleteTemplate = template })
+                    DropdownMenuItem(text = { Text(appText("Delete screen", "Usuń ekran"), color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }, enabled = templates.size > 1, onClick = { templateMenu = false; deleteTemplate = template })
                     DropdownMenuItem(text = { Text(appText("Restore factory screen", "Przywróć ekran fabryczny")) }, leadingIcon = { Icon(Icons.Default.Restore, null) }, onClick = { templateMenu = false; restoreFactory = true })
                 }
-                Text(appText("Select a card", "Wybierz kartę"), Modifier.padding(start = 10.dp), color = TougeCyan, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                Text(appText("Select a card", "Wybierz kartę"), Modifier.padding(start = 10.dp), color = MaterialTheme.colorScheme.primary, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
             }
             if (selectedTemplate != null && selectedCard != null) DashboardCardEditToolbar(
                 widget = selectedCard,
@@ -289,7 +286,7 @@ fun ConfigurableDashboardScreen(
         AlertDialog(
             onDismissRequest = { deleteTemplate = null },
             title = { Text(appText("Delete this screen?", "Usunąć ten ekran?")) },
-            text = { Text(appText("This screen will be removed from this device and cloud synchronization.", "Ten ekran zostanie usunięty z urządzenia i synchronizacji online."), color = TougeMuted) },
+            text = { Text(appText("This screen will be removed from this device and cloud synchronization.", "Ten ekran zostanie usunięty z urządzenia i synchronizacji online."), color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = { Button(onClick = { scope.launch { container.dashboardRepository.delete(current) }; deleteTemplate = null }) { Text(appText("Delete", "Usuń")) } },
             dismissButton = { TextButton(onClick = { deleteTemplate = null }) { Text(appText("Cancel", "Anuluj")) } }
         )
@@ -298,7 +295,7 @@ fun ConfigurableDashboardScreen(
         AlertDialog(
             onDismissRequest = { deleteWidget = null },
             title = { Text(appText("Delete this card?", "Usunąć tę kartę?")) },
-            text = { Text(appText("You can add it again later from the dashboard editor.", "Później możesz dodać ją ponownie w edytorze dashboardu."), color = TougeMuted) },
+            text = { Text(appText("You can add it again later from the dashboard editor.", "Później możesz dodać ją ponownie w edytorze dashboardu."), color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
                 Button(onClick = {
                     scope.launch { saveWidgets(container, targetTemplate, targetTemplate.definition.widgets.filterNot { it.id == widget.id }) }
@@ -312,7 +309,7 @@ fun ConfigurableDashboardScreen(
     if (restoreFactory) AlertDialog(
         onDismissRequest = { restoreFactory = false },
         title = { Text(appText("Restore factory layout?", "Przywrócić układ fabryczny?")) },
-        text = { Text(appText("The built-in dashboard will return to the same layout as on iPhone. Your other dashboards will stay untouched.", "Wbudowany dashboard wróci do takiego samego układu jak na iPhonie. Pozostałe dashboardy pozostaną bez zmian."), color = TougeMuted) },
+        text = { Text(appText("The built-in dashboard will return to the same layout as on iPhone. Your other dashboards will stay untouched.", "Wbudowany dashboard wróci do takiego samego układu jak na iPhonie. Pozostałe dashboardy pozostaną bez zmian."), color = MaterialTheme.colorScheme.onSurfaceVariant) },
         confirmButton = { Button(onClick = { scope.launch { container.dashboardRepository.restoreFactory() }; restoreFactory = false }) { Text(appText("Restore", "Przywróć")) } },
         dismissButton = { TextButton(onClick = { restoreFactory = false }) { Text(appText("Cancel", "Anuluj")) } }
     )
@@ -336,8 +333,8 @@ private fun DashboardPageDots(
         if (editing) PageAddButton(addLeading, appText("Add screen on the left", "Dodaj ekran z lewej"), landscape)
         Row(
             Modifier.padding(horizontal = if (editing) 9.dp else 0.dp)
-                .background(Color.Black.copy(alpha = .58f), RoundedCornerShape(30.dp))
-                .border(1.dp, Color.White.copy(alpha = .12f), RoundedCornerShape(30.dp))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = .92f), RoundedCornerShape(30.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .55f), RoundedCornerShape(30.dp))
                 .padding(horizontal = if (landscape) 10.dp else 12.dp, vertical = if (landscape) 5.dp else 6.dp),
             horizontalArrangement = Arrangement.spacedBy(if (landscape) 7.dp else 9.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -348,7 +345,7 @@ private fun DashboardPageDots(
                     Modifier.size(if (landscape) 16.dp else 18.dp).clickable(enabled = editing) { select(page.id) },
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(Modifier.size(if (active) (if (landscape) 8.dp else 9.dp) else (if (landscape) 5.dp else 6.dp)).background(if (active) TougeCyan else Color.White.copy(alpha = .42f), CircleShape))
+                    Box(Modifier.size(if (active) (if (landscape) 8.dp else 9.dp) else (if (landscape) 5.dp else 6.dp)).background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = .42f), CircleShape))
                 }
             }
         }
@@ -359,7 +356,7 @@ private fun DashboardPageDots(
 @Composable
 private fun PageAddButton(action: () -> Unit, description: String, landscape: Boolean) {
     Box(
-        Modifier.size(if (landscape) 28.dp else 34.dp).background(TougeCyan, CircleShape).clickable(onClick = action),
+        Modifier.size(if (landscape) 28.dp else 34.dp).background(MaterialTheme.colorScheme.primary, CircleShape).clickable(onClick = action),
         contentAlignment = Alignment.Center
     ) {
         Icon(Icons.Default.Add, description, tint = Color.Black, modifier = Modifier.size(if (landscape) 15.dp else 18.dp))
@@ -396,18 +393,18 @@ private fun DashboardCardEditToolbar(
     Row(
         Modifier.fillMaxWidth()
             .padding(horizontal = if (landscape) 14.dp else 16.dp, vertical = if (landscape) 2.dp else 0.dp)
-            .background(Color.Black.copy(alpha = .5f), CutCornerShape(10.dp))
-            .border(1.dp, TougeCyan.copy(alpha = .24f), CutCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = .94f), CutCornerShape(10.dp))
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .24f), CutCornerShape(10.dp))
             .padding(horizontal = 8.dp, vertical = if (landscape) 5.dp else 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(if (landscape) 4.dp else 5.dp)
     ) {
         Column(Modifier.weight(1f)) {
             Text(name.uppercase(), fontSize = if (landscape) 8.sp else 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
-            Text(appText("WIDTH", "SZEROKOŚĆ"), color = TougeMuted, fontSize = 7.sp, fontWeight = FontWeight.Black, letterSpacing = .6.sp)
+            Text(appText("WIDTH", "SZEROKOŚĆ"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 7.sp, fontWeight = FontWeight.Black, letterSpacing = .6.sp)
         }
         Row(
-            Modifier.background(Color.White.copy(alpha = .055f), RoundedCornerShape(9.dp)).padding(2.dp),
+            Modifier.background(MaterialTheme.colorScheme.onSurface.copy(alpha = .055f), RoundedCornerShape(9.dp)).padding(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             DashboardEditorAction(
@@ -418,7 +415,7 @@ private fun DashboardCardEditToolbar(
                 action = { resize(-1) }
             )
             Box(Modifier.size(width = if (landscape) 34.dp else 40.dp, height = actionSize), contentAlignment = Alignment.Center) {
-                Text("$span/12", color = TougeCyan, fontSize = if (landscape) 8.sp else 9.sp, fontWeight = FontWeight.Black)
+                Text("$span/12", color = MaterialTheme.colorScheme.primary, fontSize = if (landscape) 8.sp else 9.sp, fontWeight = FontWeight.Black)
             }
             DashboardEditorAction(
                 Icons.Default.Add,
@@ -430,8 +427,8 @@ private fun DashboardCardEditToolbar(
         }
         DashboardEditorAction(Icons.AutoMirrored.Filled.ArrowBack, appText("Move earlier", "Przesuń wcześniej"), actionSize) { move(-1) }
         DashboardEditorAction(Icons.AutoMirrored.Filled.ArrowForward, appText("Move later", "Przesuń dalej"), actionSize) { move(1) }
-        DashboardEditorAction(Icons.Default.Tune, appText("Card settings", "Ustawienia karty"), actionSize, tint = TougeCyan, action = edit)
-        DashboardEditorAction(Icons.Default.Delete, appText("Delete card", "Usuń kartę"), actionSize, tint = TougeRed, action = remove)
+        DashboardEditorAction(Icons.Default.Tune, appText("Card settings", "Ustawienia karty"), actionSize, tint = MaterialTheme.colorScheme.primary, action = edit)
+        DashboardEditorAction(Icons.Default.Delete, appText("Delete card", "Usuń kartę"), actionSize, tint = MaterialTheme.colorScheme.error, action = remove)
     }
 }
 
@@ -441,16 +438,17 @@ private fun DashboardEditorAction(
     description: String,
     size: androidx.compose.ui.unit.Dp,
     enabled: Boolean = true,
-    tint: Color = Color.White.copy(alpha = .82f),
+    tint: Color = Color.Unspecified,
     action: () -> Unit
 ) {
+    val resolvedTint = if (tint == Color.Unspecified) MaterialTheme.colorScheme.onSurface.copy(alpha = .82f) else tint
     Box(
         Modifier.size(size)
-            .background(Color.White.copy(alpha = if (enabled) .055f else .018f), RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) .055f else .018f), RoundedCornerShape(8.dp))
             .clickable(enabled = enabled, onClick = action),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, description, tint = tint.copy(alpha = if (enabled) 1f else .25f), modifier = Modifier.size(size * .52f))
+        Icon(icon, description, tint = resolvedTint.copy(alpha = if (enabled) 1f else .25f), modifier = Modifier.size(size * .52f))
     }
 }
 
@@ -472,7 +470,7 @@ private fun EditableDashboardCard(
     var dragX by remember { mutableFloatStateOf(0f) }
     var dragY by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
-    val selectionModifier = if (selected) Modifier.border(2.dp, TougeCyan, CutCornerShape(16.dp)) else Modifier
+    val selectionModifier = if (selected) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CutCornerShape(16.dp)) else Modifier
     val editInteractionModifier = if (editing) {
         Modifier.clickable(onClick = select)
     } else {
@@ -520,11 +518,11 @@ private fun EditableDashboardCard(
             ) {
                 Box(
                     Modifier.size(width = if (landscape) 26.dp else 30.dp, height = if (landscape) 15.dp else 18.dp)
-                    .background(if (selected || dragging) TougeCyan else Color.Black.copy(alpha = .72f), RoundedCornerShape(12.dp))
-                    .border(1.dp, Color.White.copy(alpha = .16f), RoundedCornerShape(12.dp)),
+                    .background(if (selected || dragging) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .92f), RoundedCornerShape(12.dp))
+                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .65f), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.DragHandle, null, tint = if (selected || dragging) Color.Black else Color.White.copy(alpha = .76f), modifier = Modifier.size(if (landscape) 13.dp else 15.dp))
+                    Icon(Icons.Default.DragHandle, null, tint = if (selected || dragging) Color.Black else MaterialTheme.colorScheme.onSurface.copy(alpha = .76f), modifier = Modifier.size(if (landscape) 13.dp else 15.dp))
                 }
             }
         }
@@ -538,15 +536,15 @@ private fun PerformanceCard(widget: DashboardWidget, state: AccelerationRuntimeS
     TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 128.dp else 188.dp)) {
         Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(widget.title ?: appText("ACCELERATION", "PRZYSPIESZENIE"), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                Text(if (state.active == null) appText("READY", "GOTOWY") else appText("MEASURING", "POMIAR"), color = if (state.active == null) TougeMint else accent, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                Text(widget.title ?: appText("ACCELERATION", "PRZYSPIESZENIE"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                Text(if (state.active == null) appText("READY", "GOTOWY") else appText("MEASURING", "POMIAR"), color = if (state.active == null) MaterialTheme.colorScheme.secondary else accent, fontSize = 9.sp, fontWeight = FontWeight.Black)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 selected.forEach { type ->
                     val active = state.active?.takeIf { it.type == type }
                     val best = state.recentResults.filter { it.type == type.name }.minByOrNull { it.durationMillis }
-                    Column(Modifier.weight(1f).background(Color.Black.copy(alpha = .18f), CutCornerShape(7.dp)).padding(horizontal = 10.dp, vertical = 11.dp)) {
-                        Text(type.label, color = if (active != null) accent else TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                    Column(Modifier.weight(1f).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .045f), CutCornerShape(7.dp)).padding(horizontal = 10.dp, vertical = 11.dp)) {
+                        Text(type.label, color = if (active != null) accent else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Black)
                         Text(
                             when {
                                 active != null -> "%.2f s".format(active.elapsedMillis / 1_000.0)
@@ -558,7 +556,7 @@ private fun PerformanceCard(widget: DashboardWidget, state: AccelerationRuntimeS
                         )
                         Text(
                             if (active != null) "${active.currentSpeedKph.toInt()} km/h" else if (best != null) appText("BEST THIS DRIVE", "NAJLEPSZY W TEJ JEŹDZIE") else appText("NO ATTEMPT", "BRAK PRÓBY"),
-                            color = if (active != null) accent else TougeMuted,
+                            color = if (active != null) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 7.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -574,6 +572,7 @@ private fun ChartCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, poin
     val metric = widget.metrics.first()
     val accent = widget.accent.color()
     val duration = widget.chartDurationSeconds ?: 30
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .07f)
     val now = snapshot.updatedAt
     val values = remember(points, now / 1_000L, duration, metric) {
         val eligible = points.filter { now - it.recordedAt <= duration * 1_000L }
@@ -590,7 +589,7 @@ private fun ChartCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, poin
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TelemetryGlyph(metric, accent, Modifier.size(18.dp))
-                    Text(metric.localizedName(), Modifier.padding(start = 8.dp), color = TougeMuted, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
+                    Text(metric.localizedName(), Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
                 }
                 Text("${metric.format(metric.value(snapshot))} ${metric.unit}  •  ${duration}s", fontWeight = FontWeight.Black)
             }
@@ -598,7 +597,7 @@ private fun ChartCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, poin
                 if (values.size > 1) {
                     val min = (widget.gaugeMinimum ?: metric.defaultMin).toFloat()
                     val max = (widget.gaugeMaximum ?: metric.defaultMax).toFloat()
-                    repeat(3) { line -> drawLine(Color.White.copy(alpha = .045f), androidx.compose.ui.geometry.Offset(0f, size.height * line / 2f), androidx.compose.ui.geometry.Offset(size.width, size.height * line / 2f), strokeWidth = 1f) }
+                    repeat(3) { line -> drawLine(gridColor, androidx.compose.ui.geometry.Offset(0f, size.height * line / 2f), androidx.compose.ui.geometry.Offset(size.width, size.height * line / 2f), strokeWidth = 1f) }
                     values.zipWithNext().forEachIndexed { index, pair ->
                         val x1 = index.toFloat() / (values.size - 1) * size.width
                         val x2 = (index + 1).toFloat() / (values.size - 1) * size.width
@@ -621,13 +620,13 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
     AlertDialog(
         onDismissRequest = dismiss,
         shape = CutCornerShape(18.dp),
-        containerColor = Color(0xFF10191F),
-        titleContentColor = Color.White,
-        textContentColor = Color.White,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurface,
         title = {
             Column {
                 Text(appText("Dashboard card", "Karta dashboardu"), fontWeight = FontWeight.Black)
-                Text(appText("Choose how this parameter is presented", "Wybierz sposób prezentacji parametru"), color = TougeMuted, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                Text(appText("Choose how this parameter is presented", "Wybierz sposób prezentacji parametru"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, fontWeight = FontWeight.Medium)
             }
         },
         text = {
@@ -635,7 +634,7 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                 Modifier.heightIn(max = if (landscape) 205.dp else 540.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(appText("TYPE", "TYP"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(appText("TYPE", "TYP"), color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp), maxItemsInEachRow = 2) {
                     DashboardWidgetKind.entries.forEach { kind ->
                         FilterChip(
@@ -656,7 +655,7 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                 }
                 OutlinedTextField(title, { title = it }, label = { Text(appText("Custom title", "Własny tytuł")) }, singleLine = true)
                 if (value.kind == DashboardWidgetKind.PERFORMANCE) {
-                    Text(appText("MEASUREMENTS", "POMIARY"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(appText("MEASUREMENTS", "POMIARY"), color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     AccelerationType.entries.forEach { type ->
                         FilterChip(
                             selected = type in value.accelerationTypes,
@@ -668,7 +667,7 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                         )
                     }
                 } else if (value.kind == DashboardWidgetKind.ECU_SWITCH || value.kind == DashboardWidgetKind.ECU_ROTARY) {
-                    Text(appText("ECU CHANNEL", "KANAŁ ECU"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(appText("ECU CHANNEL", "KANAŁ ECU"), color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         EcuControlSnapshot.CHANNEL_RANGE.forEach { channel ->
                             FilterChip(
@@ -678,15 +677,15 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                             )
                         }
                     }
-                    Text(appText("The current value is read from EMU after every connection. A cached phone value is never sent.", "Aktualny stan jest odczytywany z EMU po każdym połączeniu. Zapamiętana wartość telefonu nigdy nie jest wysyłana."), color = TougeMuted, fontSize = 10.sp)
+                    Text(appText("The current value is read from EMU after every connection. A cached phone value is never sent.", "Aktualny stan jest odczytywany z EMU po każdym połączeniu. Zapamiętana wartość telefonu nigdy nie jest wysyłana."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                 } else {
-                    Text(if (maximumMetricCount(value.kind) > 1) appText("PARAMETERS", "PARAMETRY") else appText("PARAMETER", "PARAMETR"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(if (maximumMetricCount(value.kind) > 1) appText("PARAMETERS", "PARAMETRY") else appText("PARAMETER", "PARAMETR"), color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
                 repeat(maximumMetricCount(value.kind)) { index ->
                     val fallback = TelemetryMetric.entries.getOrElse(index) { TelemetryMetric.RPM }
                     val selected = value.metrics.getOrNull(index) ?: fallback
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Text("${index + 1}.", color = TougeMuted, fontWeight = FontWeight.Black)
+                        Text("${index + 1}.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Black)
                         MetricDropdown(selected) { metric ->
                             val metrics = value.metrics.toMutableList()
                             while (metrics.size <= index) metrics += fallback
@@ -695,25 +694,25 @@ private fun WidgetEditor(initial: DashboardWidget, dismiss: () -> Unit, save: (D
                         }
                     }
                 }
-                Text(appText("COLOR", "KOLOR"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(appText("COLOR", "KOLOR"), color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     DashboardAccent.entries.forEach { accent ->
                         Box(
                             Modifier.size(if (value.accent == accent) 30.dp else 24.dp)
                                 .background(accent.color(), CircleShape)
-                                .border(if (value.accent == accent) 2.dp else 0.dp, Color.White, CircleShape)
+                                .border(if (value.accent == accent) 2.dp else 0.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
                                 .clickable { value = value.copy(accent = accent) }
                         )
                     }
                 }
                 Text(
                     appText("Size and position are changed directly on the dashboard.", "Rozmiar i pozycję zmienisz bezpośrednio na dashboardzie."),
-                    color = TougeMuted,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium
                 )
                 if (value.kind != DashboardWidgetKind.ECU_SWITCH && value.kind != DashboardWidgetKind.ECU_ROTARY) {
-                    Text(appText("LANDSCAPE PRESENTATION", "WIDOK W POZIOMIE"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text(appText("LANDSCAPE PRESENTATION", "WIDOK W POZIOMIE"), color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         FilterChip(selected = value.wideKind == null, onClick = { value = value.copy(wideKind = null) }, label = { Text(appText("Same", "Taki sam")) })
                         DashboardWidgetKind.entries.filterNot { it == DashboardWidgetKind.ECU_SWITCH || it == DashboardWidgetKind.ECU_ROTARY }.forEach { kind ->

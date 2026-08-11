@@ -54,6 +54,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -95,9 +96,7 @@ import it.letscode.tougedash.model.DashboardAccent
 import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.ui.theme.TougeCyan
 import it.letscode.tougedash.ui.theme.TougeMint
-import it.letscode.tougedash.ui.theme.TougeMuted
 import it.letscode.tougedash.ui.theme.TougeOrange
-import it.letscode.tougedash.ui.theme.TougePanel
 import it.letscode.tougedash.ui.theme.TougeRed
 import it.letscode.tougedash.video.OverlayStyle
 import it.letscode.tougedash.video.OverlayElementKind
@@ -133,11 +132,11 @@ fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samp
             Text(appText(" Use my video", " Użyj mojego filmu"))
         }
         if (task.operation != null) {
-            Card(Modifier.fillMaxWidth().padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = TougePanel)) {
+            Card(Modifier.fillMaxWidth().padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(12.dp)) {
                     Text(localizedVideoOperation(task.operation!!), fontWeight = FontWeight.Bold)
                     LinearProgressIndicator(progress = { task.progress }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp))
-                    Text("${(task.progress * 100).roundToInt()}%${if (task.totalBytes > 0) "  •  ${videoBytes(task.transferredBytes)} / ${videoBytes(task.totalBytes)}" else ""}", color = TougeMuted, fontSize = 10.sp)
+                    Text("${(task.progress * 100).roundToInt()}%${if (task.totalBytes > 0) "  •  ${videoBytes(task.transferredBytes)} / ${videoBytes(task.totalBytes)}" else ""}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
                     if (task.completed && task.outputWidth > 0) {
                         val codec = if (task.outputVideoMimeType?.contains("hevc", ignoreCase = true) == true) "HEVC" else "H.264"
                         val bitrate = task.outputVideoBitrate.takeIf { it > 0 }?.let { " • %.1f Mb/s".format(it / 1_000_000.0) }.orEmpty()
@@ -155,7 +154,7 @@ fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samp
         }
         VideoGroup(appText("RECORDED BY TOUGE DASH", "NAGRANE PRZEZ TOUGE DASH"), videos.filter { it.sourceKind == "CAMERA" }, editing = { editing = it }, delete = container.videoRepository::delete)
         VideoGroup(appText("GALLERY EDITS", "PROJEKTY Z GALERII"), videos.filter { it.sourceKind == "GALLERY" }, editing = { editing = it }, delete = container.videoRepository::delete)
-        if (videos.isEmpty() && task.operation == null) Text(appText("Record a drive with the phone camera or attach footage from a dashcam. The source video stays local on this device.", "Nagraj przejazd kamerą telefonu albo dodaj film z wideorejestratora. Film źródłowy pozostaje lokalnie na tym urządzeniu."), color = TougeMuted, modifier = Modifier.padding(top = 12.dp))
+        if (videos.isEmpty() && task.operation == null) Text(appText("Record a drive with the phone camera or attach footage from a dashcam. The source video stays local on this device.", "Nagraj przejazd kamerą telefonu albo dodaj film z wideorejestratora. Film źródłowy pozostaje lokalnie na tym urządzeniu."), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
     }
     editing?.let { project -> VideoAlignmentEditor(project, driveDuration, samples, container, { editing = null }, { changed -> container.videoRepository.update(changed); editing = changed }) }
 }
@@ -163,14 +162,14 @@ fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samp
 @Composable
 private fun VideoGroup(title: String, videos: List<VideoProjectEntity>, editing: (VideoProjectEntity) -> Unit, delete: (VideoProjectEntity) -> Unit) {
     if (videos.isEmpty()) return
-    Text(title, color = TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp, bottom = 5.dp))
+    Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp, bottom = 5.dp))
     videos.forEach { video ->
-        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { editing(video) }, colors = CardDefaults.cardColors(containerColor = TougePanel)) {
+        Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { editing(video) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Movie, null, Modifier.size(34.dp), tint = TougeCyan)
                 Column(Modifier.padding(start = 10.dp).weight(1f)) {
                     Text(video.sourceDisplayName ?: if (video.sourceKind == "CAMERA") appText("Drive recording", "Nagranie przejazdu") else appText("Gallery video", "Film z galerii"), fontWeight = FontWeight.Bold)
-                    Text("${videoDuration(video.durationSeconds)}  •  ${videoBytes(video.fileSizeBytes)}  •  ${video.pixelWidth}×${video.pixelHeight}", color = TougeMuted, fontSize = 11.sp)
+                    Text("${videoDuration(video.durationSeconds)}  •  ${videoBytes(video.fileSizeBytes)}  •  ${video.pixelWidth}×${video.pixelHeight}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                 }
                 IconButton(onClick = { delete(video) }) { Icon(Icons.Default.Delete, null, tint = TougeRed) }
             }
@@ -281,7 +280,7 @@ private fun VideoAlignmentEditor(
                     )
                 }
             }
-            Text(appText("Drag HUD elements with one finger and pinch with two fingers to resize. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD jednym palcem, a dwoma palcami zmieniaj ich rozmiar. Układ pionowy i poziomy zapisuje się osobno."), color = TougeMuted, fontSize = 10.sp)
+            Text(appText("Drag HUD elements with one finger and pinch with two fingers to resize. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD jednym palcem, a dwoma palcami zmieniaj ich rozmiar. Układ pionowy i poziomy zapisuje się osobno."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
             OutlinedButton(
                 onClick = { templates.firstOrNull { it.entity.id == templateId }?.let { container.videoRepository.updateOverlayTemplate(it.copy(definition = overlayDefinition)) } },
                 modifier = Modifier.fillMaxWidth()
@@ -290,14 +289,14 @@ private fun VideoAlignmentEditor(
                 onClick = { editingTemplate = templates.firstOrNull { it.entity.id == templateId }?.copy(definition = overlayDefinition) },
                 modifier = Modifier.fillMaxWidth()
             ) { Icon(Icons.Default.Tune, null); Text(appText(" Edit HUD parameters", " Edytuj parametry HUD")) }
-            Text(appText("The upper timeline is the selected video. The lower one chooses the matching fragment of the recorded drive.", "Górna oś to wybrany film. Dolna wybiera pasujący fragment zapisanego przejazdu."), color = TougeMuted, fontSize = 10.sp)
+            Text(appText("The upper timeline is the selected video. The lower one chooses the matching fragment of the recorded drive.", "Górna oś to wybrany film. Dolna wybiera pasujący fragment zapisanego przejazdu."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
         }
     }
     Dialog(
         onDismissRequest = dismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Surface(Modifier.fillMaxSize(), color = Color(0xFF071116)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
@@ -324,7 +323,7 @@ private fun VideoAlignmentEditor(
                     }
                     Box(stageModifier.background(Color.Black).onSizeChanged { previewSize = it }, content = preview)
                 }
-                Box(Modifier.fillMaxWidth().heightIn(max = 350.dp).background(TougePanel)) { controls() }
+                Box(Modifier.fillMaxWidth().heightIn(max = 350.dp).background(MaterialTheme.colorScheme.surface)) { controls() }
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -375,7 +374,7 @@ private fun GaugeScaleSlider(
     changed: (Float) -> Unit
 ) {
     val snapped = { raw: Float -> (raw / step).roundToInt() * step }
-    Text("$label: ${if (step < 1f) "%.1f".format(value) else value.roundToInt()} $unit", color = TougeMuted, fontSize = 10.sp)
+    Text("$label: ${if (step < 1f) "%.1f".format(value) else value.roundToInt()} $unit", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
     Slider(value, { changed(snapped(it).coerceIn(range)) }, valueRange = range)
 }
 
@@ -438,7 +437,7 @@ private fun HudElementPreview(
         .padding(horizontal = 12.dp, vertical = 8.dp)
     when (element.kind) {
         OverlayElementKind.DIGITAL -> Column(shell, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(element.metric.localizedName(), color = TougeMuted, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            Text(element.metric.localizedName(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Text(element.metric.format(value), color = accent, fontSize = 25.sp, fontWeight = FontWeight.Black)
             Text(element.metric.unit, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         }
@@ -452,7 +451,7 @@ private fun HudElementPreview(
         }
         OverlayElementKind.BAR -> Column(shell.fillMaxWidth(.62f)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(element.metric.shortName, color = TougeMuted, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                Text(element.metric.shortName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Black)
                 Text("${element.metric.format(value)} ${element.metric.unit}", fontWeight = FontWeight.Black)
             }
             val progress = definition.progress(element.metric, value)
@@ -575,7 +574,7 @@ private fun HudTemplateEditor(
                     value = value.copy(definition = value.definition.copy(maximumBoostBar = it))
                 }
                 value.definition.elements.forEachIndexed { index, element ->
-                    Card(colors = CardDefaults.cardColors(containerColor = TougePanel)) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("${index + 1}.", color = element.accent.color(), fontWeight = FontWeight.Black)
