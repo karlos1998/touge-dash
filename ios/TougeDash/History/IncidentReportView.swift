@@ -419,7 +419,8 @@ private struct IncidentChartCard: View {
                     ForEach(samples) { sample in
                         LineMark(
                             x: .value("Time", sample.timestamp),
-                            y: .value(item.name, item.value(sample))
+                            y: .value(item.name, item.value(sample)),
+                            series: .value(localized("Seria"), item.name)
                         )
                         .foregroundStyle(item.color)
                         .interpolationMethod(.linear)
