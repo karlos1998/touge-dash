@@ -9,6 +9,14 @@
 "Touge Dash Cloud i dane online" = "Touge Dash Cloud and online data";
 "REJESTROWANIE PRZEJAZDÓW" = "DRIVE RECORDING";
 "Trasa GPS, podział sesji i kamera" = "GPS route, session splitting and camera";
+"WYGLĄD" = "APPEARANCE";
+"Motyw interfejsu aplikacji" = "Application interface theme";
+"MOTYW APLIKACJI" = "APPLICATION THEME";
+"Domyślnie zgodny z ustawieniem urządzenia" = "Uses the device setting by default";
+"Motyw aplikacji" = "Application theme";
+"Systemowy" = "System";
+"Jasny" = "Light";
+"Ciemny" = "Dark";
 "Szybki podgląd aktywny · ekran iPhone’a nie wygasi się automatycznie" = "Quick view active · the iPhone screen will stay on";
 "Szukanie interfejsu ECUMaster…" = "Searching for an ECUMaster interface…";
 "Urządzenia ECUMaster" = "ECUMaster devices";

@@ -95,8 +95,8 @@ struct DashboardTemplateBar: View {
                 }
                 .padding(.horizontal, compact ? 9 : 11)
                 .frame(height: compact ? 30 : 38)
-                .background(Color.white.opacity(0.06), in: CutCornerPanel(cut: 7))
-                .overlay(CutCornerPanel(cut: 7).stroke(Color.white.opacity(0.1)))
+                .background(Color.primary.opacity(0.06), in: CutCornerPanel(cut: 7))
+                .overlay(CutCornerPanel(cut: 7).stroke(Color.primary.opacity(0.1)))
             }
             .buttonStyle(.plain)
 
@@ -121,8 +121,8 @@ struct DashboardTemplateBar: View {
                     .frame(width: narrow ? 78 : nil)
                     .padding(.horizontal, compact ? 9 : (narrow ? 0 : 12))
                     .padding(.vertical, compact || narrow ? 7 : 10)
-                    .background(Color.white.opacity(0.075), in: CutCornerPanel(cut: 7))
-                    .overlay(CutCornerPanel(cut: 7).stroke(Color.white.opacity(0.1)))
+                    .background(Color.primary.opacity(0.075), in: CutCornerPanel(cut: 7))
+                    .overlay(CutCornerPanel(cut: 7).stroke(Color.primary.opacity(0.1)))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(localized("Edycja zaawansowana dashboardu"))
@@ -245,7 +245,6 @@ struct DashboardTemplateEditor: View {
                 Button(localized("Anuluj"), role: .cancel) { }
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private func addWidget() {
@@ -307,7 +306,6 @@ struct DashboardWidgetQuickEditor: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 

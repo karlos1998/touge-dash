@@ -70,7 +70,7 @@ struct CloudSyncCard: View {
                                 .textInputAutocapitalization(.words)
                                 .padding(.horizontal, 12)
                                 .frame(height: 42)
-                                .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
+                                .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
                             Button("Dodaj") {
                                 let name = vehicleName.trimmingCharacters(in: .whitespacesAndNewlines)
                                 guard !name.isEmpty else { return }
@@ -82,7 +82,7 @@ struct CloudSyncCard: View {
                         }
                         Text("To EMULOGGER będzie od teraz rozpoznawany automatycznie.")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                     }
                 } else if let vehicle = sync.activeVehicle {
                     VStack(alignment: .leading, spacing: 11) {
@@ -304,9 +304,9 @@ private struct CloudAuthenticationView: View {
                     .disabled(account.isWorking)
 
                     HStack {
-                        Rectangle().fill(Color.white.opacity(0.09)).frame(height: 1)
+                        Rectangle().fill(Color.primary.opacity(0.09)).frame(height: 1)
                         Text("LUB").font(.caption2.weight(.black)).foregroundStyle(.tertiary)
-                        Rectangle().fill(Color.white.opacity(0.09)).frame(height: 1)
+                        Rectangle().fill(Color.primary.opacity(0.09)).frame(height: 1)
                     }
 
                     SignInWithAppleButton(.continue) { request in
@@ -411,7 +411,7 @@ private struct CloudAuthenticationView: View {
             }
         }
         .padding(12)
-        .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func passwordRequirement(_ title: String, _ met: Bool) -> some View {
@@ -458,8 +458,8 @@ private struct CloudTextFieldStyle: TextFieldStyle {
         configuration
             .padding(.horizontal, 14)
             .frame(height: 48)
-            .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.08)))
+            .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.08)))
     }
 }
 

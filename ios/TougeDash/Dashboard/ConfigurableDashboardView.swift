@@ -208,11 +208,11 @@ private struct EditableDashboardWidget: View {
                     }
                         .font(.system(size: showsDragTitle ? 8 : 10, weight: .black))
                         .tracking(showsDragTitle ? 0.7 : 0)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(Color.primary.opacity(0.8))
                         .padding(.horizontal, showsDragTitle ? 9 : 8)
                         .frame(height: compact ? 26 : 30)
                         .background(.black.opacity(0.72), in: Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.15)))
+                        .overlay(Capsule().stroke(Color.primary.opacity(0.15)))
 
                     Spacer(minLength: 0)
 
@@ -264,7 +264,7 @@ private struct EditableDashboardWidget: View {
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 11)
-        .foregroundStyle(.white)
+        .foregroundStyle(Color.primary)
         .background(Color.black.opacity(0.88), in: Capsule())
         .overlay(Capsule().stroke(widget.accent.color.opacity(0.7)))
     }
@@ -280,9 +280,9 @@ private struct EditableDashboardWidget: View {
             Image(systemName: icon)
                 .font(.system(size: compact ? 10 : 11, weight: .black))
                 .frame(width: compact ? 26 : 30, height: compact ? 26 : 30)
-                .foregroundStyle(enabled ? Color.white : Color.white.opacity(0.35))
+                .foregroundStyle(enabled ? Color.primary : Color.primary.opacity(0.35))
                 .background(tint.opacity(enabled ? 0.88 : 0.3), in: Circle())
-                .overlay(Circle().stroke(Color.white.opacity(enabled ? 0.2 : 0.08)))
+                .overlay(Circle().stroke(Color.primary.opacity(enabled ? 0.2 : 0.08)))
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
@@ -427,7 +427,7 @@ private struct DashboardPerformanceWidget: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(compact ? 7 : 10)
-                    .background(Color.black.opacity(0.18), in: CutCornerPanel(cut: 7))
+                    .background(Color.primary.opacity(0.045), in: CutCornerPanel(cut: 7))
                 }
             }
         }
@@ -476,7 +476,7 @@ private struct DashboardHeroWidget: View {
                     .contentTransition(.numericText())
                     .minimumScaleFactor(0.52)
                     .lineLimit(1)
-                    .foregroundStyle(warning ? Color.tougeRed : Color.white)
+                    .foregroundStyle(warning ? Color.tougeRed : Color.primary)
                 Text(metric.unit.uppercased())
                     .font(.system(size: compact ? 9 : 12, weight: .black))
                     .tracking(1.2)
@@ -511,7 +511,7 @@ private struct DashboardLinearScale: View {
         VStack(spacing: compact ? 3 : 5) {
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.075))
+                    Capsule().fill(Color.primary.opacity(0.075))
                     Capsule()
                         .fill(LinearGradient(colors: [tint.opacity(0.62), tint], startPoint: .leading, endPoint: .trailing))
                         .frame(width: max(8, proxy.size.width * progress))
@@ -551,7 +551,7 @@ private struct DashboardInlineMetric: View {
                 Text(metric.value(in: snapshot).formatted(.number.precision(.fractionLength(metric.precision))))
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
                 Text(metric.unit)
@@ -587,7 +587,7 @@ private struct DashboardGroupWidget: View {
             HStack(alignment: .bottom, spacing: compact ? 8 : 13) {
                 ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
                     if index > 0 {
-                        Rectangle().fill(Color.white.opacity(0.08)).frame(width: 1).padding(.vertical, 4)
+                        Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1).padding(.vertical, 4)
                     }
                     DashboardGroupValue(metric: metric, snapshot: snapshot, tint: widget.accent.color, compact: compact, prominent: prominent)
                 }
@@ -629,7 +629,7 @@ private struct DashboardGroupValue: View {
                     .contentTransition(.numericText())
                     .minimumScaleFactor(0.48)
                     .lineLimit(1)
-                    .foregroundStyle(warning ? Color.tougeRed : Color.white)
+                    .foregroundStyle(warning ? Color.tougeRed : Color.primary)
                 Text(metric.unit)
                     .font(.system(size: compact ? 7 : (prominent ? 12 : 9), weight: .black))
                     .foregroundStyle(warning ? Color.tougeRed : tint)
@@ -665,7 +665,7 @@ private struct DashboardValueWidget: View {
                 .fontWidth(.expanded)
                 .monospacedDigit()
                 .contentTransition(.numericText())
-                .foregroundStyle(warning ? Color.tougeRed : Color.white)
+                .foregroundStyle(warning ? Color.tougeRed : Color.primary)
                 .minimumScaleFactor(0.55)
                 .lineLimit(1)
             Text(secondaryLabel)
@@ -859,7 +859,7 @@ private struct DashboardChartWidget: View {
             .chartXAxis(.hidden)
             .chartYAxis {
                 AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) {
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(.white.opacity(0.08))
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(Color.primary.opacity(0.08))
                     AxisValueLabel().font(.system(size: 8, design: .monospaced)).foregroundStyle(.secondary)
                 }
             }

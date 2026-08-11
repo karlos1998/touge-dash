@@ -276,7 +276,7 @@ struct DriveVideoHistorySection: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(14)
-                .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 16))
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
             }
         }
     }
@@ -319,7 +319,7 @@ struct DriveVideoHistorySection: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(18)
-                .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 14))
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
             } else {
                 VStack(spacing: 9) {
                     ForEach(Array(externalProjects.enumerated()), id: \.element.id) { index, project in
@@ -371,7 +371,7 @@ struct DriveVideoHistorySection: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .background(Color.black.opacity(0.26), in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .combine)
     }
 
@@ -423,7 +423,7 @@ struct DriveVideoHistorySection: View {
             .buttonStyle(.bordered)
         }
         .padding(12)
-        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func sectionPanel<Content: View>(
@@ -434,7 +434,7 @@ struct DriveVideoHistorySection: View {
             .padding(16)
             .background {
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(Color.black.opacity(0.36))
+                    .fill(Color.primary.opacity(0.065))
                     .overlay {
                         RoundedRectangle(cornerRadius: 18)
                             .stroke(accent.opacity(0.24), lineWidth: 1)
@@ -693,7 +693,7 @@ private struct VideoMetadataPill: View {
             .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(Color.white.opacity(0.055), in: Capsule())
+            .background(Color.primary.opacity(0.055), in: Capsule())
     }
 }
 
@@ -790,7 +790,6 @@ private struct DriveVideoExportSheet: View {
                     : min(max(exportRangeStart + minimumExportDuration, exportRangeEnd), newDuration)
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var exportContent: some View {
@@ -900,7 +899,7 @@ private struct DriveVideoExportSheet: View {
             }
         }
         .padding(16)
-        .background(Color.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var exportButton: some View {
@@ -976,7 +975,7 @@ private struct DriveVideoExportSheet: View {
                 .foregroundStyle(.secondary)
         }
         .padding(14)
-        .background(Color.black.opacity(0.42), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
         .allowsHitTesting(!exporter.state.isWorking)
         .opacity(exporter.state.isWorking ? 0.62 : 1)
     }
@@ -1108,7 +1107,7 @@ private struct DriveVideoExportSheet: View {
             .tint(.tougeCyan)
         }
         .padding(16)
-        .background(Color.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var telemetryDuration: Double {
@@ -1298,7 +1297,7 @@ private struct DriveVideoExportSheet: View {
             .foregroundStyle(.secondary)
         }
         .padding(14)
-        .background(Color.black.opacity(0.34), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private var previewPositionBinding: Binding<Double> {
@@ -1442,7 +1441,7 @@ private struct TelemetryFragmentSelector: View {
             }
         }
         .padding(14)
-        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 14))
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 14))
     }
 
     private func nudgeButton(seconds: Double) -> some View {
@@ -1744,7 +1743,7 @@ private struct TimelineNudgeControl: View {
         }
         .frame(maxWidth: .infinity)
         .padding(9)
-        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

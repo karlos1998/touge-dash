@@ -53,9 +53,9 @@ struct DriveVideoRecordingCard: View {
             if settings.isEnabled {
                 VStack(spacing: 0) {
                     cameraPicker
-                    Divider().overlay(Color.white.opacity(0.06))
+                    Divider().overlay(Color.primary.opacity(0.06))
                     qualityPicker
-                    Divider().overlay(Color.white.opacity(0.06))
+                    Divider().overlay(Color.primary.opacity(0.06))
                     Toggle(isOn: audioBinding) {
                         settingLabel(
                             title: localized("Dźwięk z mikrofonu"),
@@ -68,7 +68,7 @@ struct DriveVideoRecordingCard: View {
                     .padding(.vertical, 11)
                 }
                 .padding(.horizontal, 12)
-                .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 12))
+                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
             }
 
             HStack(spacing: 10) {
@@ -84,7 +84,7 @@ struct DriveVideoRecordingCard: View {
 
             Text(localized("Film rozpoczyna się z pierwszą próbką, jest dzielony razem z przejazdem i kończy po rozłączeniu. Pliki nie są wysyłane do Touge Dash Cloud."))
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
 
             if case .failed(let message) = recorder.state {
                 HStack {
@@ -234,10 +234,9 @@ private struct DriveVideoExperimentalWarning: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Color(red: 0.025, green: 0.035, blue: 0.045))
+        .presentationBackground(Color.tougeBackground)
         .task { await runCountdown() }
     }
 
@@ -347,7 +346,7 @@ private struct DriveVideoExperimentalWarning: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(compactHeight ? 12 : 16)
-        .background(Color.white.opacity(0.045), in: CutCornerPanel(cut: 12))
+        .background(Color.primary.opacity(0.045), in: CutCornerPanel(cut: 12))
         .overlay(CutCornerPanel(cut: 12).stroke(tint.opacity(0.25)))
     }
 
@@ -363,7 +362,7 @@ private struct DriveVideoExperimentalWarning: View {
             .padding(.vertical, 10)
             .background(.ultraThinMaterial)
             .overlay(alignment: .top) {
-                Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+                Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
             }
         } else {
             VStack(spacing: 10) {
@@ -375,7 +374,7 @@ private struct DriveVideoExperimentalWarning: View {
             .padding(.bottom, 10)
             .background(.ultraThinMaterial)
             .overlay(alignment: .top) {
-                Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+                Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
             }
         }
     }
@@ -394,9 +393,9 @@ private struct DriveVideoExperimentalWarning: View {
             .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity)
             .padding(.vertical, compactHeight ? 11 : 14)
-            .foregroundStyle(secondsRemaining > 0 ? Color.white.opacity(0.48) : Color.black)
+            .foregroundStyle(secondsRemaining > 0 ? Color.primary.opacity(0.48) : Color.black)
             .background(
-                secondsRemaining > 0 ? Color.white.opacity(0.065) : Color.tougeOrange,
+                secondsRemaining > 0 ? Color.primary.opacity(0.065) : Color.tougeOrange,
                 in: CutCornerPanel(cut: 10)
             )
         }

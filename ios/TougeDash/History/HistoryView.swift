@@ -357,7 +357,7 @@ struct DriveSegmentationCard: View {
 
             Text(localized("Po osiągnięciu limitu Touge Dash zapisze odcinek i bez rozłączania rozpocznie następny. Telemetria i film są cięte na tej samej osi czasu."))
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
         }
         .padding(16)
         .cardSurface(accent: .tougeYellow)
@@ -608,7 +608,7 @@ private struct ManualSessionSplitCard: View {
 
             Text(localized("Zamknij bieżący zapis bez rozłączania EMULOGGERA. Następna próbka rozpocznie osobny przejazd."))
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
 
             Button(action: action) {
                 Label(localized("Zapisz i rozpocznij nowy"), systemImage: "scissors")
@@ -719,8 +719,8 @@ private struct LocalArchiveStorageFooter: View {
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.025), in: CutCornerPanel(cut: 8))
-        .overlay(CutCornerPanel(cut: 8).stroke(Color.white.opacity(0.06)))
+        .background(Color.primary.opacity(0.025), in: CutCornerPanel(cut: 8))
+        .overlay(CutCornerPanel(cut: 8).stroke(Color.primary.opacity(0.06)))
         .accessibilityElement(children: .combine)
     }
 }
@@ -1707,21 +1707,21 @@ private struct HistoryChartCard: View {
 
                 if let selectedTime {
                     RuleMark(x: .value(localized("Wybrany czas"), selectedTime))
-                        .foregroundStyle(Color.white.opacity(0.62))
+                        .foregroundStyle(Color.primary.opacity(0.62))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                 }
             }
             .chartYScale(domain: yDomain)
             .chartXAxis {
                 AxisMarks(preset: .inset, values: .automatic(desiredCount: 3)) { value in
-                    AxisGridLine().foregroundStyle(Color.white.opacity(0.055))
+                    AxisGridLine().foregroundStyle(Color.primary.opacity(0.055))
                     AxisValueLabel(format: .dateTime.hour().minute().second())
                         .foregroundStyle(Color.secondary)
                 }
             }
             .chartYAxis {
                 AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
-                    AxisGridLine().foregroundStyle(Color.white.opacity(0.055))
+                    AxisGridLine().foregroundStyle(Color.primary.opacity(0.055))
                     AxisValueLabel().foregroundStyle(Color.secondary)
                 }
             }
@@ -1758,7 +1758,7 @@ private struct HistoryChartCard: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 9)
-                .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
+                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 7))
             }
         }
         .padding(16)
@@ -1858,7 +1858,7 @@ private struct AccelerationAttemptsCard: View {
                         Button { selectedTime = attempt.startedAt } label: {
                             Text("#\(index + 1)  \((Double(attempt.durationMillis) / 1_000).formatted(.number.precision(.fractionLength(2)))) s")
                                 .font(.caption2.monospacedDigit().weight(.black))
-                                .foregroundStyle(attempt.id == best.id ? Color.black : Color.white)
+                                .foregroundStyle(attempt.id == best.id ? Color.black : Color.primary)
                                 .padding(.horizontal, 9)
                                 .padding(.vertical, 6)
                                 .background(attempt.id == best.id ? color : color.opacity(0.13), in: Capsule())

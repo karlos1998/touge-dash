@@ -4,6 +4,7 @@ import SwiftUI
 @main
 @MainActor
 struct TougeDashApp: App {
+    @AppStorage(AppAppearance.defaultsKey) private var appearanceValue = AppAppearance.system.rawValue
     private let modelContainer: ModelContainer
     @StateObject private var controller: TelemetryController
     @StateObject private var cloudAccount: CloudAccountService
@@ -84,10 +85,56 @@ struct TougeDashApp: App {
                 dashboardTemplates: dashboardTemplates,
                 dashboardBuffer: dashboardBuffer,
                 videoRecorder: videoRecorder,
-                videoOverlays: videoOverlays
+                videoOverlays: videoOverlays,
+                appearance: appearanceBinding
             )
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(appearance.colorScheme)
         }
         .modelContainer(modelContainer)
+    }
+
+    private var appearance: AppAppearance {
+        AppAppearance(rawValue: appearanceValue) ?? .system
+    }
+
+    private var appearanceBinding: Binding<AppAppearance> {
+        Binding(
+            get: { appearance },
+            set: { appearanceValue = $0.rawValue }
+        )
+    }
+}
+
+enum AppAppearance: String, CaseIterable, Identifiable {
+    static let defaultsKey = "tougeDash.appearance"
+
+    case system
+    case light
+    case dark
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .system: localized("Systemowy")
+        case .light: localized("Jasny")
+        case .dark: localized("Ciemny")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .system: "circle.lefthalf.filled"
+        case .light: "sun.max.fill"
+        case .dark: "moon.stars.fill"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
     }
 }

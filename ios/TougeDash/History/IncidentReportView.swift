@@ -437,7 +437,7 @@ private struct IncidentChartCard: View {
             }
             .chartXAxis {
                 AxisMarks(values: .automatic(desiredCount: 5)) { value in
-                    AxisGridLine().foregroundStyle(Color.white.opacity(0.07))
+                    AxisGridLine().foregroundStyle(Color.primary.opacity(0.07))
                     AxisValueLabel(format: .dateTime.minute().second())
                 }
             }

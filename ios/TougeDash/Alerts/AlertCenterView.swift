@@ -234,7 +234,7 @@ struct AlertCenterView: View {
                 .frame(maxWidth: 920)
                 .frame(maxWidth: .infinity)
             }
-            .background(Color.black)
+            .background(DashboardBackground())
             .navigationTitle("Centrum alertów")
             .onAppear(perform: reload)
             .onChange(of: store.activeVehicleID) { _, _ in reload() }
@@ -282,8 +282,8 @@ struct AlertCenterView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(16)
-        .background(CutCornerPanel(cut: 14).fill(Color.white.opacity(0.055)))
-        .overlay(CutCornerPanel(cut: 14).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .background(CutCornerPanel(cut: 14).fill(Color.primary.opacity(0.055)))
+        .overlay(CutCornerPanel(cut: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
     }
 
     private var safetyNotice: some View {
@@ -346,7 +346,7 @@ struct AlertCenterView: View {
             .disabled(!canEdit)
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 13).fill(Color.white.opacity(0.045)))
+        .background(RoundedRectangle(cornerRadius: 13).fill(Color.primary.opacity(0.045)))
     }
 
     private var actionBar: some View {
@@ -427,8 +427,8 @@ private struct AlertRuleEditor<Content: View>: View {
             }
         }
         .padding(16)
-        .background(CutCornerPanel(cut: 12).fill(Color.white.opacity(enabled ? 0.05 : 0.025)))
-        .overlay(CutCornerPanel(cut: 12).stroke(enabled ? tint.opacity(0.24) : Color.white.opacity(0.06)))
+        .background(CutCornerPanel(cut: 12).fill(Color.primary.opacity(enabled ? 0.05 : 0.025)))
+        .overlay(CutCornerPanel(cut: 12).stroke(enabled ? tint.opacity(0.24) : Color.primary.opacity(0.06)))
         .opacity(enabled ? 1 : 0.62)
     }
 }
@@ -456,7 +456,7 @@ private struct RuleValueField: View {
             }
         }
         .padding(11)
-        .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 9))
+        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 9))
     }
 }
 

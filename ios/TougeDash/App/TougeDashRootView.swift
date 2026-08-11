@@ -8,6 +8,7 @@ struct TougeDashRootView: View {
     @ObservedObject var dashboardBuffer: DashboardTelemetryBuffer
     @ObservedObject var videoRecorder: DriveVideoRecorder
     @ObservedObject var videoOverlays: VideoOverlayTemplateStore
+    @Binding var appearance: AppAppearance
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -20,7 +21,8 @@ struct TougeDashRootView: View {
         dashboardTemplates: DashboardTemplateStore,
         dashboardBuffer: DashboardTelemetryBuffer,
         videoRecorder: DriveVideoRecorder,
-        videoOverlays: VideoOverlayTemplateStore
+        videoOverlays: VideoOverlayTemplateStore,
+        appearance: Binding<AppAppearance>
     ) {
         self.controller = controller
         self.cloudAccount = cloudAccount
@@ -29,9 +31,11 @@ struct TougeDashRootView: View {
         self.dashboardBuffer = dashboardBuffer
         self.videoRecorder = videoRecorder
         self.videoOverlays = videoOverlays
+        _appearance = appearance
         #if DEBUG
         let historyPreview = ProcessInfo.processInfo.environment["TOUGE_DASH_HISTORY_PREVIEW"] == "1"
-        _selection = State(initialValue: historyPreview ? 1 : 0)
+        let settingsPreview = ProcessInfo.processInfo.environment["TOUGE_DASH_SETTINGS_PREVIEW"] == "1"
+        _selection = State(initialValue: settingsPreview ? 3 : historyPreview ? 1 : 0)
         #else
         _selection = State(initialValue: 0)
         #endif
@@ -81,7 +85,8 @@ struct TougeDashRootView: View {
                 cloudAccount: cloudAccount,
                 cloudSync: cloudSync,
                 videoRecorder: videoRecorder,
-                segmentSettings: controller.historyRecorder.segmentSettings
+                segmentSettings: controller.historyRecorder.segmentSettings,
+                appearance: $appearance
             )
                 .toolbarVisibility(compactLandscape ? .hidden : .automatic, for: .tabBar)
                 .tabItem {
@@ -90,7 +95,6 @@ struct TougeDashRootView: View {
                 .tag(3)
         }
         .tint(.tougeCyan)
-        .preferredColorScheme(.dark)
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
                 controller.historyRecorder.saveNow()
@@ -115,6 +119,7 @@ private struct AppSettingsView: View {
     @ObservedObject var cloudSync: CloudSyncManager
     @ObservedObject var videoRecorder: DriveVideoRecorder
     @ObservedObject var segmentSettings: DriveSegmentSettingsStore
+    @Binding var appearance: AppAppearance
 
     var body: some View {
         NavigationStack {
@@ -123,6 +128,12 @@ private struct AppSettingsView: View {
 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(alignment: .leading, spacing: 14) {
+                        settingsSection(
+                            title: localized("WYGLĄD"),
+                            subtitle: localized("Motyw interfejsu aplikacji")
+                        )
+                        AppearanceSettingsCard(appearance: $appearance)
+
                         settingsSection(
                             title: localized("KONTO I SYNCHRONIZACJA"),
                             subtitle: localized("Touge Dash Cloud i dane online")
@@ -161,5 +172,41 @@ private struct AppSettingsView: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.top, 4)
+    }
+}
+
+private struct AppearanceSettingsCard: View {
+    @Binding var appearance: AppAppearance
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(spacing: 12) {
+                ZStack {
+                    CutCornerPanel(cut: 9)
+                        .fill(Color.tougeBlue.opacity(0.13))
+                    Image(systemName: appearance.symbol)
+                        .foregroundStyle(Color.tougeBlue)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localized("MOTYW APLIKACJI"))
+                        .font(.system(size: 12, weight: .black))
+                        .tracking(1)
+                    Text(localized("Domyślnie zgodny z ustawieniem urządzenia"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Picker(localized("Motyw aplikacji"), selection: $appearance) {
+                ForEach(AppAppearance.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(16)
+        .cardSurface(accent: .tougeBlue)
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @ObservedObject var controller: TelemetryController
@@ -100,7 +101,6 @@ struct ContentView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $controller.showingDevicePicker) {
             DevicePickerView(controller: controller)
         }
@@ -195,12 +195,12 @@ private struct DashboardPageIndicator: View {
                         onSelect(page.id)
                     } label: {
                         Circle()
-                            .fill(page.id == activeID ? Color.white : Color.white.opacity(0.38))
+                            .fill(page.id == activeID ? Color.primary : Color.primary.opacity(0.38))
                             .frame(
                                 width: page.id == activeID ? (compact ? 8 : 10) : (compact ? 6 : 8),
                                 height: page.id == activeID ? (compact ? 8 : 10) : (compact ? 6 : 8)
                             )
-                            .shadow(color: page.id == activeID ? .white.opacity(0.35) : .clear, radius: 4)
+                            .shadow(color: page.id == activeID ? Color.primary.opacity(0.22) : .clear, radius: 4)
                             .frame(width: compact ? 18 : 22, height: compact ? 18 : 22)
                     }
                     .buttonStyle(.plain)
@@ -210,7 +210,7 @@ private struct DashboardPageIndicator: View {
             .padding(.horizontal, compact ? 12 : 16)
             .frame(height: compact ? 24 : 30)
             .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Color.white.opacity(0.08)))
+            .overlay(Capsule().stroke(Color.primary.opacity(0.08)))
 
             if isEditing {
                 addButton(action: onAddTrailing, label: localized("Dodaj ekran z prawej"))
@@ -322,10 +322,10 @@ private struct DashboardHeader: View {
                     .frame(width: compact ? 30 : 36, height: compact ? 30 : 36)
                     .foregroundStyle(isEditingDashboard ? Color.black : Color.tougeCyan)
                     .background(
-                        isEditingDashboard ? Color.tougeCyan : Color.white.opacity(0.055),
+                        isEditingDashboard ? Color.tougeCyan : Color.primary.opacity(0.055),
                         in: CutCornerPanel(cut: 7)
                     )
-                    .overlay(CutCornerPanel(cut: 7).stroke(Color.white.opacity(0.09)))
+                    .overlay(CutCornerPanel(cut: 7).stroke(Color.primary.opacity(0.09)))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(isEditingDashboard ? localized("Zakończ edycję dashboardu") : localized("Edytuj dashboard"))
@@ -409,9 +409,9 @@ private struct ActionLabel: View {
             .minimumScaleFactor(0.75)
             .frame(maxWidth: .infinity)
             .padding(.vertical, compact ? 8 : 13)
-            .foregroundStyle(active ? Color.black : Color.white)
-            .background(active ? Color.tougeCyan : Color.white.opacity(0.07), in: CutCornerPanel(cut: 10))
-            .overlay(CutCornerPanel(cut: 10).stroke(Color.white.opacity(active ? 0 : 0.08)))
+            .foregroundStyle(active ? Color.black : Color.primary)
+            .background(active ? Color.tougeCyan : Color.primary.opacity(0.07), in: CutCornerPanel(cut: 10))
+            .overlay(CutCornerPanel(cut: 10).stroke(Color.primary.opacity(active ? 0 : 0.08)))
     }
 }
 
@@ -431,8 +431,8 @@ private struct ConnectionBadge: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
-        .background(Color.white.opacity(0.06), in: Capsule())
-        .overlay(Capsule().stroke(Color.white.opacity(0.09)))
+        .background(Color.primary.opacity(0.06), in: Capsule())
+        .overlay(Capsule().stroke(Color.primary.opacity(0.09)))
     }
 }
 
@@ -522,16 +522,17 @@ private struct DevicePickerView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 
 struct DashboardBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         ZStack {
-            Color(red: 0.012, green: 0.019, blue: 0.028)
-            RadialGradient(colors: [Color.tougeBlue.opacity(0.17), .clear], center: .topTrailing, startRadius: 15, endRadius: 620)
-            RadialGradient(colors: [Color.tougeCyan.opacity(0.08), .clear], center: .bottomLeading, startRadius: 20, endRadius: 520)
+            Color.tougeBackground
+            RadialGradient(colors: [Color.tougeBlue.opacity(colorScheme == .dark ? 0.17 : 0.11), .clear], center: .topTrailing, startRadius: 15, endRadius: 620)
+            RadialGradient(colors: [Color.tougeCyan.opacity(colorScheme == .dark ? 0.08 : 0.07), .clear], center: .bottomLeading, startRadius: 20, endRadius: 520)
             GeometryReader { proxy in
                 ZStack {
                     ForEach(0..<4, id: \.self) { index in
@@ -544,7 +545,7 @@ struct DashboardBackground: View {
                 }
             }
             .accessibilityHidden(true)
-            LinearGradient(colors: [.clear, Color.black.opacity(0.42)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [.clear, Color.tougeBackdropShade], startPoint: .top, endPoint: .bottom)
         }
         .ignoresSafeArea()
     }
@@ -580,15 +581,15 @@ extension View {
                 .fill(
                     LinearGradient(
                         colors: warning
-                            ? [Color.tougeRed.opacity(0.15), Color(red: 0.045, green: 0.052, blue: 0.065)]
-                            : [Color(red: 0.055, green: 0.071, blue: 0.088), Color(red: 0.032, green: 0.043, blue: 0.056)],
+                            ? [Color.tougeRed.opacity(0.15), Color.tougePanelBottom]
+                            : [Color.tougePanelTop, Color.tougePanelBottom],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .overlay(
                     CutCornerPanel()
-                        .stroke(warning ? Color.tougeRed.opacity(0.62) : Color.white.opacity(0.085), lineWidth: 1)
+                        .stroke(warning ? Color.tougeRed.opacity(0.62) : Color.tougeOutline, lineWidth: 1)
                 )
                 .shadow(color: Color.black.opacity(0.28), radius: 14, y: 8)
         }
@@ -602,11 +603,22 @@ extension View {
 }
 
 extension Color {
-    static let tougeCyan = Color(red: 0.05, green: 0.88, blue: 0.94)
-    static let tougeBlue = Color(red: 0.16, green: 0.48, blue: 1)
-    static let tougeMint = Color(red: 0.21, green: 0.91, blue: 0.62)
-    static let tougeOrange = Color(red: 1, green: 0.47, blue: 0.19)
-    static let tougeYellow = Color(red: 1, green: 0.77, blue: 0.19)
-    static let tougeRed = Color(red: 1, green: 0.22, blue: 0.25)
-    static let tougeIce = Color(red: 0.38, green: 0.75, blue: 1)
+    static let tougeCyan = adaptive(light: UIColor(red: 0, green: 0.58, blue: 0.65, alpha: 1), dark: UIColor(red: 0.05, green: 0.88, blue: 0.94, alpha: 1))
+    static let tougeBlue = adaptive(light: UIColor(red: 0.08, green: 0.38, blue: 0.88, alpha: 1), dark: UIColor(red: 0.16, green: 0.48, blue: 1, alpha: 1))
+    static let tougeMint = adaptive(light: UIColor(red: 0, green: 0.62, blue: 0.38, alpha: 1), dark: UIColor(red: 0.21, green: 0.91, blue: 0.62, alpha: 1))
+    static let tougeOrange = adaptive(light: UIColor(red: 0.91, green: 0.32, blue: 0.07, alpha: 1), dark: UIColor(red: 1, green: 0.47, blue: 0.19, alpha: 1))
+    static let tougeYellow = adaptive(light: UIColor(red: 0.72, green: 0.47, blue: 0, alpha: 1), dark: UIColor(red: 1, green: 0.77, blue: 0.19, alpha: 1))
+    static let tougeRed = adaptive(light: UIColor(red: 0.85, green: 0.12, blue: 0.16, alpha: 1), dark: UIColor(red: 1, green: 0.22, blue: 0.25, alpha: 1))
+    static let tougeIce = adaptive(light: UIColor(red: 0.05, green: 0.48, blue: 0.78, alpha: 1), dark: UIColor(red: 0.38, green: 0.75, blue: 1, alpha: 1))
+    static let tougeBackground = adaptive(light: UIColor(red: 0.94, green: 0.965, blue: 0.973, alpha: 1), dark: UIColor(red: 0.012, green: 0.019, blue: 0.028, alpha: 1))
+    static let tougePanelTop = adaptive(light: UIColor(red: 1, green: 1, blue: 1, alpha: 0.96), dark: UIColor(red: 0.055, green: 0.071, blue: 0.088, alpha: 1))
+    static let tougePanelBottom = adaptive(light: UIColor(red: 0.90, green: 0.935, blue: 0.945, alpha: 0.98), dark: UIColor(red: 0.032, green: 0.043, blue: 0.056, alpha: 1))
+    static let tougeOutline = adaptive(light: UIColor.black.withAlphaComponent(0.11), dark: UIColor.white.withAlphaComponent(0.085))
+    static let tougeBackdropShade = adaptive(light: UIColor.black.withAlphaComponent(0.035), dark: UIColor.black.withAlphaComponent(0.42))
+
+    private static func adaptive(light: UIColor, dark: UIColor) -> Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? dark : light
+        })
+    }
 }

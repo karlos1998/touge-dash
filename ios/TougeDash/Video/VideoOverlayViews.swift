@@ -593,7 +593,6 @@ struct VideoOverlayTemplateManagerView: View {
                 Button(localized("Anuluj"), role: .cancel) { }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 
@@ -694,7 +693,6 @@ private struct VideoOverlayTemplateEditor: View {
                 Button(localized("Anuluj"), role: .cancel) { }
             }
         }
-        .preferredColorScheme(.dark)
     }
 }
 

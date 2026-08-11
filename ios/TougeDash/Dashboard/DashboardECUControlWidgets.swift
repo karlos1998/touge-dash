@@ -25,7 +25,7 @@ struct DashboardECUSwitchWidget: View {
                         .font(.system(size: compact ? 24 : 35, weight: .black, design: .rounded))
                         .fontWidth(.expanded)
                         .monospacedDigit()
-                        .foregroundStyle(value == true ? widget.accent.color : Color.white)
+                        .foregroundStyle(value == true ? widget.accent.color : Color.primary)
                     Text(isPending ? localized("WYSYŁANIE PEŁNEGO STANU") : controls.availabilityLabel)
                         .font(.system(size: compact ? 6 : 8, weight: .black))
                         .tracking(0.55)
@@ -35,7 +35,7 @@ struct DashboardECUSwitchWidget: View {
                 Spacer(minLength: 4)
                 ZStack(alignment: value == true ? .trailing : .leading) {
                     Capsule()
-                        .fill(value == true ? widget.accent.color.opacity(0.32) : Color.white.opacity(0.08))
+                        .fill(value == true ? widget.accent.color.opacity(0.32) : Color.primary.opacity(0.08))
                         .frame(width: compact ? 48 : 64, height: compact ? 27 : 36)
                     Circle()
                         .fill(value == true ? widget.accent.color : Color.secondary.opacity(0.7))
