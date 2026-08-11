@@ -221,7 +221,13 @@ fun ConfigurableDashboardScreen(
             }
             androidx.compose.animation.AnimatedVisibility(
                 visible = editing || (templates.size > 1 && pageIndicatorVisible),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (landscape) 8.dp else 12.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(
+                    bottom = if (editing) {
+                        if (landscape) 8.dp else 12.dp
+                    } else {
+                        if (landscape) 34.dp else 44.dp
+                    }
+                ),
                 enter = fadeIn(tween(120)),
                 exit = fadeOut(tween(650))
             ) {

@@ -4,10 +4,16 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +21,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,15 +39,15 @@ import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.FilterChip
@@ -64,6 +71,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -119,7 +127,7 @@ fun TougeDashApp(
     var tab by remember { mutableIntStateOf(0) }
     var showConnection by remember { mutableStateOf(false) }
     var selectedSessionId by remember { mutableStateOf<String?>(null) }
-    var showDashboardNavigation by remember { mutableStateOf(false) }
+    var dashboardNavigationVisible by remember { mutableStateOf(false) }
     var dashboardEditing by remember { mutableStateOf(false) }
     var vehicleToName by remember { mutableStateOf<VehicleEntity?>(null) }
     val vehicles by container.dao.vehicles().collectAsState(initial = emptyList())
@@ -164,6 +172,12 @@ fun TougeDashApp(
             delay(500)
         }
     }
+    LaunchedEffect(dashboardNavigationVisible, tab, dashboardEditing) {
+        if (dashboardNavigationVisible && tab == 0 && !dashboardEditing) {
+            delay(5000)
+            dashboardNavigationVisible = false
+        }
+    }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     Scaffold(
         containerColor = Color.Transparent,
@@ -179,14 +193,11 @@ fun TougeDashApp(
                     landscape = landscape,
                     onConnection = { showConnection = true },
                     dashboardEditing = dashboardEditing,
-                    toggleDashboardEditor = { dashboardEditing = !dashboardEditing },
-                    navigationExpanded = showDashboardNavigation,
-                    showNavigation = { showDashboardNavigation = true },
-                    hideNavigation = { showDashboardNavigation = false },
-                    navigate = {
-                        showDashboardNavigation = false
-                        tab = it
-                    }
+                    toggleDashboardEditor = {
+                        dashboardNavigationVisible = false
+                        dashboardEditing = !dashboardEditing
+                    },
+                    showNavigation = { dashboardNavigationVisible = true }
                 ) else if (landscape) CompactAppHeader(connection) { showConnection = true }
                 else AppHeader(connection) { showConnection = true }
                 when (tab) {
@@ -196,6 +207,16 @@ fun TougeDashApp(
                     else -> MoreScreen(container)
                 }
             }
+            if (tab == 0 && !dashboardEditing) DashboardNavigationOverlay(
+                expanded = dashboardNavigationVisible,
+                landscape = landscape,
+                reveal = { dashboardNavigationVisible = true },
+                hide = { dashboardNavigationVisible = false },
+                navigate = {
+                    dashboardNavigationVisible = false
+                    tab = it
+                }
+            )
         }
     }
     if (showConnection) ConnectionDialog(connection, { showConnection = false }, requestPermissions, rescan)
@@ -208,11 +229,18 @@ fun TougeDashApp(
 }
 
 @Composable
-private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, navigate: (Int) -> Unit) {
+private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, overlay: Boolean = false, navigate: (Int) -> Unit) {
+    val overlayShape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     NavigationBar(
-        containerColor = Color(0xF20A1218),
+        containerColor = if (overlay) Color(0xFA0A1218) else Color(0xF20A1218),
         tonalElevation = 0.dp,
-        modifier = Modifier.border(width = 1.dp, color = Color.White.copy(alpha = .06f))
+        windowInsets = if (overlay) WindowInsets(0, 0, 0, 0) else NavigationBarDefaults.windowInsets,
+        modifier = if (overlay) {
+            Modifier.fillMaxWidth().height(if (landscape) 58.dp else 72.dp)
+                .border(width = 1.dp, color = TougeCyan.copy(alpha = .18f), shape = overlayShape)
+        } else {
+            Modifier.border(width = 1.dp, color = Color.White.copy(alpha = .06f))
+        }
     ) {
         listOf(
             Triple(R.string.dashboard, Icons.Default.DirectionsCar, 0),
@@ -238,16 +266,95 @@ private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, navigate: (In
 }
 
 @Composable
+private fun DashboardNavigationOverlay(
+    expanded: Boolean,
+    landscape: Boolean,
+    reveal: () -> Unit,
+    hide: () -> Unit,
+    navigate: (Int) -> Unit
+) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = !expanded,
+            modifier = Modifier.fillMaxWidth().height(if (landscape) 28.dp else 38.dp),
+            enter = fadeIn(tween(220)),
+            exit = fadeOut(tween(100))
+        ) {
+            Box(
+                Modifier.fillMaxSize().pointerInput(Unit) {
+                    var drag = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { drag = 0f },
+                        onVerticalDrag = { _, amount ->
+                            drag += amount
+                            if (drag < -24f) reveal()
+                        }
+                    )
+                },
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Box(
+                    Modifier.padding(bottom = 4.dp)
+                        .width(if (landscape) 92.dp else 112.dp)
+                        .height(if (landscape) 24.dp else 30.dp)
+                        .background(Color.Black.copy(alpha = .68f), RoundedCornerShape(18.dp))
+                        .border(1.dp, TougeCyan.copy(alpha = .26f), RoundedCornerShape(18.dp))
+                        .clickable(onClick = reveal),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            appText("NAVIGATION", "NAWIGACJA"),
+                            color = Color.White.copy(alpha = .82f),
+                            fontSize = if (landscape) 7.sp else 8.sp,
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = .8.sp
+                        )
+                        Text("  ↑", color = TougeCyan, fontSize = if (landscape) 11.sp else 13.sp, fontWeight = FontWeight.Black)
+                    }
+                }
+            }
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            visible = expanded,
+            modifier = Modifier.fillMaxWidth(),
+            enter = slideInVertically(tween(240)) { it } + fadeIn(tween(160)),
+            exit = slideOutVertically(tween(220)) { it } + fadeOut(tween(180))
+        ) {
+            Column(
+                Modifier.fillMaxWidth()
+                    .background(Color(0xFA0A1218), RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                    .pointerInput(Unit) {
+                        var drag = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { drag = 0f },
+                            onVerticalDrag = { _, amount ->
+                                drag += amount
+                                if (drag > 28f) hide()
+                            }
+                        )
+                    }
+            ) {
+                Box(
+                    Modifier.fillMaxWidth().height(if (landscape) 18.dp else 24.dp).clickable(onClick = hide),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.KeyboardArrowDown, null, tint = TougeCyan.copy(alpha = .72f), modifier = Modifier.size(if (landscape) 16.dp else 19.dp))
+                }
+                AppNavigationBar(0, landscape, overlay = true, navigate = navigate)
+            }
+        }
+    }
+}
+
+@Composable
 private fun DriverDashboardHeader(
     connection: TelemetryConnection,
     landscape: Boolean,
     onConnection: () -> Unit,
     dashboardEditing: Boolean,
     toggleDashboardEditor: () -> Unit,
-    navigationExpanded: Boolean,
-    showNavigation: () -> Unit,
-    hideNavigation: () -> Unit,
-    navigate: (Int) -> Unit
+    showNavigation: () -> Unit
 ) {
     val controlSize = if (landscape) 30.dp else 34.dp
     val touchSize = if (landscape) 38.dp else 44.dp
@@ -289,23 +396,15 @@ private fun DriverDashboardHeader(
                     )
                 }
             }
-            Box(Modifier.size(touchSize), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(touchSize).clickable(onClick = showNavigation),
+                contentAlignment = Alignment.Center
+            ) {
                 Box(
-                    Modifier.size(controlSize).background(Color.Black.copy(alpha = .34f), CircleShape).clickable(onClick = showNavigation),
+                    Modifier.size(controlSize).background(Color.Black.copy(alpha = .34f), CircleShape),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.MoreHoriz, stringResource(R.string.more), tint = Color.White, modifier = Modifier.size(if (landscape) 18.dp else 20.dp)) }
-                DropdownMenu(expanded = navigationExpanded, onDismissRequest = hideNavigation) {
-                    listOf(
-                        Triple(R.string.history, Icons.Default.History, 1),
-                        Triple(R.string.alerts, Icons.Default.Notifications, 2),
-                        Triple(R.string.more, Icons.Default.MoreHoriz, 3)
-                    ).forEach { item ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(item.first), fontWeight = FontWeight.SemiBold) },
-                            leadingIcon = { Icon(item.second, null, tint = TougeCyan) },
-                            onClick = { navigate(item.third) }
-                        )
-                    }
+                ) {
+                    Icon(Icons.Default.MoreHoriz, stringResource(R.string.more), tint = Color.White, modifier = Modifier.size(if (landscape) 18.dp else 20.dp))
                 }
             }
         }
