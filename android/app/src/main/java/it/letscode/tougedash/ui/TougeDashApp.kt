@@ -171,7 +171,10 @@ fun TougeDashApp(
             NavigationBar(
                 containerColor = Color(0xF20A1218),
                 tonalElevation = 0.dp,
-                modifier = Modifier.height(if (landscape) 54.dp else 80.dp).border(width = 1.dp, color = Color.White.copy(alpha = .06f))
+                // NavigationBar adds the system navigation-bar inset to its own
+                // content height. A fixed outer height makes that inset consume
+                // the space reserved for icons and labels on three-button devices.
+                modifier = Modifier.border(width = 1.dp, color = Color.White.copy(alpha = .06f))
             ) {
                 listOf(
                     Triple(R.string.dashboard, Icons.Default.DirectionsCar, 0),
