@@ -83,20 +83,36 @@ class TelemetryBitmapOverlay(
             OverlayElementKind.BLACKLIST_TACH -> drawBlacklistTach(sample, element, cx, cy, scale)
             OverlayElementKind.CARBON_TACH -> drawCarbonTach(sample, element, cx, cy, scale)
             OverlayElementKind.STREET_SHIFT_TACH -> drawStreetShiftTach(sample, element, cx, cy, scale)
-            OverlayElementKind.ROUTE_MAP -> drawRouteMap(sample, element, cx, cy, scale)
+            OverlayElementKind.ROUTE_MAP,
+            OverlayElementKind.ROUTE_MAP_CIRCULAR -> drawRouteMap(sample, element, cx, cy, scale)
         }
     }
 
     private fun drawRouteMap(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
-        val width = 535f * scale
-        val height = 340f * scale
+        val circular = element.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR
+        val width = (if (circular) 385f else 535f) * scale
+        val height = (if (circular) 385f else 340f) * scale
         val rect = RectF(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2)
-        val radius = 28f * scale
+        val radius = if (circular) width / 2 else 28f * scale
+        val clippingPath = Path().apply {
+            if (circular) addOval(rect, Path.Direction.CW)
+            else addRoundRect(rect, radius, radius, Path.Direction.CW)
+        }
         canvas.save()
-        canvas.clipPath(Path().apply { addRoundRect(rect, radius, radius, Path.Direction.CW) })
+        canvas.clipPath(clippingPath)
+        var mapContentRect = RectF(rect)
         routeMap?.let { snapshot ->
             paint.alpha = 255
-            canvas.drawBitmap(snapshot.bitmap, null, rect, paint)
+            val imageScale = maxOf(rect.width() / snapshot.bitmap.width, rect.height() / snapshot.bitmap.height)
+            val contentWidth = snapshot.bitmap.width * imageScale
+            val contentHeight = snapshot.bitmap.height * imageScale
+            mapContentRect = RectF(
+                rect.centerX() - contentWidth / 2,
+                rect.centerY() - contentHeight / 2,
+                rect.centerX() + contentWidth / 2,
+                rect.centerY() + contentHeight / 2
+            )
+            canvas.drawBitmap(snapshot.bitmap, null, mapContentRect, paint)
         } ?: run {
             paint.style = Paint.Style.FILL
             paint.color = 0xf0051116.toInt()
@@ -116,8 +132,8 @@ class TelemetryBitmapOverlay(
 
         routeMap?.takeIf { it.points.isNotEmpty() }?.let { snapshot ->
             fun mapped(point: RouteMapPoint) = android.graphics.PointF(
-                rect.left + point.x * rect.width(),
-                rect.top + point.y * rect.height()
+                mapContentRect.left + point.x * mapContentRect.width(),
+                mapContentRect.top + point.y * mapContentRect.height()
             )
             val mappedPoints = snapshot.points.map(::mapped)
             fun stroke(points: List<android.graphics.PointF>, color: Int, strokeWidth: Float) {
@@ -172,19 +188,14 @@ class TelemetryBitmapOverlay(
         paint.style = Paint.Style.STROKE
         paint.strokeWidth = 10f * scale
         paint.color = 0xdd000000.toInt()
-        canvas.drawRoundRect(rect, radius, radius, paint)
+        if (circular) canvas.drawOval(rect, paint) else canvas.drawRoundRect(rect, radius, radius, paint)
         paint.strokeWidth = 3f * scale
         paint.color = element.accent.colorInt()
-        canvas.drawRoundRect(rect, radius, radius, paint)
+        if (circular) canvas.drawOval(rect, paint) else canvas.drawRoundRect(rect, radius, radius, paint)
         paint.style = Paint.Style.FILL
 
-        val labelLeft = rect.left + 17f * scale
-        pill(labelLeft, rect.top + 15f * scale, labelLeft + 156f * scale, rect.top + 53f * scale, 0xcc000000.toInt())
-        text(if (routeMap == null) "NO GPS" else "ROUTE // LIVE", labelLeft + 13f * scale, rect.top + 42f * scale, 18f * scale, if (routeMap == null) 0xffffa03d.toInt() else element.accent.colorInt())
-        val speedRight = rect.right - 17f * scale
-        pill(speedRight - 142f * scale, rect.bottom - 55f * scale, speedRight, rect.bottom - 16f * scale, 0xcc000000.toInt())
-        rightText("${sample.speedKph.toInt()} KM/H", speedRight - 11f * scale, rect.bottom - 28f * scale, 20f * scale, Color.WHITE)
-        text("© OpenStreetMap", rect.left + 13f * scale, rect.bottom - 12f * scale, 10f * scale, 0xbbffffff.toInt())
+        if (routeMap == null) centered("NO GPS", rect.centerX(), rect.centerY() + 7f * scale, 21f * scale, 0xffffa03d.toInt())
+        centered("© OpenStreetMap", rect.centerX(), rect.bottom - (if (circular) 27f else 12f) * scale, 10f * scale, 0xbbffffff.toInt())
     }
 
     private fun drawDigital(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {

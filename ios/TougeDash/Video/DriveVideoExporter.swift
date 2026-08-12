@@ -279,7 +279,9 @@ final class DriveVideoExporter: ObservableObject {
         }
         activeExport = exporter
         if let template {
-            let routeMap: VideoRouteMapSnapshot? = if template.elements.contains(where: { $0.kind == .routeMap }) {
+            let routeMap: VideoRouteMapSnapshot? = if template.elements.contains(where: {
+                $0.kind == .routeMap || $0.kind == .routeMapCircular
+            }) {
                 await VideoRouteMapSnapshotter.make(samples: samples)
             } else {
                 nil
@@ -770,6 +772,7 @@ enum VideoOverlayCGRenderer {
         case .streetShiftTach: return CGSize(width: 190 * scale, height: 150 * scale)
         case .blacklistTach, .carbonTach: return CGSize(width: 150 * scale, height: 150 * scale)
         case .routeMap: return CGSize(width: 214 * scale, height: 136 * scale)
+        case .routeMapCircular: return CGSize(width: 154 * scale, height: 154 * scale)
         }
     }
 
@@ -811,7 +814,7 @@ enum VideoOverlayCGRenderer {
             drawOilCluster(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
         case .neonTach, .blacklistTach, .carbonTach, .streetShiftTach:
             drawArcadeTach(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
-        case .routeMap:
+        case .routeMap, .routeMapCircular:
             drawRouteMap(element: element, sample: sample, routeMap: routeMap, rect: rect, context: context)
         }
     }
@@ -824,14 +827,28 @@ enum VideoOverlayCGRenderer {
         context: CGContext
     ) {
         let accent = element.accent.uiColor
-        let radius = max(8, rect.width * 0.065)
+        let isCircular = element.kind == .routeMapCircular
+        let radius = isCircular ? min(rect.width, rect.height) / 2 : max(8, rect.width * 0.065)
         let mapRect = rect.insetBy(dx: rect.width * 0.018, dy: rect.width * 0.018)
+        let clippingPath = isCircular
+            ? UIBezierPath(ovalIn: mapRect)
+            : UIBezierPath(roundedRect: mapRect, cornerRadius: radius)
 
         context.saveGState()
-        context.addPath(UIBezierPath(roundedRect: mapRect, cornerRadius: radius).cgPath)
+        context.addPath(clippingPath.cgPath)
         context.clip()
+        var mapContentRect = mapRect
         if let routeMap {
-            UIImage(cgImage: routeMap.image).draw(in: mapRect)
+            let imageSize = CGSize(width: routeMap.image.width, height: routeMap.image.height)
+            let imageScale = max(mapRect.width / imageSize.width, mapRect.height / imageSize.height)
+            let scaledSize = CGSize(width: imageSize.width * imageScale, height: imageSize.height * imageScale)
+            mapContentRect = CGRect(
+                x: mapRect.midX - scaledSize.width / 2,
+                y: mapRect.midY - scaledSize.height / 2,
+                width: scaledSize.width,
+                height: scaledSize.height
+            )
+            UIImage(cgImage: routeMap.image).draw(in: mapContentRect)
         } else {
             context.setFillColor(UIColor(red: 0.02, green: 0.055, blue: 0.07, alpha: 0.96).cgColor)
             context.fill(mapRect)
@@ -854,8 +871,8 @@ enum VideoOverlayCGRenderer {
         if let routeMap, !routeMap.points.isEmpty {
             let mapped = routeMap.points.map { point in
                 CGPoint(
-                    x: mapRect.minX + point.position.x * mapRect.width,
-                    y: mapRect.minY + point.position.y * mapRect.height
+                    x: mapContentRect.minX + point.position.x * mapContentRect.width,
+                    y: mapContentRect.minY + point.position.y * mapContentRect.height
                 )
             }
             strokeRoute(mapped, color: UIColor.black.withAlphaComponent(0.78), width: rect.width * 0.026, context: context)
@@ -896,43 +913,22 @@ enum VideoOverlayCGRenderer {
 
         context.setStrokeColor(UIColor.black.withAlphaComponent(0.85).cgColor)
         context.setLineWidth(max(4, rect.width * 0.026))
-        context.addPath(UIBezierPath(roundedRect: mapRect, cornerRadius: radius).cgPath)
+        context.addPath(clippingPath.cgPath)
         context.strokePath()
         context.setStrokeColor(accent.withAlphaComponent(0.92).cgColor)
         context.setLineWidth(max(1.2, rect.width * 0.008))
-        context.addPath(UIBezierPath(roundedRect: mapRect, cornerRadius: radius).cgPath)
+        context.addPath(clippingPath.cgPath)
         context.strokePath()
 
-        let labelFont = UIFont.monospacedSystemFont(ofSize: rect.width * 0.047, weight: .black)
-        let speedFont = UIFont.monospacedDigitSystemFont(ofSize: rect.width * 0.074, weight: .black)
-        let badge = CGRect(
-            x: mapRect.minX + rect.width * 0.032,
-            y: mapRect.minY + rect.width * 0.028,
-            width: rect.width * 0.43,
-            height: rect.width * 0.105
-        )
-        context.setFillColor(UIColor.black.withAlphaComponent(0.76).cgColor)
-        fillRoundedRect(badge, context: context)
-        let routeLabel = (routeMap == nil ? localized("BRAK GPS") : "ROUTE // LIVE") as NSString
-        routeLabel.draw(
-            at: CGPoint(x: badge.minX + rect.width * 0.025, y: badge.minY + rect.width * 0.026),
-            withAttributes: [.font: labelFont, .foregroundColor: routeMap == nil ? UIColor.systemOrange : accent]
-        )
-
-        let speed = "\(Int(sample.speed.rounded())) KM/H" as NSString
-        let speedSize = speed.size(withAttributes: [.font: speedFont])
-        let speedBadge = CGRect(
-            x: mapRect.maxX - speedSize.width - rect.width * 0.075,
-            y: mapRect.maxY - rect.width * 0.132,
-            width: speedSize.width + rect.width * 0.05,
-            height: rect.width * 0.105
-        )
-        context.setFillColor(UIColor.black.withAlphaComponent(0.78).cgColor)
-        fillRoundedRect(speedBadge, context: context)
-        speed.draw(
-            at: CGPoint(x: speedBadge.minX + rect.width * 0.025, y: speedBadge.minY + rect.width * 0.016),
-            withAttributes: [.font: speedFont, .foregroundColor: UIColor.white]
-        )
+        if routeMap == nil {
+            drawCentered(
+                localized("BRAK GPS"),
+                font: .monospacedSystemFont(ofSize: rect.width * 0.06, weight: .black),
+                color: .systemOrange,
+                centerX: mapRect.midX,
+                y: mapRect.midY - rect.width * 0.03
+            )
+        }
     }
 
     private static func strokeRoute(_ points: [CGPoint], color: UIColor, width: CGFloat, context: CGContext) {

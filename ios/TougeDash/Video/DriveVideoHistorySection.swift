@@ -853,6 +853,31 @@ private struct DriveVideoExportSheet: View {
                 .padding(9)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if addsOverlay {
+                Menu {
+                    ForEach(overlayStore.templates) { template in
+                        Menu(template.name) {
+                            ForEach(template.elements) { element in
+                                Button {
+                                    addWidget(element)
+                                } label: {
+                                    Label(widgetTitle(element), systemImage: element.kind.icon)
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.headline.weight(.black))
+                        .frame(width: 34, height: 34)
+                        .background(.ultraThinMaterial, in: Circle())
+                        .overlay(Circle().stroke(Color.tougeCyan.opacity(0.75), lineWidth: 1))
+                }
+                .accessibilityLabel(localized("Dodaj widget"))
+                .padding(9)
+            }
+        }
         .overlay(alignment: .bottomLeading) {
             if let exportScrubPosition {
                 HStack(spacing: 7) {
@@ -877,6 +902,30 @@ private struct DriveVideoExportSheet: View {
     private var exportAspectRatio: CGFloat {
         guard recording.pixelWidth > 0, recording.pixelHeight > 0 else { return 16 / 9 }
         return CGFloat(recording.pixelWidth) / CGFloat(recording.pixelHeight)
+    }
+
+    private func addWidget(_ source: VideoOverlayElement) {
+        let widget = VideoOverlayElement(
+            metric: source.metric,
+            slot: source.slot,
+            scale: source.scale,
+            sizeMultiplier: source.sizeMultiplier,
+            accent: source.accent,
+            kind: source.kind,
+            landscapePosition: source.landscapePosition,
+            portraitPosition: source.portraitPosition
+        )
+        overlayDraft.elements.append(widget)
+        selectedElementID = widget.id
+    }
+
+    private func widgetTitle(_ element: VideoOverlayElement) -> String {
+        switch element.kind {
+        case .routeMap, .routeMapCircular:
+            element.kind.title
+        default:
+            "\(element.kind.title) · \(element.metric.shortTitle)"
+        }
     }
 
     private var exportOptions: some View {

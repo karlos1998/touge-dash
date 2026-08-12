@@ -23,7 +23,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let store = VideoOverlayTemplateStore(defaults: defaults, keyPrefix: suite)
-        XCTAssertEqual(store.templates.count, 10)
+        XCTAssertEqual(store.templates.count, 12)
         XCTAssertEqual(store.selectedTemplate.style, .racing)
 
         let copy = store.createCopy()
@@ -197,6 +197,10 @@ final class DriveVideoFeatureTests: XCTestCase {
     @MainActor
     func testRouteRadarRendersMappedRouteWithoutCoveringTachometer() throws {
         XCTAssertEqual(VideoOverlayTemplate.routeRadar.elements.map(\.kind), [.routeMap, .neonTach])
+        XCTAssertEqual(VideoOverlayTemplate.routeOrbit.elements.map(\.kind), [.routeMapCircular, .carbonTach])
+        XCTAssertEqual(VideoOverlayTemplate.routeOrbit.elements.first?.accent, .mint)
+        XCTAssertEqual(VideoOverlayTemplate.pursuitMap.elements.map(\.kind), [.routeMap, .blacklistTach])
+        XCTAssertEqual(VideoOverlayTemplate.pursuitMap.elements.first?.accent, .red)
         let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
         var telemetry = TelemetrySnapshot.preview
         telemetry.speedKPH = 83
@@ -225,16 +229,18 @@ final class DriveVideoFeatureTests: XCTestCase {
                 .init(timestamp: startedAt.addingTimeInterval(4), position: CGPoint(x: 0.92, y: 0.36))
             ]
         )
-        let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
-            size: CGSize(width: 390, height: 220),
-            sample: VideoTelemetryFrame(sample: sample),
-            template: .routeRadar,
-            routeMap: routeMap
-        ))
-        let attachment = XCTAttachment(image: UIImage(cgImage: image))
-        attachment.name = "Export-HUD-Route-Radar"
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .pursuitMap] {
+            let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
+                size: CGSize(width: 390, height: 220),
+                sample: VideoTelemetryFrame(sample: sample),
+                template: template,
+                routeMap: routeMap
+            ))
+            let attachment = XCTAttachment(image: UIImage(cgImage: image))
+            attachment.name = "Export-HUD-\(template.name.replacingOccurrences(of: " ", with: "-"))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 
     @MainActor
@@ -261,16 +267,18 @@ final class DriveVideoFeatureTests: XCTestCase {
         let generatedRouteMap = await VideoRouteMapSnapshotter.make(samples: frames)
         let routeMap = try XCTUnwrap(generatedRouteMap)
         XCTAssertEqual(routeMap.points.count, samples.count)
-        let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
-            size: CGSize(width: 390, height: 220),
-            sample: try XCTUnwrap(frames.last),
-            template: .routeRadar,
-            routeMap: routeMap
-        ))
-        let attachment = XCTAttachment(image: UIImage(cgImage: image))
-        attachment.name = "Simulator-Real-Map-Route-Radar"
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit] {
+            let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
+                size: CGSize(width: 390, height: 220),
+                sample: try XCTUnwrap(frames.last),
+                template: template,
+                routeMap: routeMap
+            ))
+            let attachment = XCTAttachment(image: UIImage(cgImage: image))
+            attachment.name = "Simulator-Real-Map-\(template.name.replacingOccurrences(of: " ", with: "-"))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
     }
 
     @MainActor

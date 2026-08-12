@@ -1,5 +1,6 @@
 package it.letscode.tougedash.video
 
+import it.letscode.tougedash.model.DashboardAccent
 import it.letscode.tougedash.model.TelemetryMetric
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -82,5 +83,16 @@ class OverlayTemplateModelsTest {
 
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP, OverlayElementKind.NEON_TACH), template.elements.map { it.kind })
         assertEquals(template, json.decodeFromString<VideoOverlayTemplateDefinition>(json.encodeToString(template)))
+    }
+
+    @Test
+    fun `route map variants include circular mint and rectangular red layouts`() {
+        val orbit = VideoOverlayTemplateDefinition.routeOrbit()
+        val pursuit = VideoOverlayTemplateDefinition.pursuitMap()
+
+        assertEquals(listOf(OverlayElementKind.ROUTE_MAP_CIRCULAR, OverlayElementKind.CARBON_TACH), orbit.elements.map { it.kind })
+        assertEquals(DashboardAccent.MINT, orbit.elements.first().accent)
+        assertEquals(listOf(OverlayElementKind.ROUTE_MAP, OverlayElementKind.BLACKLIST_TACH), pursuit.elements.map { it.kind })
+        assertEquals(DashboardAccent.RED, pursuit.elements.first().accent)
     }
 }

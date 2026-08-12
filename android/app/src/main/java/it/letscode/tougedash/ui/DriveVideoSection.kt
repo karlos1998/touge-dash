@@ -207,6 +207,7 @@ private fun VideoAlignmentEditor(
     var overlayDefinition by remember(initial.id) { mutableStateOf(VideoOverlayTemplateDefinition(runCatching { OverlayStyle.valueOf(initial.overlayTemplateId ?: "RACE") }.getOrDefault(OverlayStyle.RACE))) }
     var editingTemplate by remember { mutableStateOf<VideoOverlayTemplate?>(null) }
     var selectedElementId by remember { mutableStateOf<String?>(null) }
+    var widgetMenuOpen by remember { mutableStateOf(false) }
     val portraitVideo = initial.pixelHeight > initial.pixelWidth
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(templates, templateId) {
@@ -252,6 +253,48 @@ private fun VideoAlignmentEditor(
                     })
                 }
             )
+        }
+        Box(
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(10.dp)
+        ) {
+            IconButton(
+                onClick = { widgetMenuOpen = true },
+                modifier = Modifier
+                    .size(38.dp)
+                    .background(Color.Black.copy(alpha = .62f), androidx.compose.foundation.shape.CircleShape)
+                    .border(1.dp, TougeCyan.copy(alpha = .82f), androidx.compose.foundation.shape.CircleShape)
+            ) {
+                Icon(Icons.Default.Add, appText("Add widget", "Dodaj widget"), tint = Color.White)
+            }
+            androidx.compose.material3.DropdownMenu(
+                expanded = widgetMenuOpen,
+                onDismissRequest = { widgetMenuOpen = false }
+            ) {
+                templates.forEach { template ->
+                    template.definition.resolvedElements().forEach { source ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(widgetKindName(source.kind), fontWeight = FontWeight.Bold)
+                                    Text(
+                                        template.entity.name + if (source.kind.isRouteMap()) "" else " · ${source.metric.shortName}",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                            },
+                            onClick = {
+                                val widget = source.copy(id = java.util.UUID.randomUUID().toString())
+                                overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements + widget)
+                                selectedElementId = widget.id
+                                widgetMenuOpen = false
+                            }
+                        )
+                    }
+                }
+            }
         }
         IconButton(
             onClick = {
@@ -378,6 +421,24 @@ private fun VideoAlignmentEditor(
     }
 }
 
+private fun OverlayElementKind.isRouteMap() =
+    this == OverlayElementKind.ROUTE_MAP || this == OverlayElementKind.ROUTE_MAP_CIRCULAR
+
+@Composable
+private fun widgetKindName(kind: OverlayElementKind) = when (kind) {
+    OverlayElementKind.DIGITAL -> appText("Digital value", "Wartość cyfrowa")
+    OverlayElementKind.GAUGE -> appText("Gauge", "Zegar")
+    OverlayElementKind.BAR -> appText("Telemetry bar", "Pasek telemetrii")
+    OverlayElementKind.SPEED_CLUSTER -> appText("Speed cluster", "Zespół prędkości")
+    OverlayElementKind.OIL_CLUSTER -> appText("Oil cluster", "Zespół oleju")
+    OverlayElementKind.NEON_TACH -> "Neon Tach"
+    OverlayElementKind.BLACKLIST_TACH -> "Blacklist Tach"
+    OverlayElementKind.CARBON_TACH -> "Carbon Tach"
+    OverlayElementKind.STREET_SHIFT_TACH -> "Street Shift Tach"
+    OverlayElementKind.ROUTE_MAP -> appText("Route minimap", "Minimapa trasy")
+    OverlayElementKind.ROUTE_MAP_CIRCULAR -> appText("Circular route minimap", "Okrągła minimapa trasy")
+}
+
 @Composable
 private fun GaugeScaleSlider(
     label: String,
@@ -448,9 +509,11 @@ private fun HudElementPreview(
     val accent = element.accent.color()
     val background = if (style == OverlayStyle.UNDERGROUND) Color.Black.copy(alpha = .82f) else Color(0xE6071014)
     val value = element.metric.sampleValue(sample)
+    val circularMap = element.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR
+    val shellShape = if (circularMap) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(12.dp)
     val shell = modifier
-        .background(background, RoundedCornerShape(12.dp))
-        .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else accent.copy(alpha = .45f), RoundedCornerShape(12.dp))
+        .background(background, shellShape)
+        .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else accent.copy(alpha = .45f), shellShape)
         .padding(horizontal = 12.dp, vertical = 8.dp)
     when (element.kind) {
         OverlayElementKind.DIGITAL -> Column(shell, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -501,7 +564,8 @@ private fun HudElementPreview(
         OverlayElementKind.BLACKLIST_TACH,
         OverlayElementKind.CARBON_TACH,
         OverlayElementKind.STREET_SHIFT_TACH -> ArcadeTachPreview(sample, element.kind, definition, shell)
-        OverlayElementKind.ROUTE_MAP -> NfsRouteMapPreview(samples, sample, accent, shell)
+        OverlayElementKind.ROUTE_MAP,
+        OverlayElementKind.ROUTE_MAP_CIRCULAR -> NfsRouteMapPreview(samples, sample, accent, circularMap, shell)
     }
 }
 
@@ -510,6 +574,7 @@ private fun NfsRouteMapPreview(
     samples: List<TelemetrySampleEntity>,
     sample: TelemetrySampleEntity,
     accent: Color,
+    circular: Boolean,
     modifier: Modifier
 ) {
     val context = LocalContext.current
@@ -548,7 +613,9 @@ private fun NfsRouteMapPreview(
         canvas.drawPath(path, paint)
         BitmapDrawable(context.resources, bitmap)
     }
-    Box(modifier.width(240.dp).height(150.dp).padding(0.dp)) {
+    val sizeModifier = if (circular) Modifier.size(172.dp) else Modifier.width(240.dp).height(150.dp)
+    val mapShape = if (circular) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(12.dp)
+    Box(modifier.then(sizeModifier).graphicsLayer { shape = mapShape; clip = true }.padding(0.dp)) {
         if (points.isNotEmpty()) {
             AndroidView(
                 factory = {
@@ -601,15 +668,7 @@ private fun NfsRouteMapPreview(
                 Text(appText("NO GPS", "BRAK GPS"), color = TougeOrange, fontSize = 11.sp, fontWeight = FontWeight.Black)
             }
         }
-        Row(
-            Modifier.fillMaxWidth().padding(9.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("ROUTE // LIVE", color = accent, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(Color.Black.copy(alpha = .72f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 4.dp))
-            Text("${sample.speedKph.roundToInt()} KM/H", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(Color.Black.copy(alpha = .72f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 4.dp))
-        }
-        Text("© OpenStreetMap", color = Color.White.copy(alpha = .72f), fontSize = 6.sp, modifier = Modifier.align(Alignment.BottomStart).padding(7.dp))
+        Text("© OpenStreetMap", color = Color.White.copy(alpha = .72f), fontSize = 6.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (circular) 13.dp else 7.dp))
     }
 }
 

@@ -17,7 +17,8 @@ enum class OverlayElementKind {
     BLACKLIST_TACH,
     CARBON_TACH,
     STREET_SHIFT_TACH,
-    ROUTE_MAP
+    ROUTE_MAP,
+    ROUTE_MAP_CIRCULAR
 }
 
 @Serializable
@@ -169,6 +170,24 @@ data class VideoOverlayTemplateDefinition(
             elements = listOf(
                 element(TelemetryMetric.SPEED, OverlayElementKind.ROUTE_MAP, OverlayElementScale.MEDIUM, DashboardAccent.CYAN, .19f, .24f, .50f, .18f),
                 element(TelemetryMetric.RPM, OverlayElementKind.NEON_TACH, OverlayElementScale.SMALL, DashboardAccent.CYAN, .82f, .73f, .50f, .78f)
+            )
+        )
+
+        fun routeOrbit() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.UNDERGROUND,
+            maximumRpm = 9_000f,
+            elements = listOf(
+                element(TelemetryMetric.SPEED, OverlayElementKind.ROUTE_MAP_CIRCULAR, OverlayElementScale.MEDIUM, DashboardAccent.MINT, .18f, .26f, .50f, .20f),
+                element(TelemetryMetric.RPM, OverlayElementKind.CARBON_TACH, OverlayElementScale.SMALL, DashboardAccent.ORANGE, .83f, .73f, .50f, .79f)
+            )
+        )
+
+        fun pursuitMap() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.RACE,
+            maximumRpm = 10_000f,
+            elements = listOf(
+                element(TelemetryMetric.SPEED, OverlayElementKind.ROUTE_MAP, OverlayElementScale.MEDIUM, DashboardAccent.RED, .81f, .24f, .50f, .20f),
+                element(TelemetryMetric.RPM, OverlayElementKind.BLACKLIST_TACH, OverlayElementScale.SMALL, DashboardAccent.RED, .18f, .73f, .50f, .79f)
             )
         )
 
