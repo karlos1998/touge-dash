@@ -16,6 +16,7 @@ struct DashboardTelemetryPoint: Identifiable, Hashable, Sendable {
 @MainActor
 final class DashboardTelemetryBuffer: ObservableObject {
     @Published private(set) var points: [DashboardTelemetryPoint] = []
+    @Published private(set) var sessionMaximums: [DashboardMetric: Double] = [:]
 
     private let retention: TimeInterval
     private let minimumInterval: TimeInterval
@@ -26,7 +27,19 @@ final class DashboardTelemetryBuffer: ObservableObject {
         minimumInterval = 1 / samplesPerSecond
     }
 
-    func record(_ snapshot: TelemetrySnapshot, now: Date = .now) {
+    func record(
+        _ snapshot: TelemetrySnapshot,
+        now: Date = .now,
+        includeInSessionMaximums: Bool = true
+    ) {
+        if includeInSessionMaximums {
+            for metric in DashboardMetric.allCases {
+                let sample = metric.value(in: snapshot)
+                guard sample.isFinite else { continue }
+                sessionMaximums[metric] = max(sessionMaximums[metric] ?? sample, sample)
+            }
+        }
+
         guard now.timeIntervalSince(lastRecordedAt) >= minimumInterval else { return }
         lastRecordedAt = now
         points.append(DashboardTelemetryPoint(recordedAt: now, snapshot: snapshot))
@@ -46,6 +59,7 @@ final class DashboardTelemetryBuffer: ObservableObject {
 
     func reset() {
         points.removeAll(keepingCapacity: true)
+        sessionMaximums.removeAll(keepingCapacity: true)
         lastRecordedAt = .distantPast
     }
 }

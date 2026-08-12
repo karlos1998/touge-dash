@@ -108,6 +108,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -178,6 +179,12 @@ fun TougeDashApp(
             delay(5000)
             dashboardNavigationVisible = false
         }
+    }
+    BackHandler(enabled = tab != 0) {
+        selectedSessionId = null
+        dashboardNavigationVisible = false
+        dashboardEditing = false
+        tab = 0
     }
     val landscape = LocalConfiguration.current.screenWidthDp > LocalConfiguration.current.screenHeightDp
     Scaffold(
@@ -480,7 +487,13 @@ private fun DashboardLogoMark(modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, landscape: Boolean, rules: VehicleAlertRules = VehicleAlertRules()) {
+internal fun DashboardCard(
+    widget: DashboardWidget,
+    snapshot: TelemetrySnapshot,
+    sessionMaximums: Map<TelemetryMetric, Double> = emptyMap(),
+    landscape: Boolean,
+    rules: VehicleAlertRules = VehicleAlertRules()
+) {
     val accent = widget.accent.color()
     val kind = dashboardDisplayKind(widget, landscape)
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
@@ -513,18 +526,18 @@ internal fun DashboardCard(widget: DashboardWidget, snapshot: TelemetrySnapshot,
         val verticalPadding = if (kind == DashboardWidgetKind.COMPACT && fittedPortrait) 6.dp else if (kind == DashboardWidgetKind.COMPACT) 9.dp else if (compactLandscape || fittedPortrait) 13.dp else 17.dp
         Box(Modifier.fillMaxSize().padding(horizontal = horizontalPadding, vertical = verticalPadding)) {
             when (kind) {
-                DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait)
-                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait, warning)
-                DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait)
-                DashboardWidgetKind.PERFORMANCE -> ValueWidget(TelemetryMetric.SPEED, snapshot, accent, false, compactLandscape, fittedPortrait)
-                else -> ValueWidget(widget.metrics.first(), snapshot, if (warning) MaterialTheme.colorScheme.error else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape, fittedPortrait)
+                DashboardWidgetKind.HERO -> HeroWidget(widget, snapshot, sessionMaximums, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait)
+                DashboardWidgetKind.GROUP -> GroupWidget(widget, snapshot, sessionMaximums, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait, warning)
+                DashboardWidgetKind.GAUGE -> GaugeWidget(widget, snapshot, sessionMaximums, if (warning) MaterialTheme.colorScheme.error else accent, compactLandscape, fittedPortrait)
+                DashboardWidgetKind.PERFORMANCE -> ValueWidget(TelemetryMetric.SPEED, snapshot, sessionMaximums, accent, false, compactLandscape, fittedPortrait)
+                else -> ValueWidget(widget.metrics.first(), snapshot, sessionMaximums, if (warning) MaterialTheme.colorScheme.error else accent, kind == DashboardWidgetKind.COMPACT, compactLandscape, fittedPortrait)
             }
         }
     }
 }
 
 @Composable
-private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, fittedPortrait: Boolean) {
+private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, sessionMaximums: Map<TelemetryMetric, Double>, accent: Color, compact: Boolean, fittedPortrait: Boolean) {
     val metric = widget.metrics.first()
     val value = metric.value(snapshot)
     val dense = compact || fittedPortrait
@@ -540,6 +553,7 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
             Row(verticalAlignment = Alignment.Bottom) {
                 val valueSize = if (dense) 48.sp else 68.sp
                 Text(metric.format(value), fontSize = valueSize, lineHeight = valueSize, fontWeight = FontWeight.Black, maxLines = 1)
+                SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 5.dp, top = if (dense) 4.dp else 7.dp), dense)
                 Text(metric.unit.uppercase(), Modifier.padding(start = 7.dp, bottom = if (dense) 6.dp else 10.dp), color = accent, fontSize = if (dense) 9.sp else 11.sp, fontWeight = FontWeight.Black, letterSpacing = 1.2.sp)
             }
             val min = widget.gaugeMinimum ?: metric.defaultMin
@@ -554,25 +568,26 @@ private fun HeroWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, acc
                 ScaleText("${metric.format(max)} ${metric.unit.uppercase()}")
             }
             Row(Modifier.fillMaxWidth().padding(top = if (dense) 5.dp else 9.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                widget.metrics.drop(1).take(3).forEach { InlineMetric(it, snapshot, accent, dense) }
+                widget.metrics.drop(1).take(3).forEach { InlineMetric(it, snapshot, sessionMaximums, accent, dense) }
             }
         }
     }
 }
 
 @Composable
-private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean) {
+private fun InlineMetric(metric: TelemetryMetric, snapshot: TelemetrySnapshot, sessionMaximums: Map<TelemetryMetric, Double>, accent: Color, compact: Boolean) {
     Column(Modifier.fillMaxWidth(.3f)) {
         Text(metric.localizedName(), color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .8f), fontSize = if (compact) 6.sp else 7.sp, lineHeight = if (compact) 7.sp else 9.sp, fontWeight = FontWeight.Black, letterSpacing = .7.sp)
         Row(verticalAlignment = Alignment.Bottom) {
             Text(metric.format(metric.value(snapshot)), color = MaterialTheme.colorScheme.onSurface, fontSize = if (compact) 11.sp else 13.sp, lineHeight = if (compact) 12.sp else 15.sp, fontWeight = FontWeight.Bold)
+            SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 2.dp), compact = true)
             Text(metric.unit, Modifier.padding(start = 3.dp, bottom = 1.dp), color = accent, fontSize = if (compact) 7.sp else 8.sp, lineHeight = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @Composable
-private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, fittedPortrait: Boolean, warning: Boolean) {
+private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, sessionMaximums: Map<TelemetryMetric, Double>, accent: Color, compact: Boolean, fittedPortrait: Boolean, warning: Boolean) {
     val dense = compact || fittedPortrait
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -594,6 +609,7 @@ private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
                         val valueSize = if (compact) 21.sp else if (fittedPortrait) 25.sp else 37.sp
                         val valueLineHeight = if (compact) 22.sp else if (fittedPortrait) 26.sp else 39.sp
                         Text(metric.format(metric.value(snapshot)), fontSize = valueSize, lineHeight = valueLineHeight, fontWeight = FontWeight.Black, maxLines = 1)
+                        SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 3.dp, top = 2.dp), compact = true)
                         Text(metric.unit, Modifier.padding(start = 4.dp, bottom = if (dense) 2.dp else 5.dp), color = metricAccent(metric, accent), fontSize = if (dense) 7.sp else 10.sp, fontWeight = FontWeight.Black)
                     }
                 }
@@ -603,7 +619,7 @@ private fun GroupWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
 }
 
 @Composable
-private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, compactLandscape: Boolean, fittedPortrait: Boolean) {
+private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, sessionMaximums: Map<TelemetryMetric, Double>, accent: Color, compact: Boolean, compactLandscape: Boolean, fittedPortrait: Boolean) {
     Column(
         Modifier.fillMaxSize(),
         verticalArrangement = if (compact) Arrangement.spacedBy(2.dp, Alignment.CenterVertically) else Arrangement.SpaceBetween
@@ -613,18 +629,22 @@ private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, ac
             TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else if (fittedPortrait) 18.dp else 22.dp))
         }
         if (compact) {
-            Text(
-                "${metric.format(metric.value(snapshot))}${if (metric.unit == "%") "%" else " ${metric.unit}"}",
-                color = accent,
-                fontSize = if (fittedPortrait) 19.sp else if (compactLandscape) 21.sp else 23.sp,
-                lineHeight = if (fittedPortrait) 20.sp else 23.sp,
-                fontWeight = FontWeight.Black,
-                maxLines = 1
-            )
+            Row(verticalAlignment = Alignment.Top) {
+                Text(
+                    "${metric.format(metric.value(snapshot))}${if (metric.unit == "%") "%" else " ${metric.unit}"}",
+                    color = accent,
+                    fontSize = if (fittedPortrait) 19.sp else if (compactLandscape) 21.sp else 23.sp,
+                    lineHeight = if (fittedPortrait) 20.sp else 23.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1
+                )
+                SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 4.dp), compact = true)
+            }
         } else {
             Column {
                 Row(verticalAlignment = Alignment.Bottom) {
                     Text(metric.format(metric.value(snapshot)), fontSize = if (compactLandscape || fittedPortrait) 34.sp else 43.sp, lineHeight = if (compactLandscape || fittedPortrait) 35.sp else 44.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Clip)
+                    SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 4.dp, top = 3.dp), compactLandscape || fittedPortrait)
                     if (metric != TelemetryMetric.AFR && metric != TelemetryMetric.BATTERY_VOLTAGE) {
                         Text(metric.unit, Modifier.padding(start = 5.dp, bottom = 5.dp), color = accent, fontSize = 10.sp, fontWeight = FontWeight.Black)
                     }
@@ -636,7 +656,7 @@ private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, ac
 }
 
 @Composable
-private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, accent: Color, compact: Boolean, fittedPortrait: Boolean) {
+private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, sessionMaximums: Map<TelemetryMetric, Double>, accent: Color, compact: Boolean, fittedPortrait: Boolean) {
     val metric = widget.metrics.first()
     val min = widget.gaugeMinimum ?: metric.defaultMin
     val max = widget.gaugeMaximum ?: metric.defaultMax
@@ -653,11 +673,33 @@ private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, ac
                 drawArc(Brush.sweepGradient(listOf(TougeBlue, accent)), 150f, 240f * progress, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 24.sp else if (fittedPortrait) 31.sp else 38.sp, lineHeight = if (compact) 25.sp else if (fittedPortrait) 32.sp else 39.sp, fontWeight = FontWeight.Black)
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 24.sp else if (fittedPortrait) 31.sp else 38.sp, lineHeight = if (compact) 25.sp else if (fittedPortrait) 32.sp else 39.sp, fontWeight = FontWeight.Black)
+                    SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 3.dp), compact || fittedPortrait)
+                }
                 Text(metric.unit, color = accent, fontSize = if (compact) 8.sp else if (fittedPortrait) 9.sp else 10.sp, fontWeight = FontWeight.Black)
             }
         }
     }
+}
+
+@Composable
+internal fun SessionMaximumText(
+    metric: TelemetryMetric,
+    maximum: Double?,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
+    maximum ?: return
+    Text(
+        "${if (compact) "↑" else "MAX "}${metric.format(maximum)}",
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontSize = if (compact) 6.sp else 8.sp,
+        lineHeight = if (compact) 7.sp else 9.sp,
+        fontWeight = FontWeight.Black,
+        maxLines = 1
+    )
 }
 
 @Composable

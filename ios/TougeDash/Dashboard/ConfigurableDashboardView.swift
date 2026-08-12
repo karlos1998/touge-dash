@@ -361,17 +361,17 @@ private struct DashboardWidgetView: View {
         let kind = isWide ? (widget.wideKind ?? widget.kind) : widget.kind
         switch kind {
         case .hero:
-            DashboardHeroWidget(widget: widget, snapshot: snapshot, compact: compact)
+            DashboardHeroWidget(widget: widget, snapshot: snapshot, sessionMaximums: telemetryBuffer.sessionMaximums, compact: compact)
         case .group:
-            DashboardGroupWidget(widget: widget, snapshot: snapshot, compact: compact, prominent: isWide && !compact)
+            DashboardGroupWidget(widget: widget, snapshot: snapshot, sessionMaximums: telemetryBuffer.sessionMaximums, compact: compact, prominent: isWide && !compact)
         case .value:
-            DashboardValueWidget(widget: widget, snapshot: snapshot, compact: compact, prominent: isWide && !compact)
+            DashboardValueWidget(widget: widget, snapshot: snapshot, sessionMaximums: telemetryBuffer.sessionMaximums, compact: compact, prominent: isWide && !compact)
         case .gauge:
-            DashboardGaugeWidget(widget: widget, snapshot: snapshot, compact: compact)
+            DashboardGaugeWidget(widget: widget, snapshot: snapshot, sessionMaximums: telemetryBuffer.sessionMaximums, compact: compact)
         case .chart:
-            DashboardChartWidget(widget: widget, snapshot: snapshot, telemetryBuffer: telemetryBuffer, compact: compact)
+            DashboardChartWidget(widget: widget, snapshot: snapshot, sessionMaximums: telemetryBuffer.sessionMaximums, telemetryBuffer: telemetryBuffer, compact: compact)
         case .compact:
-            DashboardCompactWidget(widget: widget, snapshot: snapshot, compact: compact)
+            DashboardCompactWidget(widget: widget, snapshot: snapshot, sessionMaximums: telemetryBuffer.sessionMaximums, compact: compact)
         case .performance:
             DashboardPerformanceWidget(widget: widget, engine: accelerationEngine, compact: compact)
         case .ecuSwitch:
@@ -439,6 +439,7 @@ private struct DashboardPerformanceWidget: View {
 private struct DashboardHeroWidget: View {
     let widget: DashboardWidget
     let snapshot: TelemetrySnapshot
+    let sessionMaximums: [DashboardMetric: Double]
     let compact: Bool
 
     private var metric: DashboardMetric { widget.primaryMetric }
@@ -477,6 +478,8 @@ private struct DashboardHeroWidget: View {
                     .minimumScaleFactor(0.52)
                     .lineLimit(1)
                     .foregroundStyle(warning ? Color.tougeRed : Color.primary)
+                DashboardSessionMaximum(metric: metric, maximum: sessionMaximums[metric], compact: compact)
+                    .alignmentGuide(.lastTextBaseline) { dimensions in dimensions[.top] }
                 Text(metric.unit.uppercased())
                     .font(.system(size: compact ? 9 : 12, weight: .black))
                     .tracking(1.2)
@@ -490,7 +493,7 @@ private struct DashboardHeroWidget: View {
             if !secondary.isEmpty {
                 HStack(spacing: 0) {
                     ForEach(secondary) { item in
-                        DashboardInlineMetric(metric: item, snapshot: snapshot)
+                        DashboardInlineMetric(metric: item, snapshot: snapshot, maximum: sessionMaximums[item])
                     }
                 }
             }
@@ -540,6 +543,7 @@ private struct DashboardLinearScale: View {
 private struct DashboardInlineMetric: View {
     let metric: DashboardMetric
     let snapshot: TelemetrySnapshot
+    let maximum: Double?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -554,6 +558,8 @@ private struct DashboardInlineMetric: View {
                     .foregroundStyle(Color.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.65)
+                DashboardSessionMaximum(metric: metric, maximum: maximum, compact: true)
+                    .alignmentGuide(.lastTextBaseline) { dimensions in dimensions[.top] }
                 Text(metric.unit)
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
@@ -566,6 +572,7 @@ private struct DashboardInlineMetric: View {
 private struct DashboardGroupWidget: View {
     let widget: DashboardWidget
     let snapshot: TelemetrySnapshot
+    let sessionMaximums: [DashboardMetric: Double]
     let compact: Bool
     let prominent: Bool
 
@@ -589,7 +596,7 @@ private struct DashboardGroupWidget: View {
                     if index > 0 {
                         Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1).padding(.vertical, 4)
                     }
-                    DashboardGroupValue(metric: metric, snapshot: snapshot, tint: widget.accent.color, compact: compact, prominent: prominent)
+                    DashboardGroupValue(metric: metric, snapshot: snapshot, maximum: sessionMaximums[metric], tint: widget.accent.color, compact: compact, prominent: prominent)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -602,6 +609,7 @@ private struct DashboardGroupWidget: View {
 private struct DashboardGroupValue: View {
     let metric: DashboardMetric
     let snapshot: TelemetrySnapshot
+    let maximum: Double?
     let tint: Color
     let compact: Bool
     let prominent: Bool
@@ -630,6 +638,8 @@ private struct DashboardGroupValue: View {
                     .minimumScaleFactor(0.48)
                     .lineLimit(1)
                     .foregroundStyle(warning ? Color.tougeRed : Color.primary)
+                DashboardSessionMaximum(metric: metric, maximum: maximum, compact: true)
+                    .alignmentGuide(.lastTextBaseline) { dimensions in dimensions[.top] }
                 Text(metric.unit)
                     .font(.system(size: compact ? 7 : (prominent ? 12 : 9), weight: .black))
                     .foregroundStyle(warning ? Color.tougeRed : tint)
@@ -642,6 +652,7 @@ private struct DashboardGroupValue: View {
 private struct DashboardValueWidget: View {
     let widget: DashboardWidget
     let snapshot: TelemetrySnapshot
+    let sessionMaximums: [DashboardMetric: Double]
     let compact: Bool
     let prominent: Bool
 
@@ -660,14 +671,17 @@ private struct DashboardValueWidget: View {
                 Image(systemName: metric.icon).foregroundStyle(warning ? Color.tougeRed : widget.accent.color)
             }
             Spacer(minLength: 0)
-            Text(metric.value(in: snapshot).formatted(.number.precision(.fractionLength(metric.precision))))
-                .font(.system(size: compact ? 25 : (prominent ? 49 : 34), weight: .black, design: .rounded))
-                .fontWidth(.expanded)
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .foregroundStyle(warning ? Color.tougeRed : Color.primary)
-                .minimumScaleFactor(0.55)
-                .lineLimit(1)
+            HStack(alignment: .top, spacing: 4) {
+                Text(metric.value(in: snapshot).formatted(.number.precision(.fractionLength(metric.precision))))
+                    .font(.system(size: compact ? 25 : (prominent ? 49 : 34), weight: .black, design: .rounded))
+                    .fontWidth(.expanded)
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                    .foregroundStyle(warning ? Color.tougeRed : Color.primary)
+                    .minimumScaleFactor(0.55)
+                    .lineLimit(1)
+                DashboardSessionMaximum(metric: metric, maximum: sessionMaximums[metric], compact: compact)
+            }
             Text(secondaryLabel)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -688,6 +702,7 @@ private struct DashboardValueWidget: View {
 private struct DashboardCompactWidget: View {
     let widget: DashboardWidget
     let snapshot: TelemetrySnapshot
+    let sessionMaximums: [DashboardMetric: Double]
     let compact: Bool
 
     private var metric: DashboardMetric { widget.primaryMetric }
@@ -705,6 +720,8 @@ private struct DashboardCompactWidget: View {
                     .monospacedDigit()
                     .minimumScaleFactor(0.58)
                     .lineLimit(1)
+                DashboardSessionMaximum(metric: metric, maximum: sessionMaximums[metric], compact: true)
+                    .alignmentGuide(.lastTextBaseline) { dimensions in dimensions[.top] }
                 Text(metric.unit)
                     .font(.system(size: compact ? 6 : 8, weight: .bold))
             }
@@ -719,6 +736,7 @@ private struct DashboardCompactWidget: View {
 private struct DashboardGaugeWidget: View {
     let widget: DashboardWidget
     let snapshot: TelemetrySnapshot
+    let sessionMaximums: [DashboardMetric: Double]
     let compact: Bool
 
     private var metric: DashboardMetric { widget.primaryMetric }
@@ -737,6 +755,7 @@ private struct DashboardGaugeWidget: View {
                 .lineLimit(1)
             DashboardNeedleGauge(
                 value: metric.value(in: snapshot),
+                maximum: sessionMaximums[metric],
                 range: range,
                 metric: metric,
                 tint: metric.isWarning(in: snapshot) ? .tougeRed : widget.accent.color,
@@ -750,6 +769,7 @@ private struct DashboardGaugeWidget: View {
 
 private struct DashboardNeedleGauge: View {
     let value: Double
+    let maximum: Double?
     let range: ClosedRange<Double>
     let metric: DashboardMetric
     let tint: Color
@@ -795,10 +815,13 @@ private struct DashboardNeedleGauge: View {
 
             VStack(spacing: 0) {
                 Spacer()
-                Text(value.formatted(.number.precision(.fractionLength(metric.precision))))
-                    .font(.system(size: compact ? 23 : 34, weight: .black, design: .rounded))
-                    .fontWidth(.expanded)
-                    .monospacedDigit()
+                HStack(alignment: .top, spacing: 3) {
+                    Text(value.formatted(.number.precision(.fractionLength(metric.precision))))
+                        .font(.system(size: compact ? 23 : 34, weight: .black, design: .rounded))
+                        .fontWidth(.expanded)
+                        .monospacedDigit()
+                    DashboardSessionMaximum(metric: metric, maximum: maximum, compact: compact)
+                }
                 Text(metric.unit)
                     .font(.caption2.weight(.black))
                     .foregroundStyle(tint)
@@ -812,6 +835,7 @@ private struct DashboardNeedleGauge: View {
 private struct DashboardChartWidget: View {
     let widget: DashboardWidget
     let snapshot: TelemetrySnapshot
+    let sessionMaximums: [DashboardMetric: Double]
     @ObservedObject var telemetryBuffer: DashboardTelemetryBuffer
     let compact: Bool
 
@@ -837,6 +861,8 @@ private struct DashboardChartWidget: View {
                 Text(metric.value(in: snapshot).formatted(.number.precision(.fractionLength(metric.precision))))
                     .font(.system(size: compact ? 20 : 28, weight: .black, design: .rounded))
                     .monospacedDigit()
+                DashboardSessionMaximum(metric: metric, maximum: sessionMaximums[metric], compact: true)
+                    .alignmentGuide(.firstTextBaseline) { dimensions in dimensions[.top] }
                 Text(metric.unit)
                     .font(.caption2.weight(.black))
                     .foregroundStyle(widget.accent.color)
@@ -866,6 +892,22 @@ private struct DashboardChartWidget: View {
         }
         .padding(compact ? 10 : 14)
         .cardSurface(warning: metric.isWarning(in: snapshot), accent: widget.accent.color)
+    }
+}
+
+private struct DashboardSessionMaximum: View {
+    let metric: DashboardMetric
+    let maximum: Double?
+    let compact: Bool
+
+    var body: some View {
+        if let maximum {
+            Text("\(compact ? "↑" : "MAX ")\(maximum.formatted(.number.precision(.fractionLength(metric.precision))))")
+                .font(.system(size: compact ? 6 : 8, weight: .black, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
     }
 }
 

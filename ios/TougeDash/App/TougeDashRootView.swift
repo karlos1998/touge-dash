@@ -109,7 +109,9 @@ struct TougeDashRootView: View {
         .onChange(of: cloudAccount.isAuthenticated) { _, _ in
             Task { await cloudSync.accountDidChange() }
         }
-        .onReceive(controller.$snapshot) { dashboardBuffer.record($0) }
+        .onReceive(controller.$snapshot) {
+            dashboardBuffer.record($0, includeInSessionMaximums: controller.isConnected)
+        }
     }
 }
 

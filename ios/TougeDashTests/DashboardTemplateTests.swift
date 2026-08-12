@@ -31,6 +31,34 @@ final class DashboardTemplateTests: XCTestCase {
         XCTAssertEqual(DashboardMetric.speed.value(in: snapshot), 128)
     }
 
+    @MainActor
+    func testDashboardSessionMaximumsOnlyMoveUpwardAndResetInMemory() {
+        let buffer = DashboardTelemetryBuffer()
+        var first = TelemetrySnapshot()
+        first.boostBar = -0.4
+        first.rpm = 3_200
+        buffer.record(first)
+
+        var lower = first
+        lower.boostBar = -0.7
+        lower.rpm = 2_800
+        buffer.record(lower)
+
+        XCTAssertEqual(buffer.sessionMaximums[.boost], -0.4)
+        XCTAssertEqual(buffer.sessionMaximums[.rpm], 3_200)
+
+        var higher = lower
+        higher.boostBar = 1.2
+        higher.rpm = 6_400
+        buffer.record(higher)
+
+        XCTAssertEqual(buffer.sessionMaximums[.boost], 1.2)
+        XCTAssertEqual(buffer.sessionMaximums[.rpm], 6_400)
+
+        buffer.reset()
+        XCTAssertTrue(buffer.sessionMaximums.isEmpty)
+    }
+
     func testControlCardUsesCloudCompatibleDashboardSchema() throws {
         let widget = DashboardWidget(
             kind: .ecuSwitch,

@@ -2,6 +2,7 @@ package it.letscode.tougedash.telemetry
 
 import android.util.Log
 import it.letscode.tougedash.model.TelemetryConnection
+import it.letscode.tougedash.model.TelemetryMetric
 import it.letscode.tougedash.model.TelemetrySnapshot
 import it.letscode.tougedash.model.ConnectionState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +20,8 @@ object TelemetryRuntime {
     val diagnostics = mutableDiagnostics.asStateFlow()
     private val mutableChartPoints = MutableStateFlow<List<TimedTelemetry>>(emptyList())
     val chartPoints = mutableChartPoints.asStateFlow()
+    private val mutableSessionMaximums = MutableStateFlow<Map<TelemetryMetric, Double>>(emptyMap())
+    val sessionMaximums = mutableSessionMaximums.asStateFlow()
     private val mutableAppVisible = MutableStateFlow(false)
     val appVisible = mutableAppVisible.asStateFlow()
     private val driveSplitRequested = AtomicBoolean(false)
@@ -38,6 +41,7 @@ object TelemetryRuntime {
 
     internal fun updateSnapshot(value: TelemetrySnapshot) {
         mutableSnapshot.value = value
+        mutableSessionMaximums.value = accumulateSessionMaximums(mutableSessionMaximums.value, value)
         // Dashboard charts do not need the full recording frequency. Keeping 5 Hz here
         // avoids copying a 6,000-element list ten times per second on long drives.
         if (value.updatedAt - lastChartPointAt >= 200) {
@@ -50,5 +54,16 @@ object TelemetryRuntime {
     internal fun diagnostic(value: String) {
         Log.d("TougeDashBLE", value)
         mutableDiagnostics.value = (listOf("${System.currentTimeMillis()}: $value") + mutableDiagnostics.value).take(100)
+    }
+}
+
+internal fun accumulateSessionMaximums(
+    current: Map<TelemetryMetric, Double>,
+    snapshot: TelemetrySnapshot
+): Map<TelemetryMetric, Double> = buildMap {
+    TelemetryMetric.entries.forEach { metric ->
+        val sample = metric.value(snapshot)
+        if (sample.isFinite()) put(metric, maxOf(current[metric] ?: sample, sample))
+        else current[metric]?.let { put(metric, it) }
     }
 }

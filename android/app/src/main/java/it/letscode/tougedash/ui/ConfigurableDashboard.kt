@@ -107,6 +107,7 @@ fun ConfigurableDashboardScreen(
     val template by container.dashboardRepository.selected.collectAsState(initial = DashboardTemplate.factory())
     val templates by container.dashboardRepository.templates.collectAsState(initial = listOf(DashboardTemplate.factory()))
     val chartPoints by container.runtime.chartPoints.collectAsState()
+    val sessionMaximums by container.runtime.sessionMaximums.collectAsState()
     val performance by container.accelerationEngine.state.collectAsState()
     val ecuControlState by container.ecuControls.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -228,7 +229,7 @@ fun ConfigurableDashboardScreen(
                 ) {
                     items(widgets, key = { it.id }, span = { GridItemSpan(if (landscape) it.landscapeSpan else it.portraitSpan) }) { widget ->
                         EditableDashboardCard(
-                            widget, snapshot, chartPoints, performance, alertRules, landscape, editing,
+                            widget, snapshot, sessionMaximums, chartPoints, performance, alertRules, landscape, editing,
                             ecuControlState, container.ecuControls,
                             selected = selectedWidget == (pageTemplate.id to widget.id),
                             select = { selectedWidget = pageTemplate.id to widget.id },
@@ -456,6 +457,7 @@ private fun DashboardEditorAction(
 private fun EditableDashboardCard(
     widget: DashboardWidget,
     snapshot: TelemetrySnapshot,
+    sessionMaximums: Map<TelemetryMetric, Double>,
     chartPoints: List<TimedTelemetry>,
     performance: AccelerationRuntimeState,
     alertRules: VehicleAlertRules,
@@ -483,11 +485,11 @@ private fun EditableDashboardCard(
     ) {
         val effectiveKind = dashboardDisplayKind(widget, landscape)
         when (effectiveKind) {
-            DashboardWidgetKind.CHART -> ChartCard(widget, snapshot, chartPoints, landscape)
+            DashboardWidgetKind.CHART -> ChartCard(widget, snapshot, sessionMaximums, chartPoints, landscape)
             DashboardWidgetKind.PERFORMANCE -> PerformanceCard(widget, performance, landscape)
             DashboardWidgetKind.ECU_SWITCH -> EcuSwitchCard(widget, ecuControlState, landscape, !editing) { ecuControls.toggleSwitch(it) }
             DashboardWidgetKind.ECU_ROTARY -> EcuRotaryCard(widget, ecuControlState, landscape, !editing) { channel, value -> ecuControls.setRotary(channel, value) }
-            else -> DashboardCard(widget, snapshot, landscape, alertRules)
+            else -> DashboardCard(widget, snapshot, sessionMaximums, landscape, alertRules)
         }
         if (editing) {
             Box(
@@ -568,7 +570,13 @@ private fun PerformanceCard(widget: DashboardWidget, state: AccelerationRuntimeS
 }
 
 @Composable
-private fun ChartCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, points: List<TimedTelemetry>, landscape: Boolean) {
+private fun ChartCard(
+    widget: DashboardWidget,
+    snapshot: TelemetrySnapshot,
+    sessionMaximums: Map<TelemetryMetric, Double>,
+    points: List<TimedTelemetry>,
+    landscape: Boolean
+) {
     val metric = widget.metrics.first()
     val accent = widget.accent.color()
     val duration = widget.chartDurationSeconds ?: 30
@@ -591,7 +599,11 @@ private fun ChartCard(widget: DashboardWidget, snapshot: TelemetrySnapshot, poin
                     TelemetryGlyph(metric, accent, Modifier.size(18.dp))
                     Text(metric.localizedName(), Modifier.padding(start = 8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
                 }
-                Text("${metric.format(metric.value(snapshot))} ${metric.unit}  •  ${duration}s", fontWeight = FontWeight.Black)
+                Row(verticalAlignment = Alignment.Top) {
+                    Text("${metric.format(metric.value(snapshot))} ${metric.unit}", fontWeight = FontWeight.Black)
+                    SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 5.dp), compact = true)
+                    Text("  •  ${duration}s", fontWeight = FontWeight.Black)
+                }
             }
             Canvas(Modifier.fillMaxWidth().weight(1f).padding(top = 13.dp)) {
                 if (values.size > 1) {
