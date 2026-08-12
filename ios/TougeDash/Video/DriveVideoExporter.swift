@@ -576,7 +576,7 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
     }
 }
 
-private enum VideoOverlayCGRenderer {
+enum VideoOverlayCGRenderer {
     static func render(size: CGSize, sample: VideoTelemetryFrame, template: VideoOverlayTemplate) -> CGImage? {
         let format = UIGraphicsImageRendererFormat()
         format.opaque = false
@@ -618,6 +618,9 @@ private enum VideoOverlayCGRenderer {
         case .bar: return CGSize(width: 190 * scale, height: 48 * scale)
         case .speedCluster: return CGSize(width: 126 * scale, height: 126 * scale)
         case .oilCluster: return CGSize(width: 116 * scale, height: 116 * scale)
+        case .neonTach: return CGSize(width: 184 * scale, height: 150 * scale)
+        case .streetShiftTach: return CGSize(width: 190 * scale, height: 150 * scale)
+        case .blacklistTach, .carbonTach: return CGSize(width: 150 * scale, height: 150 * scale)
         }
     }
 
@@ -656,6 +659,8 @@ private enum VideoOverlayCGRenderer {
             drawSpeedCluster(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
         case .oilCluster:
             drawOilCluster(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
+        case .neonTach, .blacklistTach, .carbonTach, .streetShiftTach:
+            drawArcadeTach(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
         }
     }
 
@@ -858,6 +863,155 @@ private enum VideoOverlayCGRenderer {
         drawCentered("\(Int(temperature))°", font: .monospacedDigitSystemFont(ofSize: 23 * localScale, weight: .black), color: .white, centerX: rect.midX, y: rect.midY - 5 * localScale)
         let pressure = sample.value(for: .oilPressure)
         drawCentered("OIL P  \(pressure.formatted(.number.precision(.fractionLength(1)))) bar", font: .monospacedSystemFont(ofSize: 6 * localScale, weight: .black), color: UIColor.white.withAlphaComponent(0.8), centerX: rect.midX, y: rect.midY + 23 * localScale)
+    }
+
+    private static func drawArcadeTach(
+        element: VideoOverlayElement,
+        configuration: VideoOverlayGaugeConfiguration,
+        sample: VideoTelemetryFrame,
+        rect: CGRect,
+        context: CGContext
+    ) {
+        let kind = element.kind
+        let localScale = rect.height / 150
+        let faceDimension = 150 * localScale
+        let faceRect: CGRect = switch kind {
+        case .neonTach: CGRect(x: rect.maxX - faceDimension, y: rect.minY, width: faceDimension, height: faceDimension)
+        case .streetShiftTach: CGRect(x: rect.minX, y: rect.minY, width: faceDimension, height: faceDimension)
+        default: CGRect(x: rect.midX - faceDimension / 2, y: rect.minY, width: faceDimension, height: faceDimension)
+        }
+        let center = CGPoint(x: faceRect.midX, y: faceRect.midY)
+        let radius = faceDimension * 0.41
+        let accent: UIColor = switch kind {
+        case .neonTach: UIColor(red: 0.09, green: 0.75, blue: 1, alpha: 1)
+        case .blacklistTach: UIColor(red: 0.84, green: 0.18, blue: 0.18, alpha: 1)
+        case .carbonTach: UIColor(red: 0.89, green: 0.64, blue: 0.25, alpha: 1)
+        default: UIColor(red: 0.94, green: 0.63, blue: 0.29, alpha: 1)
+        }
+        let face: UIColor = switch kind {
+        case .neonTach: UIColor(red: 0.015, green: 0.04, blue: 0.06, alpha: 0.94)
+        case .carbonTach: UIColor(red: 0.09, green: 0.075, blue: 0.045, alpha: 0.94)
+        case .streetShiftTach: UIColor(red: 0.03, green: 0.04, blue: 0.03, alpha: 0.92)
+        default: UIColor(red: 0.035, green: 0.04, blue: 0.045, alpha: 0.94)
+        }
+
+        context.setFillColor(face.cgColor)
+        context.fillEllipse(in: faceRect)
+        if kind == .carbonTach {
+            context.saveGState()
+            context.addEllipse(in: faceRect.insetBy(dx: 2 * localScale, dy: 2 * localScale))
+            context.clip()
+            context.setLineWidth(1 * localScale)
+            for offset in stride(from: -faceDimension, through: faceDimension * 2, by: 10 * localScale) {
+                context.setStrokeColor(UIColor.white.withAlphaComponent(0.035).cgColor)
+                context.move(to: CGPoint(x: faceRect.minX + offset, y: faceRect.maxY))
+                context.addLine(to: CGPoint(x: faceRect.minX + offset + faceDimension, y: faceRect.minY))
+                context.strokePath()
+            }
+            context.restoreGState()
+        }
+        context.setStrokeColor(accent.withAlphaComponent(0.7).cgColor)
+        context.setLineWidth(max(1, 1.5 * localScale))
+        context.strokeEllipse(in: faceRect.insetBy(dx: localScale, dy: localScale))
+
+        let start = CGFloat.pi * 0.778
+        let sweep = CGFloat.pi * 1.444
+        context.setLineCap(.square)
+        for index in 0...40 {
+            let fraction = CGFloat(index) / 40
+            let angle = start + sweep * fraction
+            let major = index.isMultiple(of: 4)
+            let length = faceDimension * (major ? 0.075 : 0.04)
+            let isRedline = (kind == .blacklistTach || kind == .streetShiftTach) && fraction > 0.78
+            context.setStrokeColor((isRedline ? DashboardAccent.red.uiColor : UIColor.white.withAlphaComponent(major ? 0.9 : 0.35)).cgColor)
+            context.setLineWidth(max(0.7, faceDimension * (major ? 0.014 : 0.007)))
+            context.move(to: CGPoint(x: center.x + cos(angle) * (radius - length), y: center.y + sin(angle) * (radius - length)))
+            context.addLine(to: CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius))
+            context.strokePath()
+        }
+        let divisions = min(12, max(4, Int((configuration.maximumRPM / 1_000).rounded())))
+        for index in 0...divisions {
+            let fraction = CGFloat(index) / CGFloat(divisions)
+            let angle = start + sweep * fraction
+            drawCentered(
+                "\(index)",
+                font: .systemFont(ofSize: 7 * localScale, weight: .bold),
+                color: UIColor.white.withAlphaComponent(0.8),
+                centerX: center.x + cos(angle) * radius * 0.69,
+                y: center.y + sin(angle) * radius * 0.69 - 4 * localScale
+            )
+        }
+        let rpmProgress = progress(for: .rpm, value: sample.value(for: .rpm), configuration: configuration)
+        context.setStrokeColor(accent.withAlphaComponent(0.55).cgColor)
+        context.setLineWidth(max(1.5, faceDimension * 0.018))
+        context.setLineCap(.round)
+        context.addArc(center: center, radius: radius + faceDimension * 0.035, startAngle: start, endAngle: start + sweep * rpmProgress, clockwise: false)
+        context.strokePath()
+        let needleAngle = start + sweep * rpmProgress
+        context.setStrokeColor(accent.cgColor)
+        context.setLineWidth(max(2, faceDimension * 0.018))
+        context.move(to: center)
+        context.addLine(to: CGPoint(x: center.x + cos(needleAngle) * radius * 0.72, y: center.y + sin(needleAngle) * radius * 0.72))
+        context.strokePath()
+        context.setFillColor(UIColor.white.cgColor)
+        context.fillEllipse(in: CGRect(x: center.x - 3 * localScale, y: center.y - 3 * localScale, width: 6 * localScale, height: 6 * localScale))
+
+        let titleColor = kind == .carbonTach ? UIColor(red: 1, green: 0.82, blue: 0.51, alpha: 1) : accent
+        drawCentered("RPM ×1000", font: .systemFont(ofSize: 6.5 * localScale, weight: .black), color: titleColor, centerX: center.x, y: center.y - 32 * localScale)
+
+        if kind == .streetShiftTach {
+            let throttle = progress(for: .throttle, value: sample.value(for: .throttle), configuration: configuration)
+            context.setStrokeColor(UIColor(red: 0.57, green: 0.93, blue: 0.22, alpha: 1).cgColor)
+            context.setLineWidth(max(3, faceDimension * 0.045))
+            context.setLineCap(.butt)
+            context.addArc(center: center, radius: faceDimension * 0.47, startAngle: .pi * 0.194, endAngle: .pi * (0.194 + 0.611 * throttle), clockwise: false)
+            context.strokePath()
+            let boxColor = UIColor(red: 0.91, green: 0.66, blue: 0.37, alpha: 1)
+            let sideCenterX = rect.minX + 160 * localScale
+            let gearRect = CGRect(x: sideCenterX - 21 * localScale, y: center.y - 38 * localScale, width: 42 * localScale, height: 27 * localScale)
+            let speedRect = CGRect(x: sideCenterX - 27 * localScale, y: center.y + 13 * localScale, width: 54 * localScale, height: 31 * localScale)
+            context.setFillColor(boxColor.cgColor)
+            context.addPath(UIBezierPath(roundedRect: gearRect, cornerRadius: 4 * localScale).cgPath); context.fillPath()
+            context.addPath(UIBezierPath(roundedRect: speedRect, cornerRadius: 4 * localScale).cgPath); context.fillPath()
+            let dark = UIColor(red: 0.14, green: 0.09, blue: 0.04, alpha: 1)
+            drawCentered("GEAR", font: .systemFont(ofSize: 5.5 * localScale, weight: .black), color: UIColor(red: 1, green: 0.76, blue: 0.49, alpha: 1), centerX: gearRect.midX, y: gearRect.minY - 9 * localScale)
+            drawCentered("–", font: .systemFont(ofSize: 22 * localScale, weight: .black), color: dark, centerX: gearRect.midX, y: gearRect.minY)
+            drawCentered(Int(sample.value(for: .speed)).formatted(), font: .monospacedDigitSystemFont(ofSize: 20 * localScale, weight: .black), color: dark, centerX: speedRect.midX, y: speedRect.minY + 3 * localScale)
+            drawCentered("KM/H", font: .systemFont(ofSize: 5.5 * localScale, weight: .black), color: .white, centerX: speedRect.midX, y: speedRect.maxY + 2 * localScale)
+            drawCentered("THROTTLE \(Int(sample.value(for: .throttle)))%", font: .monospacedSystemFont(ofSize: 6.5 * localScale, weight: .black), color: UIColor(red: 0.61, green: 0.92, blue: 0.29, alpha: 1), centerX: center.x, y: center.y + 58 * localScale)
+        } else {
+            let speed = Int(sample.value(for: .speed)).formatted()
+            drawCentered(speed, font: .monospacedDigitSystemFont(ofSize: 28 * localScale, weight: .black), color: kind == .blacklistTach ? .white : accent, centerX: center.x, y: center.y + 2 * localScale)
+            drawCentered("KM/H", font: .systemFont(ofSize: 6.5 * localScale, weight: .black), color: kind == .carbonTach ? .white : accent, centerX: center.x, y: center.y + 32 * localScale)
+            if kind == .neonTach {
+                let podCenter = CGPoint(x: rect.minX + 25.5 * localScale, y: rect.minY + 112.5 * localScale)
+                let podRadius = 26 * localScale
+                context.setFillColor(UIColor(red: 0.015, green: 0.04, blue: 0.06, alpha: 0.97).cgColor)
+                context.fillEllipse(in: CGRect(x: podCenter.x - podRadius, y: podCenter.y - podRadius, width: podRadius * 2, height: podRadius * 2))
+                context.setLineWidth(max(2, podRadius * 0.13))
+                context.setLineCap(.round)
+                context.setStrokeColor(UIColor.white.withAlphaComponent(0.14).cgColor)
+                context.addArc(center: podCenter, radius: podRadius * 0.76, startAngle: .pi * 0.75, endAngle: .pi * 2.25, clockwise: false)
+                context.strokePath()
+                context.setStrokeColor(UIColor(red: 0.15, green: 0.91, blue: 0.44, alpha: 1).cgColor)
+                context.addArc(center: podCenter, radius: podRadius * 0.76, startAngle: .pi * 0.75, endAngle: .pi * (0.75 + 1.5 * progress(for: .boost, value: sample.value(for: .boost), configuration: configuration)), clockwise: false)
+                context.strokePath()
+                drawCentered("BOOST", font: .systemFont(ofSize: 5.5 * localScale, weight: .black), color: UIColor(red: 0.49, green: 0.96, blue: 0.65, alpha: 1), centerX: podCenter.x, y: podCenter.y - 12 * localScale)
+                drawCentered(sample.value(for: .boost).formatted(.number.precision(.fractionLength(1))), font: .monospacedDigitSystemFont(ofSize: 10 * localScale, weight: .black), color: .white, centerX: podCenter.x, y: podCenter.y - 1 * localScale)
+                drawCentered("BAR", font: .systemFont(ofSize: 4.5 * localScale, weight: .black), color: UIColor.white.withAlphaComponent(0.7), centerX: podCenter.x, y: podCenter.y + 11 * localScale)
+                return
+            }
+            let secondary: String
+            let secondaryColor: UIColor
+            if kind == .carbonTach {
+                secondary = "OIL \(Int(sample.value(for: .oilTemperature)))°C"
+                secondaryColor = UIColor(red: 1, green: 0.81, blue: 0.47, alpha: 1)
+            } else {
+                secondary = "BOOST \(sample.value(for: .boost).formatted(.number.precision(.fractionLength(1)))) bar"
+                secondaryColor = UIColor.white.withAlphaComponent(0.8)
+            }
+            drawCentered(secondary, font: .monospacedSystemFont(ofSize: 6 * localScale, weight: .black), color: secondaryColor, centerX: center.x, y: center.y + 44 * localScale)
+        }
     }
 
     private static func drawDialNeedle(

@@ -53,4 +53,26 @@ class OverlayTemplateModelsTest {
         assertEquals(300.0, restored.range(TelemetryMetric.SPEED).endInclusive, 0.0)
         assertEquals(140.0, restored.range(TelemetryMetric.OIL_TEMPERATURE).endInclusive, 0.0)
     }
+
+    @Test
+    fun `arcade era presets use recorded telemetry instead of nitrous`() {
+        val presets = listOf(
+            VideoOverlayTemplateDefinition.neonCircuit(),
+            VideoOverlayTemplateDefinition.blacklistClassic(),
+            VideoOverlayTemplateDefinition.carbonGold(),
+            VideoOverlayTemplateDefinition.streetShift()
+        )
+
+        assertEquals(
+            listOf(
+                OverlayElementKind.NEON_TACH,
+                OverlayElementKind.BLACKLIST_TACH,
+                OverlayElementKind.CARBON_TACH,
+                OverlayElementKind.STREET_SHIFT_TACH
+            ),
+            presets.map { it.elements.single().kind }
+        )
+        presets.forEach { assertEquals(it, json.decodeFromString<VideoOverlayTemplateDefinition>(json.encodeToString(it))) }
+        assertEquals(10_000.0, presets.first().range(TelemetryMetric.RPM).endInclusive, 0.0)
+    }
 }

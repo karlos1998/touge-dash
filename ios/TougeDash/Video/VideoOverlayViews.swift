@@ -164,6 +164,7 @@ private struct VideoOverlayElementView: View {
             case .bar: barValue
             case .speedCluster: speedCluster
             case .oilCluster: oilCluster
+            case .neonTach, .blacklistTach, .carbonTach, .streetShiftTach: arcadeTach
             }
         }
         .shadow(color: shadowColor, radius: 5 * scale)
@@ -286,6 +287,144 @@ private struct VideoOverlayElementView: View {
         .overlay(Circle().stroke(element.accent.color.opacity(0.7), lineWidth: 1.2 * scale))
     }
 
+    private var arcadeTach: some View {
+        let kind = element.kind
+        let accent = arcadeAccent(for: kind)
+        let isNeon = kind == .neonTach
+        let isStreet = kind == .streetShiftTach
+        let width = (isNeon ? 184.0 : isStreet ? 190.0 : 150.0) * scale
+        let mainOffset = (isNeon ? 17.0 : isStreet ? -20.0 : 0.0) * scale
+        return ZStack {
+            Circle()
+                .fill(arcadeFaceColor(for: kind))
+                .frame(width: 150 * scale, height: 150 * scale)
+                .overlay(Circle().stroke(accent.opacity(0.7), lineWidth: 1.5 * scale))
+                .offset(x: mainOffset)
+
+            if isNeon {
+                Circle()
+                    .fill(Color(red: 0.015, green: 0.04, blue: 0.06).opacity(0.97))
+                    .frame(width: 52 * scale, height: 52 * scale)
+                    .overlay(Circle().stroke(Color(red: 0.15, green: 0.91, blue: 0.44).opacity(0.65), lineWidth: 1.2 * scale))
+                    .offset(x: -66 * scale, y: 38 * scale)
+            }
+
+            ArcadeTachFace(
+                kind: kind,
+                rpmProgress: progress(for: .rpm, value: metricValue(.rpm)),
+                boostProgress: progress(for: .boost, value: metricValue(.boost)),
+                throttleProgress: progress(for: .throttle, value: metricValue(.throttle)),
+                maximumRPM: configuration.maximumRPM,
+                accent: accent
+            )
+
+            Text("RPM ×1000")
+                .font(.system(size: 6.5 * scale, weight: .black))
+                .foregroundStyle(kind == .carbonTach ? Color(red: 1, green: 0.82, blue: 0.51) : accent)
+                .offset(x: mainOffset, y: -29 * scale)
+
+            if isStreet {
+                VStack(spacing: 1 * scale) {
+                    Text("GEAR")
+                        .font(.system(size: 5.5 * scale, weight: .black))
+                        .foregroundStyle(Color(red: 1, green: 0.76, blue: 0.49))
+                    Text("–")
+                        .font(.system(size: 22 * scale, weight: .black, design: .rounded))
+                        .foregroundStyle(Color(red: 0.14, green: 0.09, blue: 0.04))
+                        .frame(width: 42 * scale, height: 27 * scale)
+                        .background(Color(red: 0.91, green: 0.66, blue: 0.37), in: RoundedRectangle(cornerRadius: 4 * scale))
+                }
+                .offset(x: 65 * scale, y: -24 * scale)
+                VStack(spacing: 1 * scale) {
+                    Text(Int(metricValue(.speed)).formatted())
+                        .font(.system(size: 21 * scale, weight: .black, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Color(red: 0.14, green: 0.09, blue: 0.04))
+                        .frame(width: 54 * scale, height: 31 * scale)
+                        .background(Color(red: 0.91, green: 0.66, blue: 0.37), in: RoundedRectangle(cornerRadius: 4 * scale))
+                    Text("KM/H").font(.system(size: 5.5 * scale, weight: .black)).foregroundStyle(.white)
+                }
+                .offset(x: 65 * scale, y: 29 * scale)
+                Text("THROTTLE \(Int(metricValue(.throttle)))%")
+                    .font(.system(size: 6.5 * scale, weight: .black, design: .monospaced))
+                    .foregroundStyle(Color(red: 0.61, green: 0.92, blue: 0.29))
+                    .offset(x: mainOffset, y: 58 * scale)
+            } else if isNeon {
+                VStack(spacing: 0) {
+                    Text(Int(metricValue(.speed)).formatted())
+                        .font(.system(size: 28 * scale, weight: .black, design: .rounded))
+                        .fontWidth(.expanded)
+                        .monospacedDigit()
+                        .foregroundStyle(accent)
+                    Text("KM/H")
+                        .font(.system(size: 6.5 * scale, weight: .black))
+                        .foregroundStyle(accent)
+                }
+                .offset(x: mainOffset, y: 23 * scale)
+                VStack(spacing: 0) {
+                    Text(verbatim: "BOOST")
+                        .font(.system(size: 5.5 * scale, weight: .black))
+                        .foregroundStyle(Color(red: 0.49, green: 0.96, blue: 0.65))
+                    Text(metricValue(.boost).formatted(.number.precision(.fractionLength(1))))
+                        .font(.system(size: 10 * scale, weight: .black, design: .monospaced))
+                        .foregroundStyle(.white)
+                    Text("BAR")
+                        .font(.system(size: 4.5 * scale, weight: .black))
+                        .foregroundStyle(.white.opacity(0.7))
+                }
+                .offset(x: -66 * scale, y: 38 * scale)
+            } else {
+                VStack(spacing: 0) {
+                    Text(Int(metricValue(.speed)).formatted())
+                        .font(.system(size: 28 * scale, weight: .black, design: .rounded))
+                        .fontWidth(.expanded)
+                        .monospacedDigit()
+                        .foregroundStyle(kind == .blacklistTach ? .white : accent)
+                    Text("KM/H")
+                        .font(.system(size: 6.5 * scale, weight: .black))
+                        .foregroundStyle(kind == .carbonTach ? .white : accent)
+                    Text(arcadeSecondaryText(for: kind))
+                        .font(.system(size: 6 * scale, weight: .black, design: .monospaced))
+                        .foregroundStyle(arcadeSecondaryColor(for: kind))
+                }
+                .offset(y: 24 * scale)
+            }
+        }
+        .frame(width: width, height: 150 * scale)
+    }
+
+    private func arcadeAccent(for kind: VideoOverlayElementKind) -> Color {
+        switch kind {
+        case .neonTach: Color(red: 0.09, green: 0.75, blue: 1)
+        case .blacklistTach: Color(red: 0.84, green: 0.18, blue: 0.18)
+        case .carbonTach: Color(red: 0.89, green: 0.64, blue: 0.25)
+        default: Color(red: 0.94, green: 0.63, blue: 0.29)
+        }
+    }
+
+    private func arcadeFaceColor(for kind: VideoOverlayElementKind) -> Color {
+        switch kind {
+        case .neonTach: Color(red: 0.015, green: 0.04, blue: 0.06).opacity(0.94)
+        case .carbonTach: Color(red: 0.09, green: 0.075, blue: 0.045).opacity(0.94)
+        case .streetShiftTach: Color(red: 0.03, green: 0.04, blue: 0.03).opacity(0.92)
+        default: Color(red: 0.035, green: 0.04, blue: 0.045).opacity(0.94)
+        }
+    }
+
+    private func arcadeSecondaryText(for kind: VideoOverlayElementKind) -> String {
+        switch kind {
+        case .carbonTach: "OIL \(Int(metricValue(.oilTemperature)))°C"
+        default: "BOOST \(metricValue(.boost).formatted(.number.precision(.fractionLength(1)))) bar"
+        }
+    }
+
+    private func arcadeSecondaryColor(for kind: VideoOverlayElementKind) -> Color {
+        switch kind {
+        case .carbonTach: Color(red: 1, green: 0.81, blue: 0.47)
+        default: .white.opacity(0.8)
+        }
+    }
+
     private func dialFace(metric: DashboardMetric, value: Double, accent: Color) -> some View {
         RacingDialFace(
             progress: progress(for: metric, value: value),
@@ -390,6 +529,97 @@ private struct VideoOverlayElementView: View {
                 .fill(Color.black.opacity(0.42))
         }
     }
+}
+
+private struct ArcadeTachFace: View, Equatable {
+    let kind: VideoOverlayElementKind
+    let rpmProgress: Double
+    let boostProgress: Double
+    let throttleProgress: Double
+    let maximumRPM: Double
+    let accent: Color
+
+    var body: some View {
+        Canvas(opaque: false, rendersAsynchronously: true) { context, size in
+            let dimension = min(size.width, size.height)
+            let centerX: CGFloat = switch kind {
+            case .neonTach: size.width - dimension / 2
+            case .streetShiftTach: dimension / 2
+            default: size.width / 2
+            }
+            let center = CGPoint(x: centerX, y: size.height / 2)
+            let radius = dimension * 0.41
+
+            var minor = Path()
+            var major = Path()
+            var redline = Path()
+            for index in 0...40 {
+                let fraction = Double(index) / 40
+                let angle = radians(140 + 260 * fraction)
+                let isMajor = index.isMultiple(of: 4)
+                let length = dimension * (isMajor ? 0.075 : 0.04)
+                let inner = point(center: center, angle: angle, radius: radius - length)
+                let outer = point(center: center, angle: angle, radius: radius)
+                if (kind == .blacklistTach || kind == .streetShiftTach), fraction > 0.78 {
+                    redline.move(to: inner); redline.addLine(to: outer)
+                } else if isMajor {
+                    major.move(to: inner); major.addLine(to: outer)
+                } else {
+                    minor.move(to: inner); minor.addLine(to: outer)
+                }
+            }
+            context.stroke(minor, with: .color(.white.opacity(0.35)), style: .init(lineWidth: max(0.7, dimension * 0.007)))
+            context.stroke(major, with: .color(.white.opacity(0.9)), style: .init(lineWidth: max(1, dimension * 0.014)))
+            context.stroke(redline, with: .color(Color(red: 0.87, green: 0.19, blue: 0.19)), style: .init(lineWidth: max(1, dimension * 0.016)))
+
+            let divisions = min(12, max(4, Int((maximumRPM / 1_000).rounded())))
+            for index in 0...divisions {
+                let fraction = Double(index) / Double(divisions)
+                let angle = radians(140 + 260 * fraction)
+                let label = context.resolve(
+                    Text("\(index)")
+                        .font(.system(size: dimension * 0.047, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.8))
+                )
+                context.draw(label, at: point(center: center, angle: angle, radius: radius * 0.69), anchor: .center)
+            }
+
+            var progressArc = Path()
+            progressArc.addArc(center: center, radius: radius + dimension * 0.035, startAngle: .degrees(140), endAngle: .degrees(140 + 260 * rpmProgress), clockwise: false)
+            context.stroke(progressArc, with: .color(accent.opacity(0.55)), style: .init(lineWidth: max(1.5, dimension * 0.018), lineCap: .round))
+
+            let needleAngle = radians(140 + 260 * rpmProgress)
+            var needle = Path()
+            needle.move(to: center)
+            needle.addLine(to: point(center: center, angle: needleAngle, radius: radius * 0.72))
+            context.stroke(needle, with: .color(accent), style: .init(lineWidth: max(2, dimension * 0.018), lineCap: .round))
+            context.fill(Path(ellipseIn: CGRect(x: center.x - dimension * 0.022, y: center.y - dimension * 0.022, width: dimension * 0.044, height: dimension * 0.044)), with: .color(.white))
+
+            if kind == .neonTach {
+                drawSmallArc(in: &context, center: CGPoint(x: dimension * 0.17, y: dimension * 0.75), radius: dimension * 0.145, progress: boostProgress, color: Color(red: 0.15, green: 0.91, blue: 0.44))
+            }
+            if kind == .streetShiftTach {
+                var throttle = Path()
+                throttle.addArc(center: center, radius: dimension * 0.47, startAngle: .degrees(35), endAngle: .degrees(35 + 110 * throttleProgress), clockwise: false)
+                context.stroke(throttle, with: .color(Color(red: 0.57, green: 0.93, blue: 0.22)), style: .init(lineWidth: max(3, dimension * 0.045), lineCap: .butt))
+            }
+        }
+    }
+
+    private func drawSmallArc(in context: inout GraphicsContext, center: CGPoint, radius: CGFloat, progress: Double, color: Color) {
+        var background = Path()
+        background.addArc(center: center, radius: radius, startAngle: .degrees(135), endAngle: .degrees(405), clockwise: false)
+        context.stroke(background, with: .color(.white.opacity(0.14)), style: .init(lineWidth: max(2, radius * 0.16), lineCap: .round))
+        var foreground = Path()
+        foreground.addArc(center: center, radius: radius, startAngle: .degrees(135), endAngle: .degrees(135 + 270 * progress), clockwise: false)
+        context.stroke(foreground, with: .color(color), style: .init(lineWidth: max(2, radius * 0.16), lineCap: .round))
+    }
+
+    private func point(center: CGPoint, angle: Double, radius: CGFloat) -> CGPoint {
+        CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
+    }
+
+    private func radians(_ degrees: Double) -> Double { degrees * .pi / 180 }
 }
 
 private struct RacingDialFace: View, Equatable {

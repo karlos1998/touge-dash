@@ -296,7 +296,11 @@ class VideoRepository(
         template("UNDERGROUND", "Night Run", VideoOverlayTemplateDefinition.nightRun()),
         template("MINIMAL", "Clean Drive", VideoOverlayTemplateDefinition.cleanDrive()),
         template("PORTRAIT_RALLY", "Portrait Rally", VideoOverlayTemplateDefinition.portraitRally()),
-        template("STREET_LEGENDS", "Street Legends", VideoOverlayTemplateDefinition.streetLegends())
+        template("STREET_LEGENDS", "Street Legends", VideoOverlayTemplateDefinition.streetLegends()),
+        template("NEON_CIRCUIT", "Neon Circuit", VideoOverlayTemplateDefinition.neonCircuit()),
+        template("BLACKLIST_CLASSIC", "Blacklist Classic", VideoOverlayTemplateDefinition.blacklistClassic()),
+        template("CARBON_GOLD", "Carbon Gold", VideoOverlayTemplateDefinition.carbonGold()),
+        template("STREET_SHIFT", "Street Shift", VideoOverlayTemplateDefinition.streetShift())
     )
 
     private fun template(id: String, name: String, definition: VideoOverlayTemplateDefinition): VideoOverlayTemplate {

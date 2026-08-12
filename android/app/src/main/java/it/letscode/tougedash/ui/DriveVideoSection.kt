@@ -480,6 +480,144 @@ private fun HudElementPreview(
                 Text("OIL P  ${"%.1f".format(sample.oilPressureBar)} bar", color = Color.White.copy(alpha = .78f), fontSize = 7.sp, fontWeight = FontWeight.Black)
             }
         }
+        OverlayElementKind.NEON_TACH,
+        OverlayElementKind.BLACKLIST_TACH,
+        OverlayElementKind.CARBON_TACH,
+        OverlayElementKind.STREET_SHIFT_TACH -> ArcadeTachPreview(sample, element.kind, definition, shell)
+    }
+}
+
+@Composable
+private fun ArcadeTachPreview(
+    sample: TelemetrySampleEntity,
+    kind: OverlayElementKind,
+    definition: VideoOverlayTemplateDefinition,
+    modifier: Modifier
+) {
+    val neon = kind == OverlayElementKind.NEON_TACH
+    val blacklist = kind == OverlayElementKind.BLACKLIST_TACH
+    val carbon = kind == OverlayElementKind.CARBON_TACH
+    val street = kind == OverlayElementKind.STREET_SHIFT_TACH
+    val accent = when {
+        neon -> Color(0xFF18BFFF)
+        blacklist -> Color(0xFFD62E2E)
+        carbon -> Color(0xFFE4A441)
+        else -> Color(0xFFF0A04B)
+    }
+    val face = when {
+        neon -> Color(0xF0040A0F)
+        carbon -> Color(0xF016130D)
+        street -> Color(0xE9080A08)
+        else -> Color(0xF00A0B0D)
+    }
+    val width = when { neon -> 184.dp; street -> 190.dp; else -> 150.dp }
+    val mainOffset = when { neon -> 17.dp; street -> (-20).dp; else -> 0.dp }
+    Box(modifier.width(width).height(150.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val dimension = size.height
+            val tachCenter = Offset(
+                when { neon -> size.width - dimension / 2; street -> dimension / 2; else -> size.width / 2 },
+                size.height / 2
+            )
+            val radius = dimension * .43f
+            drawCircle(face, radius = dimension / 2, center = tachCenter)
+            drawCircle(accent.copy(alpha = .7f), radius = dimension / 2 - 1.dp.toPx(), center = tachCenter, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+            val faceTopLeft = Offset(tachCenter.x - dimension / 2, tachCenter.y - dimension / 2)
+            val faceSize = androidx.compose.ui.geometry.Size(dimension, dimension)
+            val rpmProgress = definition.progress(TelemetryMetric.RPM, sample.rpm)
+            repeat(41) { index ->
+                val fraction = index / 40f
+                val radians = Math.toRadians(140.0 + 260.0 * fraction)
+                val outer = Offset(tachCenter.x + cos(radians).toFloat() * radius, tachCenter.y + sin(radians).toFloat() * radius)
+                val major = index % 4 == 0
+                val tick = if (major) 9.dp.toPx() else 5.dp.toPx()
+                val inner = Offset(tachCenter.x + cos(radians).toFloat() * (radius - tick), tachCenter.y + sin(radians).toFloat() * (radius - tick))
+                val redline = (blacklist || street) && fraction > .78f
+                drawLine(
+                    if (redline) Color(0xFFDF3030) else Color.White.copy(alpha = if (major) .9f else .38f),
+                    inner,
+                    outer,
+                    strokeWidth = if (major) 2.dp.toPx() else 1.dp.toPx()
+                )
+            }
+            val labelPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+                color = android.graphics.Color.argb(205, 255, 255, 255)
+                textAlign = AndroidPaint.Align.CENTER
+                textSize = 7.dp.toPx()
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
+            val divisions = (definition.maximumRpm / 1_000).roundToInt().coerceIn(4, 12)
+            repeat(divisions + 1) { index ->
+                val angle = Math.toRadians(140.0 + 260.0 * index / divisions)
+                val labelRadius = radius * .69f
+                drawContext.canvas.nativeCanvas.drawText(
+                    index.toString(),
+                    tachCenter.x + cos(angle).toFloat() * labelRadius,
+                    tachCenter.y + sin(angle).toFloat() * labelRadius + labelPaint.textSize * .35f,
+                    labelPaint
+                )
+            }
+            drawArc(Color.White.copy(alpha = .12f), 140f, 260f, false, topLeft = faceTopLeft, size = faceSize, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+            drawArc(accent.copy(alpha = .55f), 140f, 260f * rpmProgress, false, topLeft = faceTopLeft, size = faceSize, style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
+            val needleAngle = Math.toRadians(140.0 + 260.0 * rpmProgress)
+            drawLine(accent, tachCenter, Offset(tachCenter.x + cos(needleAngle).toFloat() * radius * .72f, tachCenter.y + sin(needleAngle).toFloat() * radius * .72f), 2.5.dp.toPx())
+            drawCircle(if (carbon) Color(0xFFFFD58A) else Color.White, 3.dp.toPx(), tachCenter)
+            if (neon) {
+                val boost = definition.progress(TelemetryMetric.BOOST, sample.boostBar)
+                val podCenter = Offset(dimension * .17f, dimension * .75f)
+                val podRadius = dimension * .173f
+                drawCircle(Color(0xFA040A0F), podRadius, podCenter)
+                val podArc = androidx.compose.ui.geometry.Size(podRadius * 1.52f, podRadius * 1.52f)
+                val podTopLeft = Offset(podCenter.x - podArc.width / 2, podCenter.y - podArc.height / 2)
+                drawArc(Color.White.copy(alpha = .12f), 135f, 270f, false, topLeft = podTopLeft, size = podArc, style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
+                drawArc(Color(0xFF26E76F), 135f, 270f * boost, false, topLeft = podTopLeft, size = podArc, style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
+            }
+            if (street) {
+                val throttle = definition.progress(TelemetryMetric.THROTTLE, sample.throttlePercent)
+                drawArc(Color(0xFF91EC37).copy(alpha = .18f), 35f, 110f, false, topLeft = faceTopLeft, size = faceSize, style = androidx.compose.ui.graphics.drawscope.Stroke(6.dp.toPx()))
+                drawArc(Color(0xFF91EC37), 35f, 110f * throttle, false, topLeft = faceTopLeft, size = faceSize, style = androidx.compose.ui.graphics.drawscope.Stroke(6.dp.toPx()))
+            }
+        }
+        Text("RPM ×1000", color = if (carbon) Color(0xFFFFD58A) else accent, fontSize = 7.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = mainOffset.toPx(); translationY = -29.dp.toPx() })
+        when {
+            street -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = 65.dp.toPx(); translationY = -24.dp.toPx() }) {
+                    Text("GEAR", color = Color(0xFFFFC27D), fontSize = 6.sp, fontWeight = FontWeight.Black)
+                    Text("–", color = Color(0xFF24170A), fontSize = 22.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(42.dp).background(Color(0xFFE7A85E), RoundedCornerShape(4.dp)))
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = 65.dp.toPx(); translationY = 29.dp.toPx() }) {
+                    Text(sample.speedKph.roundToInt().toString(), color = Color(0xFF24170A), fontSize = 20.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(54.dp).background(Color(0xFFE7A85E), RoundedCornerShape(4.dp)))
+                    Text("KM/H", color = Color.White, fontSize = 6.sp, fontWeight = FontWeight.Black)
+                }
+                Text("THROTTLE ${sample.throttlePercent.roundToInt()}%", color = Color(0xFF9BEA4A), fontSize = 7.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = mainOffset.toPx(); translationY = 58.dp.toPx() })
+            }
+            neon -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = mainOffset.toPx(); translationY = 23.dp.toPx() }) {
+                    Text(sample.speedKph.roundToInt().toString(), color = accent, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                    Text("KM/H", color = accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = -66.dp.toPx(); translationY = 38.dp.toPx() }) {
+                    Text("BOOST", color = Color(0xFF7EF5A5), fontSize = 5.sp, fontWeight = FontWeight.Black)
+                    Text("%.1f".format(sample.boostBar), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    Text("BAR", color = Color.White.copy(alpha = .7f), fontSize = 4.sp, fontWeight = FontWeight.Black)
+                }
+            }
+            else -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).padding(top = 26.dp)) {
+                    Text(sample.speedKph.roundToInt().toString(), color = if (blacklist) Color.White else accent, fontSize = 28.sp, fontWeight = FontWeight.Black)
+                    Text("KM/H", color = if (carbon) Color.White else accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        when {
+                            blacklist -> "BOOST ${"%.1f".format(sample.boostBar)} bar"
+                            else -> "OIL ${sample.oilTemperatureCelsius.roundToInt()}°C"
+                        },
+                        color = if (carbon) Color(0xFFFFCF77) else Color.White.copy(alpha = .8f),
+                        fontSize = 7.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        }
     }
 }
 

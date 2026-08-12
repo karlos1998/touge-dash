@@ -7,7 +7,17 @@ import kotlinx.serialization.Serializable
 import java.util.UUID
 
 @Serializable
-enum class OverlayElementKind { DIGITAL, GAUGE, BAR, SPEED_CLUSTER, OIL_CLUSTER }
+enum class OverlayElementKind {
+    DIGITAL,
+    GAUGE,
+    BAR,
+    SPEED_CLUSTER,
+    OIL_CLUSTER,
+    NEON_TACH,
+    BLACKLIST_TACH,
+    CARBON_TACH,
+    STREET_SHIFT_TACH
+}
 
 @Serializable
 enum class OverlayElementScale(val multiplier: Float) {
@@ -117,6 +127,38 @@ data class VideoOverlayTemplateDefinition(
             elements = listOf(
                 element(TelemetryMetric.SPEED, OverlayElementKind.SPEED_CLUSTER, OverlayElementScale.EXTRA_LARGE, DashboardAccent.CYAN, .20f, .72f, .50f, .73f),
                 element(TelemetryMetric.OIL_TEMPERATURE, OverlayElementKind.OIL_CLUSTER, OverlayElementScale.LARGE, DashboardAccent.ORANGE, .80f, .72f, .50f, .38f)
+            )
+        )
+
+        fun neonCircuit() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.UNDERGROUND,
+            maximumRpm = 10_000f,
+            elements = listOf(
+                element(TelemetryMetric.RPM, OverlayElementKind.NEON_TACH, OverlayElementScale.SMALL, DashboardAccent.CYAN, .82f, .73f, .50f, .77f)
+            )
+        )
+
+        fun blacklistClassic() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.RACE,
+            maximumRpm = 10_000f,
+            elements = listOf(
+                element(TelemetryMetric.RPM, OverlayElementKind.BLACKLIST_TACH, OverlayElementScale.SMALL, DashboardAccent.RED, .82f, .73f, .50f, .77f)
+            )
+        )
+
+        fun carbonGold() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.RACE,
+            maximumRpm = 9_000f,
+            elements = listOf(
+                element(TelemetryMetric.RPM, OverlayElementKind.CARBON_TACH, OverlayElementScale.SMALL, DashboardAccent.YELLOW, .82f, .73f, .50f, .77f)
+            )
+        )
+
+        fun streetShift() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.UNDERGROUND,
+            maximumRpm = 10_000f,
+            elements = listOf(
+                element(TelemetryMetric.RPM, OverlayElementKind.STREET_SHIFT_TACH, OverlayElementScale.SMALL, DashboardAccent.ORANGE, .82f, .73f, .50f, .77f)
             )
         )
 

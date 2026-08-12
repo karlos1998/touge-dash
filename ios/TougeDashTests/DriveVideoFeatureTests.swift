@@ -1,5 +1,7 @@
 import AVFoundation
 import SwiftData
+import SwiftUI
+import UIKit
 import XCTest
 @testable import TougeDash
 
@@ -21,7 +23,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let store = VideoOverlayTemplateStore(defaults: defaults, keyPrefix: suite)
-        XCTAssertEqual(store.templates.count, 5)
+        XCTAssertEqual(store.templates.count, 9)
         XCTAssertEqual(store.selectedTemplate.style, .racing)
 
         let copy = store.createCopy()
@@ -179,6 +181,60 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(VideoOverlayTemplate.streetLegends.elements.map(\.kind), [.speedCluster, .oilCluster])
         XCTAssertEqual(VideoOverlayTemplate.streetLegends.gaugeConfiguration.range(for: .speed), 0...300)
         XCTAssertEqual(VideoOverlayTemplate.streetLegends.gaugeConfiguration.range(for: .oilTemperature), 0...140)
+    }
+
+    func testArcadeEraPresetsUseDedicatedTachometersAndRecordedMetrics() {
+        let presets: [VideoOverlayTemplate] = [.neonCircuit, .blacklistClassic, .carbonGold, .streetShift]
+        XCTAssertEqual(
+            presets.compactMap { $0.elements.first?.kind },
+            [.neonTach, .blacklistTach, .carbonTach, .streetShiftTach]
+        )
+        XCTAssertEqual(VideoOverlayTemplate.neonCircuit.gaugeConfiguration.range(for: .rpm), 0...10_000)
+        XCTAssertEqual(VideoOverlayTemplate.carbonGold.gaugeConfiguration.range(for: .rpm), 0...9_000)
+        XCTAssertTrue(presets.allSatisfy { $0.elements.count == 1 && $0.elements[0].metric == .rpm })
+    }
+
+    @MainActor
+    func testNeonAndStreetShiftPresetPreviewsRenderOnSimulator() throws {
+        var snapshot = TelemetrySnapshot.preview
+        snapshot.rpm = 2_150
+        snapshot.speedKPH = 32
+        snapshot.boostBar = -0.3
+        snapshot.throttlePercent = 7
+        let sample = TelemetryHistorySample(snapshot: snapshot, timestamp: .now)
+
+        for template in [VideoOverlayTemplate.neonCircuit, .streetShift] {
+            let preview = ZStack {
+                LinearGradient(
+                    colors: [Color(red: 0.12, green: 0.13, blue: 0.13), Color(red: 0.025, green: 0.028, blue: 0.03)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                VideoTelemetryOverlayView(template: template, sample: sample)
+            }
+            .frame(width: 390, height: 220)
+
+            let renderer = ImageRenderer(content: preview)
+            renderer.scale = 2
+            let image = try XCTUnwrap(renderer.uiImage)
+            XCTAssertEqual(image.size, CGSize(width: 390, height: 220))
+            let attachment = XCTAttachment(image: image)
+            attachment.name = "HUD-\(template.name)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+
+            let exportedFrame = try XCTUnwrap(
+                VideoOverlayCGRenderer.render(
+                    size: CGSize(width: 390, height: 220),
+                    sample: VideoTelemetryFrame(sample: sample),
+                    template: template
+                )
+            )
+            let exportAttachment = XCTAttachment(image: UIImage(cgImage: exportedFrame))
+            exportAttachment.name = "Export-HUD-\(template.name)"
+            exportAttachment.lifetime = .keepAlways
+            add(exportAttachment)
+        }
     }
 
     func testTelemetryFrameUsesRecordedSampleInsteadOfLiveState() {

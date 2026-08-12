@@ -24,6 +24,10 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
     case bar
     case speedCluster
     case oilCluster
+    case neonTach
+    case blacklistTach
+    case carbonTach
+    case streetShiftTach
 
     var id: String { rawValue }
 
@@ -34,6 +38,10 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
         case .bar: localized("Pasek")
         case .speedCluster: localized("Zegar prędkości + boost + RPM")
         case .oilCluster: localized("Zegar oleju + ciśnienie")
+        case .neonTach: localized("Neonowy obrotomierz")
+        case .blacklistTach: localized("Klasyczny obrotomierz uliczny")
+        case .carbonTach: localized("Karbonowy obrotomierz")
+        case .streetShiftTach: localized("Zegar uliczny z biegiem")
         }
     }
 
@@ -44,6 +52,10 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
         case .bar: "chart.bar.fill"
         case .speedCluster: "speedometer"
         case .oilCluster: "oilcan.fill"
+        case .neonTach: "gauge.open.with.lines.needle.67percent.and.arrowtriangle"
+        case .blacklistTach: "gauge.with.dots.needle.67percent"
+        case .carbonTach: "circle.hexagongrid.fill"
+        case .streetShiftTach: "dial.high.fill"
         }
     }
 }
@@ -498,7 +510,86 @@ extension VideoOverlayTemplate {
         modifiedAt: Date(timeIntervalSince1970: 1_785_890_400)
     )
 
-    static let factoryTemplates: [VideoOverlayTemplate] = [.racing, .arcade, .minimal, .portrait, .streetLegends]
+    static let neonCircuit = VideoOverlayTemplate(
+        id: UUID(uuidString: "DFF220B2-549F-4BA0-9DF8-2E367EA9F1D5")!,
+        name: localized("Neon Circuit"),
+        style: .arcade,
+        elements: [
+            VideoOverlayElement(
+                metric: .rpm,
+                slot: .bottomTrailing,
+                scale: .small,
+                accent: .cyan,
+                kind: .neonTach,
+                landscapePosition: .init(x: 0.82, y: 0.73),
+                portraitPosition: .init(x: 0.5, y: 0.77)
+            )
+        ],
+        gaugeConfiguration: .init(maximumRPM: 10_000),
+        modifiedAt: Date(timeIntervalSince1970: 1_786_615_200)
+    )
+
+    static let blacklistClassic = VideoOverlayTemplate(
+        id: UUID(uuidString: "294F8665-9FE6-42C4-AE79-74E7C0BDBA39")!,
+        name: localized("Blacklist Classic"),
+        style: .racing,
+        elements: [
+            VideoOverlayElement(
+                metric: .rpm,
+                slot: .bottomTrailing,
+                scale: .small,
+                accent: .red,
+                kind: .blacklistTach,
+                landscapePosition: .init(x: 0.82, y: 0.73),
+                portraitPosition: .init(x: 0.5, y: 0.77)
+            )
+        ],
+        gaugeConfiguration: .init(maximumRPM: 10_000),
+        modifiedAt: Date(timeIntervalSince1970: 1_786_615_200)
+    )
+
+    static let carbonGold = VideoOverlayTemplate(
+        id: UUID(uuidString: "6B96EBE8-56B7-4156-A911-57A710B1BBA2")!,
+        name: localized("Carbon Gold"),
+        style: .racing,
+        elements: [
+            VideoOverlayElement(
+                metric: .rpm,
+                slot: .bottomTrailing,
+                scale: .small,
+                accent: .yellow,
+                kind: .carbonTach,
+                landscapePosition: .init(x: 0.82, y: 0.73),
+                portraitPosition: .init(x: 0.5, y: 0.77)
+            )
+        ],
+        gaugeConfiguration: .init(maximumRPM: 9_000),
+        modifiedAt: Date(timeIntervalSince1970: 1_786_615_200)
+    )
+
+    static let streetShift = VideoOverlayTemplate(
+        id: UUID(uuidString: "06E045CC-8BD3-47DE-965F-9404A5B3CE40")!,
+        name: localized("Street Shift"),
+        style: .arcade,
+        elements: [
+            VideoOverlayElement(
+                metric: .rpm,
+                slot: .bottomTrailing,
+                scale: .small,
+                accent: .orange,
+                kind: .streetShiftTach,
+                landscapePosition: .init(x: 0.82, y: 0.73),
+                portraitPosition: .init(x: 0.5, y: 0.77)
+            )
+        ],
+        gaugeConfiguration: .init(maximumRPM: 10_000),
+        modifiedAt: Date(timeIntervalSince1970: 1_786_615_200)
+    )
+
+    static let factoryTemplates: [VideoOverlayTemplate] = [
+        .racing, .arcade, .minimal, .portrait, .streetLegends,
+        .neonCircuit, .blacklistClassic, .carbonGold, .streetShift
+    ]
 
     func migratedToFreeformLayout() -> VideoOverlayTemplate {
         guard layoutVersion < 2 else { return self }

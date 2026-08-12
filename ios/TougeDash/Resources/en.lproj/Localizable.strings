@@ -602,6 +602,14 @@
 "Telemetria i filmy z przejazdów na tym urządzeniu" = "Drive telemetry and videos on this device";
 "Zegar prędkości + boost + RPM" = "Speed gauge + boost + RPM";
 "Zegar oleju + ciśnienie" = "Oil gauge + pressure";
+"Neonowy obrotomierz" = "Neon tachometer";
+"Klasyczny obrotomierz uliczny" = "Classic street tachometer";
+"Karbonowy obrotomierz" = "Carbon tachometer";
+"Zegar uliczny z biegiem" = "Street gauge with gear";
+"Neon Circuit" = "Neon Circuit";
+"Blacklist Classic" = "Blacklist Classic";
+"Carbon Gold" = "Carbon Gold";
+"Street Shift" = "Street Shift";
 "Skale zegarów" = "Gauge scales";
 "Prędkość maks." = "Maximum speed";
 "Temperatura oleju maks." = "Maximum oil temperature";

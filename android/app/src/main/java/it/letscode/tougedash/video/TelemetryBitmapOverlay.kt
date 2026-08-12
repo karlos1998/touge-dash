@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Typeface
 import androidx.media3.effect.BitmapOverlay
@@ -77,6 +78,10 @@ class TelemetryBitmapOverlay(
             OverlayElementKind.BAR -> drawBar(sample, element, cx, cy, scale)
             OverlayElementKind.SPEED_CLUSTER -> drawSpeedCluster(sample, element, cx, cy, scale)
             OverlayElementKind.OIL_CLUSTER -> drawOilCluster(sample, element, cx, cy, scale)
+            OverlayElementKind.NEON_TACH -> drawNeonTach(sample, element, cx, cy, scale)
+            OverlayElementKind.BLACKLIST_TACH -> drawBlacklistTach(sample, element, cx, cy, scale)
+            OverlayElementKind.CARBON_TACH -> drawCarbonTach(sample, element, cx, cy, scale)
+            OverlayElementKind.STREET_SHIFT_TACH -> drawStreetShiftTach(sample, element, cx, cy, scale)
         }
     }
 
@@ -146,6 +151,160 @@ class TelemetryBitmapOverlay(
         centered("OIL TEMP", cx, cy - 20f * scale, 14f * scale, element.accent.colorInt())
         centered("${sample.oilTemperatureCelsius.toInt()}°", cx, cy + 19f * scale, 45f * scale, Color.WHITE)
         centered("OIL P  ${"%.1f".format(sample.oilPressureBar)} bar", cx, cy + 45f * scale, 13f * scale, 0xddffffff.toInt())
+    }
+
+    private fun drawNeonTach(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
+        val radius = 120f * scale
+        val mainCx = cx + 28f * scale
+        circlePanel(mainCx, cy, radius, 0xe6040a0f.toInt(), 0xaa18bfff.toInt(), 3f * scale)
+        drawStyledTach(mainCx, cy, radius * .84f, 140f, 260f, progress(TelemetryMetric.RPM, sample.rpm), TelemetryMetric.RPM, 0xff18bfff.toInt(), Color.WHITE, scale)
+        centered("RPM ×1000", mainCx, cy - 27f * scale, 12f * scale, 0xff79dfff.toInt())
+        centered(sample.speedKph.toInt().toString(), mainCx, cy + 28f * scale, 48f * scale, 0xff13bdf5.toInt())
+        centered("KM/H", mainCx, cy + 49f * scale, 11f * scale, Color.WHITE)
+        val boost = progress(TelemetryMetric.BOOST, sample.boostBar)
+        val podCx = cx - 105f * scale
+        val podCy = cy + 61f * scale
+        val podRadius = 42f * scale
+        circlePanel(podCx, podCy, podRadius, 0xf0040a0f.toInt(), 0x8843e8a8.toInt(), 2f * scale)
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = 7f * scale
+        paint.color = 0x4427d7e5
+        val boostRect = RectF(podCx - podRadius * .72f, podCy - podRadius * .72f, podCx + podRadius * .72f, podCy + podRadius * .72f)
+        canvas.drawArc(boostRect, 135f, 270f, false, paint)
+        paint.color = 0xff26e76f.toInt()
+        canvas.drawArc(boostRect, 135f, 270f * boost, false, paint)
+        paint.style = Paint.Style.FILL
+        centered("BOOST", podCx, podCy - 9f * scale, 8f * scale, 0xff7ef5a5.toInt())
+        centered("%.1f".format(sample.boostBar), podCx, podCy + 9f * scale, 15f * scale, Color.WHITE)
+        centered("BAR", podCx, podCy + 21f * scale, 6f * scale, 0xbbffffff.toInt())
+    }
+
+    private fun drawBlacklistTach(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
+        val radius = 118f * scale
+        circlePanel(cx, cy, radius, 0xe70a0b0d.toInt(), 0x889aa3aa.toInt(), 2f * scale)
+        drawStyledTach(cx, cy, radius * .86f, 145f, 250f, progress(TelemetryMetric.RPM, sample.rpm), TelemetryMetric.RPM, 0xffd62e2e.toInt(), 0xfff4f4f1.toInt(), scale, redline = true)
+        centered("RPM ×1000", cx, cy - 29f * scale, 11f * scale, 0xffd9d9d4.toInt())
+        val speedWidth = 94f * scale
+        val speedTop = cy + 20f * scale
+        pill(cx - speedWidth / 2, speedTop, cx + speedWidth / 2, speedTop + 35f * scale, 0xff178ccc.toInt())
+        centered(sample.speedKph.toInt().toString(), cx, speedTop + 26f * scale, 27f * scale, Color.WHITE)
+        centered("KM/H", cx, speedTop + 48f * scale, 10f * scale, 0xffb8dff5.toInt())
+        centered("BOOST", cx - 76f * scale, cy + 64f * scale, 8f * scale, 0xffd9d9d4.toInt())
+        centered("%.1f bar".format(sample.boostBar), cx - 76f * scale, cy + 80f * scale, 11f * scale, Color.WHITE)
+    }
+
+    private fun drawCarbonTach(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
+        val radius = 118f * scale
+        circlePanel(cx, cy, radius, 0xe616130d.toInt(), 0xffd9a342.toInt(), 2f * scale)
+        canvas.save()
+        canvas.clipPath(Path().apply { addCircle(cx, cy, radius - 3f * scale, Path.Direction.CW) })
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 2f * scale
+        for (offset in -150..150 step 16) {
+            paint.color = if ((offset / 16) % 2 == 0) 0x222b2418 else 0x22100e0a
+            canvas.drawLine(cx - radius, cy + offset * scale, cx + offset * scale, cy - radius, paint)
+        }
+        canvas.restore()
+        drawStyledTach(cx, cy, radius * .84f, 145f, 250f, progress(TelemetryMetric.RPM, sample.rpm), TelemetryMetric.RPM, 0xffe4a441.toInt(), 0xffffe2a2.toInt(), scale)
+        centered("RPM ×1000", cx, cy - 27f * scale, 11f * scale, 0xffffd58a.toInt())
+        val box = RectF(cx - 48f * scale, cy + 15f * scale, cx + 48f * scale, cy + 53f * scale)
+        paint.style = Paint.Style.FILL
+        paint.color = 0xffd7a353.toInt()
+        canvas.drawRoundRect(box, 7f * scale, 7f * scale, paint)
+        centered(sample.speedKph.toInt().toString(), cx, cy + 43f * scale, 29f * scale, 0xff20170c.toInt())
+        centered("KM/H", cx, cy + 68f * scale, 11f * scale, Color.WHITE)
+        centered("OIL  ${sample.oilTemperatureCelsius.toInt()}°C", cx, cy + 86f * scale, 10f * scale, 0xffffcf77.toInt())
+    }
+
+    private fun drawStreetShiftTach(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
+        val radius = 120f * scale
+        val mainCx = cx - 32f * scale
+        circlePanel(mainCx, cy, radius, 0xd9080a08.toInt(), 0xfff2a04b.toInt(), 4f * scale)
+        drawStyledTach(mainCx, cy, radius * .82f, 145f, 250f, progress(TelemetryMetric.RPM, sample.rpm), TelemetryMetric.RPM, 0xfff0a04b.toInt(), Color.WHITE, scale, redline = true)
+        val throttle = progress(TelemetryMetric.THROTTLE, sample.throttlePercent)
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.BUTT
+        paint.strokeWidth = 10f * scale
+        val outer = RectF(mainCx - radius * .93f, cy - radius * .93f, mainCx + radius * .93f, cy + radius * .93f)
+        paint.color = 0x334bd320
+        canvas.drawArc(outer, 35f, 110f, false, paint)
+        paint.color = 0xff91ec37.toInt()
+        canvas.drawArc(outer, 35f, 110f * throttle, false, paint)
+        paint.style = Paint.Style.FILL
+        centered("RPM ×1000", mainCx, cy - 29f * scale, 11f * scale, 0xffffcb91.toInt())
+        val sideCx = cx + 103f * scale
+        centered("GEAR", sideCx, cy - 51f * scale, 8f * scale, 0xffffc27d.toInt())
+        val gearRect = RectF(sideCx - 31f * scale, cy - 43f * scale, sideCx + 31f * scale, cy - 5f * scale)
+        paint.color = 0xffe7a85e.toInt()
+        canvas.drawRoundRect(gearRect, 6f * scale, 6f * scale, paint)
+        centered("–", sideCx, cy - 14f * scale, 27f * scale, 0xff24170a.toInt())
+        val speedRect = RectF(sideCx - 38f * scale, cy + 19f * scale, sideCx + 38f * scale, cy + 60f * scale)
+        paint.color = 0xffe7a85e.toInt()
+        canvas.drawRoundRect(speedRect, 6f * scale, 6f * scale, paint)
+        centered(sample.speedKph.toInt().toString(), sideCx, cy + 50f * scale, 27f * scale, 0xff24170a.toInt())
+        centered("KM/H", sideCx, cy + 74f * scale, 9f * scale, Color.WHITE)
+        centered("THROTTLE ${sample.throttlePercent.toInt()}%", mainCx, cy + 82f * scale, 10f * scale, 0xff9bea4a.toInt())
+    }
+
+    private fun circlePanel(cx: Float, cy: Float, radius: Float, fill: Int, stroke: Int, strokeWidth: Float) {
+        paint.style = Paint.Style.FILL
+        paint.color = fill
+        canvas.drawCircle(cx, cy, radius, paint)
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = strokeWidth
+        paint.color = stroke
+        canvas.drawCircle(cx, cy, radius - strokeWidth / 2, paint)
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawStyledTach(
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        start: Float,
+        sweep: Float,
+        progress: Float,
+        metric: TelemetryMetric,
+        needleColor: Int,
+        tickColor: Int,
+        scale: Float,
+        redline: Boolean = false
+    ) {
+        paint.style = Paint.Style.STROKE
+        paint.strokeCap = Paint.Cap.SQUARE
+        for (index in 0..40) {
+            val fraction = index / 40f
+            val angle = Math.toRadians((start + sweep * fraction).toDouble())
+            val major = index % 4 == 0
+            val length = (if (major) 14f else 7f) * scale
+            paint.strokeWidth = (if (major) 3.2f else 1.5f) * scale
+            paint.color = if (redline && fraction > .78f) 0xffdf3030.toInt() else if (major) tickColor else (tickColor and 0x00ffffff) or 0x66000000
+            canvas.drawLine(
+                cx + cos(angle).toFloat() * (radius - length),
+                cy + sin(angle).toFloat() * (radius - length),
+                cx + cos(angle).toFloat() * radius,
+                cy + sin(angle).toFloat() * radius,
+                paint
+            )
+        }
+        val range = definition.range(metric)
+        val divisions = if (metric == TelemetryMetric.RPM) (range.endInclusive / 1_000).toInt().coerceIn(4, 12) else 10
+        for (index in 0..divisions) {
+            val angle = Math.toRadians((start + sweep * index / divisions.toFloat()).toDouble())
+            val value = range.start + (range.endInclusive - range.start) * index / divisions.toDouble()
+            centered(scaleLabel(value, metric), cx + cos(angle).toFloat() * radius * .72f, cy + sin(angle).toFloat() * radius * .72f + 4f * scale, 10f * scale, tickColor)
+        }
+        val needle = Math.toRadians((start + sweep * progress).toDouble())
+        paint.strokeCap = Paint.Cap.ROUND
+        paint.strokeWidth = 4f * scale
+        paint.color = needleColor
+        canvas.drawLine(cx - cos(needle).toFloat() * radius * .13f, cy - sin(needle).toFloat() * radius * .13f, cx + cos(needle).toFloat() * radius * .72f, cy + sin(needle).toFloat() * radius * .72f, paint)
+        paint.style = Paint.Style.FILL
+        paint.color = 0xff151719.toInt()
+        canvas.drawCircle(cx, cy, 8f * scale, paint)
+        paint.color = tickColor
+        canvas.drawCircle(cx, cy, 3f * scale, paint)
     }
 
     private fun drawDialNeedle(
