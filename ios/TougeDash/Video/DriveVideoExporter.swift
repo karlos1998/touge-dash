@@ -280,7 +280,7 @@ final class DriveVideoExporter: ObservableObject {
         activeExport = exporter
         if let template {
             let routeMap: VideoRouteMapSnapshot? = if template.elements.contains(where: {
-                $0.kind == .routeMap || $0.kind == .routeMapCircular
+                $0.kind == .routeMap || $0.kind == .routeMapCircular || $0.kind == .routeMapFollow
             }) {
                 await VideoRouteMapSnapshotter.make(samples: samples)
             } else {
@@ -772,7 +772,7 @@ enum VideoOverlayCGRenderer {
         case .streetShiftTach: return CGSize(width: 190 * scale, height: 150 * scale)
         case .blacklistTach, .carbonTach: return CGSize(width: 150 * scale, height: 150 * scale)
         case .routeMap: return CGSize(width: 214 * scale, height: 136 * scale)
-        case .routeMapCircular: return CGSize(width: 154 * scale, height: 154 * scale)
+        case .routeMapCircular, .routeMapFollow: return CGSize(width: 154 * scale, height: 154 * scale)
         }
     }
 
@@ -814,7 +814,7 @@ enum VideoOverlayCGRenderer {
             drawOilCluster(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
         case .neonTach, .blacklistTach, .carbonTach, .streetShiftTach:
             drawArcadeTach(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
-        case .routeMap, .routeMapCircular:
+        case .routeMap, .routeMapCircular, .routeMapFollow:
             drawRouteMap(element: element, sample: sample, routeMap: routeMap, rect: rect, context: context)
         }
     }
@@ -827,31 +827,74 @@ enum VideoOverlayCGRenderer {
         context: CGContext
     ) {
         let accent = element.accent.uiColor
-        let isCircular = element.kind == .routeMapCircular
+        let followsPosition = element.kind == .routeMapFollow
+        let isCircular = element.kind == .routeMapCircular || followsPosition
         let radius = isCircular ? min(rect.width, rect.height) / 2 : max(8, rect.width * 0.065)
         let mapRect = rect.insetBy(dx: rect.width * 0.018, dy: rect.width * 0.018)
         let clippingPath = isCircular
             ? UIBezierPath(ovalIn: mapRect)
             : UIBezierPath(roundedRect: mapRect, cornerRadius: radius)
+        let currentIndex = routeMap.flatMap { $0.pointIndex(at: sample.timestamp) }
+        var mapRotation: CGFloat = 0
+
+        func drawMarker(at point: CGPoint, angle: CGFloat) {
+            let markerSize = rect.width * 0.052
+            context.saveGState()
+            context.translateBy(x: point.x, y: point.y)
+            context.rotate(by: angle)
+            let marker = UIBezierPath()
+            marker.move(to: CGPoint(x: 0, y: -markerSize))
+            marker.addLine(to: CGPoint(x: markerSize * 0.68, y: markerSize * 0.78))
+            marker.addLine(to: CGPoint(x: 0, y: markerSize * 0.46))
+            marker.addLine(to: CGPoint(x: -markerSize * 0.68, y: markerSize * 0.78))
+            marker.close()
+            context.setShadow(offset: .zero, blur: markerSize * 0.9, color: accent.cgColor)
+            context.setFillColor(UIColor.white.cgColor)
+            context.addPath(marker.cgPath)
+            context.fillPath()
+            context.setStrokeColor(accent.cgColor)
+            context.setLineWidth(max(1, rect.width * 0.008))
+            context.addPath(marker.cgPath)
+            context.strokePath()
+            context.restoreGState()
+        }
 
         context.saveGState()
         context.addPath(clippingPath.cgPath)
         context.clip()
+        context.setFillColor(UIColor(red: 0.02, green: 0.055, blue: 0.07, alpha: 0.96).cgColor)
+        context.fill(mapRect)
         var mapContentRect = mapRect
         if let routeMap {
             let imageSize = CGSize(width: routeMap.image.width, height: routeMap.image.height)
-            let imageScale = max(mapRect.width / imageSize.width, mapRect.height / imageSize.height)
+            let imageScale = max(mapRect.width / imageSize.width, mapRect.height / imageSize.height) * (followsPosition ? 2.35 : 1)
             let scaledSize = CGSize(width: imageSize.width * imageScale, height: imageSize.height * imageScale)
-            mapContentRect = CGRect(
-                x: mapRect.midX - scaledSize.width / 2,
-                y: mapRect.midY - scaledSize.height / 2,
-                width: scaledSize.width,
-                height: scaledSize.height
-            )
+            if followsPosition, let currentIndex {
+                let current = routeMap.points[currentIndex].position
+                mapContentRect = CGRect(
+                    x: mapRect.midX - current.x * scaledSize.width,
+                    y: mapRect.midY - current.y * scaledSize.height,
+                    width: scaledSize.width,
+                    height: scaledSize.height
+                )
+                let previous = routeMap.points[max(0, currentIndex - 2)].position
+                let next = routeMap.points[min(routeMap.points.count - 1, currentIndex + 2)].position
+                mapRotation = -.pi / 2 - atan2(next.y - previous.y, next.x - previous.x)
+                context.saveGState()
+                context.translateBy(x: mapRect.midX, y: mapRect.midY)
+                context.rotate(by: mapRotation)
+                context.translateBy(x: -mapRect.midX, y: -mapRect.midY)
+            } else {
+                mapContentRect = CGRect(
+                    x: mapRect.midX - scaledSize.width / 2,
+                    y: mapRect.midY - scaledSize.height / 2,
+                    width: scaledSize.width,
+                    height: scaledSize.height
+                )
+            }
             UIImage(cgImage: routeMap.image).draw(in: mapContentRect)
+            if followsPosition, currentIndex != nil { context.restoreGState() }
         } else {
-            context.setFillColor(UIColor(red: 0.02, green: 0.055, blue: 0.07, alpha: 0.96).cgColor)
-            context.fill(mapRect)
             context.setStrokeColor(accent.withAlphaComponent(0.11).cgColor)
             context.setLineWidth(max(0.6, rect.width * 0.003))
             let grid = rect.width * 0.1
@@ -875,39 +918,30 @@ enum VideoOverlayCGRenderer {
                     y: mapContentRect.minY + point.position.y * mapContentRect.height
                 )
             }
+            if followsPosition, currentIndex != nil {
+                context.saveGState()
+                context.translateBy(x: mapRect.midX, y: mapRect.midY)
+                context.rotate(by: mapRotation)
+                context.translateBy(x: -mapRect.midX, y: -mapRect.midY)
+            }
             strokeRoute(mapped, color: UIColor.black.withAlphaComponent(0.78), width: rect.width * 0.026, context: context)
             strokeRoute(mapped, color: UIColor.white.withAlphaComponent(0.36), width: rect.width * 0.011, context: context)
 
-            if let currentIndex = routeMap.pointIndex(at: sample.timestamp) {
+            if let currentIndex {
                 let travelled = Array(mapped.prefix(currentIndex + 1))
                 strokeRoute(travelled, color: accent.withAlphaComponent(0.3), width: rect.width * 0.032, context: context)
                 strokeRoute(travelled, color: accent, width: rect.width * 0.013, context: context)
 
-                let current = mapped[currentIndex]
-                let previous = mapped[max(0, currentIndex - 1)]
-                let next = mapped[min(mapped.count - 1, currentIndex + 1)]
-                let direction = CGPoint(x: next.x - previous.x, y: next.y - previous.y)
-                let angle = atan2(direction.y, direction.x) + .pi / 2
-                let markerSize = rect.width * 0.052
-                context.saveGState()
-                context.translateBy(x: current.x, y: current.y)
-                context.rotate(by: angle)
-                let marker = UIBezierPath()
-                marker.move(to: CGPoint(x: 0, y: -markerSize))
-                marker.addLine(to: CGPoint(x: markerSize * 0.68, y: markerSize * 0.78))
-                marker.addLine(to: CGPoint(x: 0, y: markerSize * 0.46))
-                marker.addLine(to: CGPoint(x: -markerSize * 0.68, y: markerSize * 0.78))
-                marker.close()
-                context.setShadow(offset: .zero, blur: markerSize * 0.9, color: accent.cgColor)
-                context.setFillColor(UIColor.white.cgColor)
-                context.addPath(marker.cgPath)
-                context.fillPath()
-                context.setStrokeColor(accent.cgColor)
-                context.setLineWidth(max(1, rect.width * 0.008))
-                context.addPath(marker.cgPath)
-                context.strokePath()
-                context.restoreGState()
+                if !followsPosition {
+                    let current = mapped[currentIndex]
+                    let previous = mapped[max(0, currentIndex - 1)]
+                    let next = mapped[min(mapped.count - 1, currentIndex + 1)]
+                    let direction = CGPoint(x: next.x - previous.x, y: next.y - previous.y)
+                    drawMarker(at: current, angle: atan2(direction.y, direction.x) + .pi / 2)
+                }
             }
+            if followsPosition, currentIndex != nil { context.restoreGState() }
+            if followsPosition, currentIndex != nil { drawMarker(at: CGPoint(x: mapRect.midX, y: mapRect.midY), angle: 0) }
         }
         context.restoreGState()
 

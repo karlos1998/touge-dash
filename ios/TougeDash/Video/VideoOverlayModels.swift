@@ -30,6 +30,7 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
     case streetShiftTach
     case routeMap
     case routeMapCircular
+    case routeMapFollow
 
     var id: String { rawValue }
 
@@ -46,6 +47,7 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
         case .streetShiftTach: localized("Zegar uliczny z biegiem")
         case .routeMap: localized("Minimapa trasy")
         case .routeMapCircular: localized("Okrągła minimapa trasy")
+        case .routeMapFollow: localized("Minimapa śledząca")
         }
     }
 
@@ -62,6 +64,7 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
         case .streetShiftTach: "dial.high.fill"
         case .routeMap: "map.fill"
         case .routeMapCircular: "circle.hexagongrid.fill"
+        case .routeMapFollow: "location.north.circle.fill"
         }
     }
 }
@@ -676,10 +679,38 @@ extension VideoOverlayTemplate {
         modifiedAt: Date(timeIntervalSince1970: 1_786_788_000)
     )
 
+    static let routeChase = VideoOverlayTemplate(
+        id: UUID(uuidString: "A9134DE3-E7CD-4D34-B065-C63386E59EC1")!,
+        name: localized("Route Chase"),
+        style: .arcade,
+        elements: [
+            VideoOverlayElement(
+                metric: .speed,
+                slot: .topLeading,
+                scale: .medium,
+                accent: .blue,
+                kind: .routeMapFollow,
+                landscapePosition: .init(x: 0.18, y: 0.26),
+                portraitPosition: .init(x: 0.5, y: 0.2)
+            ),
+            VideoOverlayElement(
+                metric: .rpm,
+                slot: .bottomTrailing,
+                scale: .small,
+                accent: .blue,
+                kind: .neonTach,
+                landscapePosition: .init(x: 0.83, y: 0.73),
+                portraitPosition: .init(x: 0.5, y: 0.79)
+            )
+        ],
+        gaugeConfiguration: .init(maximumRPM: 10_000),
+        modifiedAt: Date(timeIntervalSince1970: 1_786_874_400)
+    )
+
     static let factoryTemplates: [VideoOverlayTemplate] = [
         .racing, .arcade, .minimal, .portrait, .streetLegends,
         .neonCircuit, .blacklistClassic, .carbonGold, .streetShift,
-        .routeRadar, .routeOrbit, .pursuitMap
+        .routeRadar, .routeOrbit, .pursuitMap, .routeChase
     ]
 
     func migratedToFreeformLayout() -> VideoOverlayTemplate {

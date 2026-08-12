@@ -197,7 +197,9 @@ class VideoRepository(
                 .build()
             val item = MediaItem.Builder().setUri(project.localUri).setClippingConfiguration(clipping).build()
             val routeMap = if (definition.resolvedElements().any {
-                it.kind == OverlayElementKind.ROUTE_MAP || it.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR
+                it.kind == OverlayElementKind.ROUTE_MAP ||
+                    it.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR ||
+                    it.kind == OverlayElementKind.ROUTE_MAP_FOLLOW
             }) {
                 createRouteMapSnapshot(context, samples)
             } else null
@@ -309,7 +311,8 @@ class VideoRepository(
         template("STREET_SHIFT", "Street Shift", VideoOverlayTemplateDefinition.streetShift()),
         template("ROUTE_RADAR", "Route Radar", VideoOverlayTemplateDefinition.routeRadar()),
         template("ROUTE_ORBIT", "Route Orbit", VideoOverlayTemplateDefinition.routeOrbit()),
-        template("PURSUIT_MAP", "Pursuit Map", VideoOverlayTemplateDefinition.pursuitMap())
+        template("PURSUIT_MAP", "Pursuit Map", VideoOverlayTemplateDefinition.pursuitMap()),
+        template("ROUTE_CHASE", "Route Chase", VideoOverlayTemplateDefinition.routeChase())
     )
 
     private fun template(id: String, name: String, definition: VideoOverlayTemplateDefinition): VideoOverlayTemplate {

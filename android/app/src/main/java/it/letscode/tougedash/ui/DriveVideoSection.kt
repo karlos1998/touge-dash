@@ -422,7 +422,9 @@ private fun VideoAlignmentEditor(
 }
 
 private fun OverlayElementKind.isRouteMap() =
-    this == OverlayElementKind.ROUTE_MAP || this == OverlayElementKind.ROUTE_MAP_CIRCULAR
+    this == OverlayElementKind.ROUTE_MAP ||
+        this == OverlayElementKind.ROUTE_MAP_CIRCULAR ||
+        this == OverlayElementKind.ROUTE_MAP_FOLLOW
 
 @Composable
 private fun widgetKindName(kind: OverlayElementKind) = when (kind) {
@@ -437,6 +439,7 @@ private fun widgetKindName(kind: OverlayElementKind) = when (kind) {
     OverlayElementKind.STREET_SHIFT_TACH -> "Street Shift Tach"
     OverlayElementKind.ROUTE_MAP -> appText("Route minimap", "Minimapa trasy")
     OverlayElementKind.ROUTE_MAP_CIRCULAR -> appText("Circular route minimap", "Okrągła minimapa trasy")
+    OverlayElementKind.ROUTE_MAP_FOLLOW -> appText("Follow minimap", "Minimapa śledząca")
 }
 
 @Composable
@@ -509,7 +512,8 @@ private fun HudElementPreview(
     val accent = element.accent.color()
     val background = if (style == OverlayStyle.UNDERGROUND) Color.Black.copy(alpha = .82f) else Color(0xE6071014)
     val value = element.metric.sampleValue(sample)
-    val circularMap = element.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR
+    val circularMap = element.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR || element.kind == OverlayElementKind.ROUTE_MAP_FOLLOW
+    val followMap = element.kind == OverlayElementKind.ROUTE_MAP_FOLLOW
     val shellShape = if (circularMap) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(12.dp)
     val shell = modifier
         .background(background, shellShape)
@@ -565,7 +569,8 @@ private fun HudElementPreview(
         OverlayElementKind.CARBON_TACH,
         OverlayElementKind.STREET_SHIFT_TACH -> ArcadeTachPreview(sample, element.kind, definition, shell)
         OverlayElementKind.ROUTE_MAP,
-        OverlayElementKind.ROUTE_MAP_CIRCULAR -> NfsRouteMapPreview(samples, sample, accent, circularMap, shell)
+        OverlayElementKind.ROUTE_MAP_CIRCULAR,
+        OverlayElementKind.ROUTE_MAP_FOLLOW -> NfsRouteMapPreview(samples, sample, accent, circularMap, followMap, shell)
     }
 }
 
@@ -575,6 +580,7 @@ private fun NfsRouteMapPreview(
     sample: TelemetrySampleEntity,
     accent: Color,
     circular: Boolean,
+    followsPosition: Boolean,
     modifier: Modifier
 ) {
     val context = LocalContext.current
@@ -589,6 +595,9 @@ private fun NfsRouteMapPreview(
         located.takeWhile { it.first.recordedAt <= sample.recordedAt }.map { it.second }
     }
     val points = remember(located) { located.map { it.second } }
+    val currentPointIndex = remember(located, sample.recordedAt) {
+        located.indexOfLast { it.first.recordedAt <= sample.recordedAt }.coerceAtLeast(0)
+    }
     val routeKey = remember(points) { points.firstOrNull()?.let { "${points.size}:${it.latitude}:${it.longitude}:${points.last().latitude}:${points.last().longitude}" } }
     val markerDrawable = remember(accent) {
         val bitmap = Bitmap.createBitmap(44, 44, Bitmap.Config.ARGB_8888)
@@ -641,17 +650,26 @@ private fun NfsRouteMapPreview(
                     map.overlays.clear()
                     map.overlays.add(fullRoute)
                     map.overlays.add(currentRoute)
-                    travelled.lastOrNull()?.let { position ->
-                        map.overlays.add(Marker(map).apply {
-                            this.position = position
-                            icon = markerDrawable
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                            travelled.getOrNull(travelled.lastIndex - 1)?.let { previous ->
-                                rotation = -previous.bearingTo(position).toFloat()
-                            }
-                        })
+                    val currentPosition = points.getOrNull(currentPointIndex)
+                    val previousPosition = points.getOrNull((currentPointIndex - 2).coerceAtLeast(0))
+                    val nextPosition = points.getOrNull((currentPointIndex + 2).coerceAtMost(points.lastIndex))
+                    if (!followsPosition) {
+                        currentPosition?.let { position ->
+                            map.overlays.add(Marker(map).apply {
+                                this.position = position
+                                icon = markerDrawable
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                                previousPosition?.let { previous ->
+                                    rotation = -previous.bearingTo(position).toFloat()
+                                }
+                            })
+                        }
                     }
-                    if (map.tag != routeKey) {
+                    if (followsPosition && currentPosition != null) {
+                        map.controller.setCenter(currentPosition)
+                        map.controller.setZoom(17.5)
+                        map.mapOrientation = -(previousPosition?.bearingTo(nextPosition ?: currentPosition)?.toFloat() ?: 0f)
+                    } else if (map.tag != routeKey) {
                         map.tag = routeKey
                         map.post {
                             if (points.size > 1) map.zoomToBoundingBox(BoundingBox.fromGeoPointsSafe(points), false, 26)
@@ -663,6 +681,23 @@ private fun NfsRouteMapPreview(
                 modifier = Modifier.fillMaxSize()
             )
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .37f)))
+            if (followsPosition) {
+                Canvas(Modifier.align(Alignment.Center).size(34.dp)) {
+                    val arrow = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(size.width / 2, size.height * .06f)
+                        lineTo(size.width * .84f, size.height * .88f)
+                        lineTo(size.width / 2, size.height * .69f)
+                        lineTo(size.width * .16f, size.height * .88f)
+                        close()
+                    }
+                    drawPath(arrow, Color.White)
+                    drawPath(
+                        arrow,
+                        accent,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
+                    )
+                }
+            }
         } else {
             Box(Modifier.fillMaxSize().background(Color(0xF0051116)), contentAlignment = Alignment.Center) {
                 Text(appText("NO GPS", "BRAK GPS"), color = TougeOrange, fontSize = 11.sp, fontWeight = FontWeight.Black)

@@ -89,10 +89,13 @@ class OverlayTemplateModelsTest {
     fun `route map variants include circular mint and rectangular red layouts`() {
         val orbit = VideoOverlayTemplateDefinition.routeOrbit()
         val pursuit = VideoOverlayTemplateDefinition.pursuitMap()
+        val chase = VideoOverlayTemplateDefinition.routeChase()
 
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP_CIRCULAR, OverlayElementKind.CARBON_TACH), orbit.elements.map { it.kind })
         assertEquals(DashboardAccent.MINT, orbit.elements.first().accent)
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP, OverlayElementKind.BLACKLIST_TACH), pursuit.elements.map { it.kind })
         assertEquals(DashboardAccent.RED, pursuit.elements.first().accent)
+        assertEquals(listOf(OverlayElementKind.ROUTE_MAP_FOLLOW, OverlayElementKind.NEON_TACH), chase.elements.map { it.kind })
+        assertEquals(DashboardAccent.BLUE, chase.elements.first().accent)
     }
 }

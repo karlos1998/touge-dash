@@ -23,7 +23,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let store = VideoOverlayTemplateStore(defaults: defaults, keyPrefix: suite)
-        XCTAssertEqual(store.templates.count, 12)
+        XCTAssertEqual(store.templates.count, 13)
         XCTAssertEqual(store.selectedTemplate.style, .racing)
 
         let copy = store.createCopy()
@@ -201,6 +201,8 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(VideoOverlayTemplate.routeOrbit.elements.first?.accent, .mint)
         XCTAssertEqual(VideoOverlayTemplate.pursuitMap.elements.map(\.kind), [.routeMap, .blacklistTach])
         XCTAssertEqual(VideoOverlayTemplate.pursuitMap.elements.first?.accent, .red)
+        XCTAssertEqual(VideoOverlayTemplate.routeChase.elements.map(\.kind), [.routeMapFollow, .neonTach])
+        XCTAssertEqual(VideoOverlayTemplate.routeChase.elements.first?.accent, .blue)
         let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
         var telemetry = TelemetrySnapshot.preview
         telemetry.speedKPH = 83
@@ -229,7 +231,7 @@ final class DriveVideoFeatureTests: XCTestCase {
                 .init(timestamp: startedAt.addingTimeInterval(4), position: CGPoint(x: 0.92, y: 0.36))
             ]
         )
-        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .pursuitMap] {
+        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .pursuitMap, .routeChase] {
             let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
                 size: CGSize(width: 390, height: 220),
                 sample: VideoTelemetryFrame(sample: sample),
@@ -267,7 +269,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         let generatedRouteMap = await VideoRouteMapSnapshotter.make(samples: frames)
         let routeMap = try XCTUnwrap(generatedRouteMap)
         XCTAssertEqual(routeMap.points.count, samples.count)
-        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit] {
+        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .routeChase] {
             let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
                 size: CGSize(width: 390, height: 220),
                 sample: try XCTUnwrap(frames.last),
@@ -276,6 +278,18 @@ final class DriveVideoFeatureTests: XCTestCase {
             ))
             let attachment = XCTAttachment(image: UIImage(cgImage: image))
             attachment.name = "Simulator-Real-Map-\(template.name.replacingOccurrences(of: " ", with: "-"))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        for index in [6, 13] {
+            let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
+                size: CGSize(width: 390, height: 220),
+                sample: frames[index],
+                template: .routeChase,
+                routeMap: routeMap
+            ))
+            let attachment = XCTAttachment(image: UIImage(cgImage: image))
+            attachment.name = "Simulator-Route-Chase-Frame-\(index)"
             attachment.lifetime = .keepAlways
             add(attachment)
         }

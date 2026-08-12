@@ -84,39 +84,84 @@ class TelemetryBitmapOverlay(
             OverlayElementKind.CARBON_TACH -> drawCarbonTach(sample, element, cx, cy, scale)
             OverlayElementKind.STREET_SHIFT_TACH -> drawStreetShiftTach(sample, element, cx, cy, scale)
             OverlayElementKind.ROUTE_MAP,
-            OverlayElementKind.ROUTE_MAP_CIRCULAR -> drawRouteMap(sample, element, cx, cy, scale)
+            OverlayElementKind.ROUTE_MAP_CIRCULAR,
+            OverlayElementKind.ROUTE_MAP_FOLLOW -> drawRouteMap(sample, element, cx, cy, scale)
         }
     }
 
     private fun drawRouteMap(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
-        val circular = element.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR
+        val followsPosition = element.kind == OverlayElementKind.ROUTE_MAP_FOLLOW
+        val circular = element.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR || followsPosition
         val width = (if (circular) 385f else 535f) * scale
         val height = (if (circular) 385f else 340f) * scale
         val rect = RectF(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2)
         val radius = if (circular) width / 2 else 28f * scale
+        val currentIndex = routeMap?.points?.indices?.minByOrNull { index ->
+            kotlin.math.abs(routeMap.points[index].recordedAt - sample.recordedAt)
+        }
+        var mapRotation = 0f
         val clippingPath = Path().apply {
             if (circular) addOval(rect, Path.Direction.CW)
             else addRoundRect(rect, radius, radius, Path.Direction.CW)
         }
+        fun drawMarker(x: Float, y: Float, angle: Float) {
+            canvas.save()
+            canvas.rotate(angle, x, y)
+            val marker = 18f * scale
+            val arrow = Path().apply {
+                moveTo(x, y - marker)
+                lineTo(x + marker * .68f, y + marker * .78f)
+                lineTo(x, y + marker * .46f)
+                lineTo(x - marker * .68f, y + marker * .78f)
+                close()
+            }
+            paint.style = Paint.Style.FILL
+            paint.color = Color.WHITE
+            paint.setShadowLayer(15f * scale, 0f, 0f, element.accent.colorInt())
+            canvas.drawPath(arrow, paint)
+            paint.clearShadowLayer()
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 4f * scale
+            paint.color = element.accent.colorInt()
+            canvas.drawPath(arrow, paint)
+            canvas.restore()
+        }
         canvas.save()
         canvas.clipPath(clippingPath)
+        paint.style = Paint.Style.FILL
+        paint.color = 0xf0051116.toInt()
+        canvas.drawRect(rect, paint)
         var mapContentRect = RectF(rect)
         routeMap?.let { snapshot ->
             paint.alpha = 255
-            val imageScale = maxOf(rect.width() / snapshot.bitmap.width, rect.height() / snapshot.bitmap.height)
+            val imageScale = maxOf(rect.width() / snapshot.bitmap.width, rect.height() / snapshot.bitmap.height) * if (followsPosition) 2.35f else 1f
             val contentWidth = snapshot.bitmap.width * imageScale
             val contentHeight = snapshot.bitmap.height * imageScale
-            mapContentRect = RectF(
-                rect.centerX() - contentWidth / 2,
-                rect.centerY() - contentHeight / 2,
-                rect.centerX() + contentWidth / 2,
-                rect.centerY() + contentHeight / 2
-            )
+            if (followsPosition && currentIndex != null) {
+                val current = snapshot.points[currentIndex]
+                mapContentRect = RectF(
+                    rect.centerX() - current.x * contentWidth,
+                    rect.centerY() - current.y * contentHeight,
+                    rect.centerX() + (1f - current.x) * contentWidth,
+                    rect.centerY() + (1f - current.y) * contentHeight
+                )
+                val previous = snapshot.points[(currentIndex - 2).coerceAtLeast(0)]
+                val next = snapshot.points[(currentIndex + 2).coerceAtMost(snapshot.points.lastIndex)]
+                val heading = Math.toDegrees(kotlin.math.atan2((next.y - previous.y).toDouble(), (next.x - previous.x).toDouble())).toFloat()
+                mapRotation = -90f - heading
+                canvas.save()
+                canvas.rotate(mapRotation, rect.centerX(), rect.centerY())
+            } else {
+                mapContentRect = RectF(
+                    rect.centerX() - contentWidth / 2,
+                    rect.centerY() - contentHeight / 2,
+                    rect.centerX() + contentWidth / 2,
+                    rect.centerY() + contentHeight / 2
+                )
+            }
             canvas.drawBitmap(snapshot.bitmap, null, mapContentRect, paint)
+            if (followsPosition && currentIndex != null) canvas.restore()
         } ?: run {
-            paint.style = Paint.Style.FILL
-            paint.color = 0xf0051116.toInt()
-            canvas.drawRect(rect, paint)
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 1.5f * scale
             paint.color = element.accent.colorInt() and 0x22ffffff
@@ -148,40 +193,28 @@ class TelemetryBitmapOverlay(
                     points.drop(1).forEach { lineTo(it.x, it.y) }
                 }, paint)
             }
+            if (followsPosition && currentIndex != null) {
+                canvas.save()
+                canvas.rotate(mapRotation, rect.centerX(), rect.centerY())
+            }
             stroke(mappedPoints, 0xc9000000.toInt(), 14f * scale)
             stroke(mappedPoints, 0x88ffffff.toInt(), 6f * scale)
 
-            val currentIndex = snapshot.points.indices.minByOrNull { index ->
-                kotlin.math.abs(snapshot.points[index].recordedAt - sample.recordedAt)
-            } ?: 0
-            val travelled = mappedPoints.take(currentIndex + 1)
-            stroke(travelled, element.accent.colorInt() and 0x66ffffff, 18f * scale)
-            stroke(travelled, element.accent.colorInt(), 8f * scale)
+            currentIndex?.let { index ->
+                val travelled = mappedPoints.take(index + 1)
+                stroke(travelled, element.accent.colorInt() and 0x66ffffff, 18f * scale)
+                stroke(travelled, element.accent.colorInt(), 8f * scale)
 
-            val current = mappedPoints[currentIndex]
-            val previous = mappedPoints[(currentIndex - 1).coerceAtLeast(0)]
-            val next = mappedPoints[(currentIndex + 1).coerceAtMost(mappedPoints.lastIndex)]
-            val angle = Math.toDegrees(kotlin.math.atan2((next.y - previous.y).toDouble(), (next.x - previous.x).toDouble())).toFloat() + 90f
-            canvas.save()
-            canvas.rotate(angle, current.x, current.y)
-            val marker = 18f * scale
-            val arrow = Path().apply {
-                moveTo(current.x, current.y - marker)
-                lineTo(current.x + marker * .68f, current.y + marker * .78f)
-                lineTo(current.x, current.y + marker * .46f)
-                lineTo(current.x - marker * .68f, current.y + marker * .78f)
-                close()
+                if (!followsPosition) {
+                    val current = mappedPoints[index]
+                    val previous = mappedPoints[(index - 1).coerceAtLeast(0)]
+                    val next = mappedPoints[(index + 1).coerceAtMost(mappedPoints.lastIndex)]
+                    val angle = Math.toDegrees(kotlin.math.atan2((next.y - previous.y).toDouble(), (next.x - previous.x).toDouble())).toFloat() + 90f
+                    drawMarker(current.x, current.y, angle)
+                }
             }
-            paint.style = Paint.Style.FILL
-            paint.color = Color.WHITE
-            paint.setShadowLayer(15f * scale, 0f, 0f, element.accent.colorInt())
-            canvas.drawPath(arrow, paint)
-            paint.clearShadowLayer()
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = 4f * scale
-            paint.color = element.accent.colorInt()
-            canvas.drawPath(arrow, paint)
-            canvas.restore()
+            if (followsPosition && currentIndex != null) canvas.restore()
+            if (followsPosition && currentIndex != null) drawMarker(rect.centerX(), rect.centerY(), 0f)
         }
         canvas.restore()
 
