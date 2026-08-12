@@ -200,7 +200,8 @@ struct DriveVideoHistorySection: View {
                     recording: recording,
                     selectedTime: $selectedTime,
                     overlay: showsOverlayPreview ? selectedOverlay : nil,
-                    selectedSample: selectedSample
+                    selectedSample: selectedSample,
+                    samples: samples
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .overlay {
@@ -582,6 +583,7 @@ private struct DriveVideoSynchronizedPlayer: View {
     @Binding var selectedTime: Date?
     let overlay: VideoOverlayTemplate?
     let selectedSample: TelemetryHistorySample?
+    let samples: [TelemetryHistorySample]
 
     @State private var player: AVPlayer?
     @State private var fileIsMissing = false
@@ -598,7 +600,7 @@ private struct DriveVideoSynchronizedPlayer: View {
             if let player {
                 VideoPlayer(player: player)
                 if let overlay {
-                    VideoTelemetryOverlayView(template: overlay, sample: selectedSample)
+                    VideoTelemetryOverlayView(template: overlay, sample: selectedSample, samples: samples)
                         .padding(5)
                 }
             } else if fileIsMissing {
@@ -823,7 +825,8 @@ private struct DriveVideoExportSheet: View {
                     EditableVideoTelemetryOverlayView(
                         template: $overlayDraft,
                         selectedElementID: $selectedElementID,
-                        sample: previewSample
+                        sample: previewSample,
+                        samples: samples
                     )
                     .padding(5)
                 }

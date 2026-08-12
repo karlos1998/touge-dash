@@ -23,7 +23,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let store = VideoOverlayTemplateStore(defaults: defaults, keyPrefix: suite)
-        XCTAssertEqual(store.templates.count, 9)
+        XCTAssertEqual(store.templates.count, 10)
         XCTAssertEqual(store.selectedTemplate.style, .racing)
 
         let copy = store.createCopy()
@@ -192,6 +192,85 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(VideoOverlayTemplate.neonCircuit.gaugeConfiguration.range(for: .rpm), 0...10_000)
         XCTAssertEqual(VideoOverlayTemplate.carbonGold.gaugeConfiguration.range(for: .rpm), 0...9_000)
         XCTAssertTrue(presets.allSatisfy { $0.elements.count == 1 && $0.elements[0].metric == .rpm })
+    }
+
+    @MainActor
+    func testRouteRadarRendersMappedRouteWithoutCoveringTachometer() throws {
+        XCTAssertEqual(VideoOverlayTemplate.routeRadar.elements.map(\.kind), [.routeMap, .neonTach])
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        var telemetry = TelemetrySnapshot.preview
+        telemetry.speedKPH = 83
+        telemetry.rpm = 4_200
+        let sample = TelemetryHistorySample(snapshot: telemetry, timestamp: startedAt.addingTimeInterval(2))
+        let background = UIGraphicsImageRenderer(size: VideoRouteMapSnapshotter.snapshotSize).image { context in
+            UIColor(red: 0.08, green: 0.10, blue: 0.11, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: VideoRouteMapSnapshotter.snapshotSize))
+            UIColor(white: 0.55, alpha: 0.5).setStroke()
+            context.cgContext.setLineWidth(10)
+            context.cgContext.move(to: CGPoint(x: 0, y: 270))
+            context.cgContext.addCurve(
+                to: CGPoint(x: 642, y: 130),
+                control1: CGPoint(x: 180, y: 350),
+                control2: CGPoint(x: 430, y: 30)
+            )
+            context.cgContext.strokePath()
+        }
+        let routeMap = VideoRouteMapSnapshot(
+            image: try XCTUnwrap(background.cgImage),
+            points: [
+                .init(timestamp: startedAt, position: CGPoint(x: 0.08, y: 0.72)),
+                .init(timestamp: startedAt.addingTimeInterval(1), position: CGPoint(x: 0.31, y: 0.61)),
+                .init(timestamp: startedAt.addingTimeInterval(2), position: CGPoint(x: 0.53, y: 0.44)),
+                .init(timestamp: startedAt.addingTimeInterval(3), position: CGPoint(x: 0.75, y: 0.30)),
+                .init(timestamp: startedAt.addingTimeInterval(4), position: CGPoint(x: 0.92, y: 0.36))
+            ]
+        )
+        let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
+            size: CGSize(width: 390, height: 220),
+            sample: VideoTelemetryFrame(sample: sample),
+            template: .routeRadar,
+            routeMap: routeMap
+        ))
+        let attachment = XCTAttachment(image: UIImage(cgImage: image))
+        attachment.name = "Export-HUD-Route-Radar"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    func testRouteRadarBuildsRealMapSnapshotOnSimulator() async throws {
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let samples = (0..<18).map { index in
+            var telemetry = TelemetrySnapshot.preview
+            telemetry.speedKPH = 45 + Double(index) * 2.6
+            telemetry.rpm = 2_200 + Double(index) * 135
+            let timestamp = startedAt.addingTimeInterval(Double(index))
+            return TelemetryHistorySample(
+                snapshot: telemetry,
+                timestamp: timestamp,
+                location: RecordedLocation(
+                    latitude: 52.4018 + Double(index) * 0.00022 + sin(Double(index) * 0.5) * 0.00032,
+                    longitude: 16.9072 + Double(index) * 0.00041,
+                    horizontalAccuracy: 5,
+                    altitude: 82,
+                    timestamp: timestamp
+                )
+            )
+        }
+        let frames = samples.map(VideoTelemetryFrame.init(sample:))
+        let generatedRouteMap = await VideoRouteMapSnapshotter.make(samples: frames)
+        let routeMap = try XCTUnwrap(generatedRouteMap)
+        XCTAssertEqual(routeMap.points.count, samples.count)
+        let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
+            size: CGSize(width: 390, height: 220),
+            sample: try XCTUnwrap(frames.last),
+            template: .routeRadar,
+            routeMap: routeMap
+        ))
+        let attachment = XCTAttachment(image: UIImage(cgImage: image))
+        attachment.name = "Simulator-Real-Map-Route-Radar"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     @MainActor

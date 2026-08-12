@@ -3,8 +3,13 @@
 package it.letscode.tougedash.ui
 
 import android.net.Uri
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.graphics.Color as AndroidColor
+import android.graphics.Path as AndroidPath
 import android.graphics.Paint as AndroidPaint
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -73,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -106,6 +112,13 @@ import it.letscode.tougedash.video.VideoOverlayElement
 import it.letscode.tougedash.video.VideoOverlayTemplate
 import it.letscode.tougedash.video.VideoOverlayTemplateDefinition
 import kotlinx.coroutines.delay
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
 import kotlin.math.roundToInt
 import kotlin.math.cos
 import kotlin.math.sin
@@ -221,6 +234,7 @@ private fun VideoAlignmentEditor(
         sample?.let { current ->
             EditableHudPreview(
                 sample = current,
+                samples = samples,
                 definition = overlayDefinition,
                 portrait = portraitVideo,
                 canvasSize = previewSize,
@@ -381,6 +395,7 @@ private fun GaugeScaleSlider(
 @Composable
 private fun BoxScope.EditableHudPreview(
     sample: TelemetrySampleEntity,
+    samples: List<TelemetrySampleEntity>,
     definition: VideoOverlayTemplateDefinition,
     portrait: Boolean,
     canvasSize: IntSize,
@@ -395,6 +410,7 @@ private fun BoxScope.EditableHudPreview(
         val position = element.position(portrait)
         HudElementPreview(
             sample = sample,
+            samples = samples,
             element = element,
             definition = definition,
             style = definition.style,
@@ -422,6 +438,7 @@ private fun BoxScope.EditableHudPreview(
 @Composable
 private fun HudElementPreview(
     sample: TelemetrySampleEntity,
+    samples: List<TelemetrySampleEntity>,
     element: VideoOverlayElement,
     definition: VideoOverlayTemplateDefinition,
     style: OverlayStyle,
@@ -484,6 +501,115 @@ private fun HudElementPreview(
         OverlayElementKind.BLACKLIST_TACH,
         OverlayElementKind.CARBON_TACH,
         OverlayElementKind.STREET_SHIFT_TACH -> ArcadeTachPreview(sample, element.kind, definition, shell)
+        OverlayElementKind.ROUTE_MAP -> NfsRouteMapPreview(samples, sample, accent, shell)
+    }
+}
+
+@Composable
+private fun NfsRouteMapPreview(
+    samples: List<TelemetrySampleEntity>,
+    sample: TelemetrySampleEntity,
+    accent: Color,
+    modifier: Modifier
+) {
+    val context = LocalContext.current
+    val located = remember(samples) {
+        samples.mapNotNull { value ->
+            val latitude = value.latitude
+            val longitude = value.longitude
+            if (latitude == null || longitude == null) null else value to GeoPoint(latitude, longitude)
+        }
+    }
+    val travelled = remember(located, sample.recordedAt) {
+        located.takeWhile { it.first.recordedAt <= sample.recordedAt }.map { it.second }
+    }
+    val points = remember(located) { located.map { it.second } }
+    val routeKey = remember(points) { points.firstOrNull()?.let { "${points.size}:${it.latitude}:${it.longitude}:${points.last().latitude}:${points.last().longitude}" } }
+    val markerDrawable = remember(accent) {
+        val bitmap = Bitmap.createBitmap(44, 44, Bitmap.Config.ARGB_8888)
+        val canvas = AndroidCanvas(bitmap)
+        val path = AndroidPath().apply {
+            moveTo(22f, 2f)
+            lineTo(39f, 39f)
+            lineTo(22f, 31f)
+            lineTo(5f, 39f)
+            close()
+        }
+        val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.WHITE
+            style = AndroidPaint.Style.FILL
+            setShadowLayer(9f, 0f, 0f, accent.toArgb())
+        }
+        canvas.drawPath(path, paint)
+        paint.clearShadowLayer()
+        paint.color = accent.toArgb()
+        paint.style = AndroidPaint.Style.STROKE
+        paint.strokeWidth = 4f
+        canvas.drawPath(path, paint)
+        BitmapDrawable(context.resources, bitmap)
+    }
+    Box(modifier.width(240.dp).height(150.dp).padding(0.dp)) {
+        if (points.isNotEmpty()) {
+            AndroidView(
+                factory = {
+                    Configuration.getInstance().userAgentValue = context.packageName
+                    MapView(context).apply {
+                        setTileSource(TileSourceFactory.MAPNIK)
+                        setMultiTouchControls(false)
+                        isClickable = false
+                        isFocusable = false
+                    }
+                },
+                update = { map ->
+                    val fullRoute = Polyline().apply {
+                        outlinePaint.color = AndroidColor.argb(155, 255, 255, 255)
+                        outlinePaint.strokeWidth = 7f
+                        setPoints(points)
+                    }
+                    val currentRoute = Polyline().apply {
+                        outlinePaint.color = accent.toArgb()
+                        outlinePaint.strokeWidth = 10f
+                        setPoints(travelled)
+                    }
+                    map.overlays.clear()
+                    map.overlays.add(fullRoute)
+                    map.overlays.add(currentRoute)
+                    travelled.lastOrNull()?.let { position ->
+                        map.overlays.add(Marker(map).apply {
+                            this.position = position
+                            icon = markerDrawable
+                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                            travelled.getOrNull(travelled.lastIndex - 1)?.let { previous ->
+                                rotation = -previous.bearingTo(position).toFloat()
+                            }
+                        })
+                    }
+                    if (map.tag != routeKey) {
+                        map.tag = routeKey
+                        map.post {
+                            if (points.size > 1) map.zoomToBoundingBox(BoundingBox.fromGeoPointsSafe(points), false, 26)
+                            else points.firstOrNull()?.let { map.controller.setCenter(it); map.controller.setZoom(17.0) }
+                        }
+                    }
+                    map.invalidate()
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .37f)))
+        } else {
+            Box(Modifier.fillMaxSize().background(Color(0xF0051116)), contentAlignment = Alignment.Center) {
+                Text(appText("NO GPS", "BRAK GPS"), color = TougeOrange, fontSize = 11.sp, fontWeight = FontWeight.Black)
+            }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(9.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("ROUTE // LIVE", color = accent, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(Color.Black.copy(alpha = .72f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 4.dp))
+            Text("${sample.speedKph.roundToInt()} KM/H", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black, modifier = Modifier.background(Color.Black.copy(alpha = .72f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 4.dp))
+        }
+        Text("© OpenStreetMap", color = Color.White.copy(alpha = .72f), fontSize = 6.sp, modifier = Modifier.align(Alignment.BottomStart).padding(7.dp))
     }
 }
 

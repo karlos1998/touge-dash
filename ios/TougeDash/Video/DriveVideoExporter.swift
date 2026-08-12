@@ -2,6 +2,7 @@
 @preconcurrency import BackgroundTasks
 import CoreImage
 import Foundation
+import MapKit
 import Photos
 import SwiftUI
 import UIKit
@@ -25,6 +26,8 @@ struct VideoTelemetryFrame: Sendable {
     let ignition: Double
     let injectorDuty: Double
     let speed: Double
+    let latitude: Double?
+    let longitude: Double?
 
     init(sample: TelemetryHistorySample) {
         timestamp = sample.timestamp
@@ -45,6 +48,8 @@ struct VideoTelemetryFrame: Sendable {
         ignition = sample.ignitionDegrees
         injectorDuty = sample.injectorDutyPercent
         speed = sample.speedKPH
+        latitude = sample.latitude
+        longitude = sample.longitude
     }
 
     func value(for metric: DashboardMetric) -> Double {
@@ -274,11 +279,17 @@ final class DriveVideoExporter: ObservableObject {
         }
         activeExport = exporter
         if let template {
+            let routeMap: VideoRouteMapSnapshot? = if template.elements.contains(where: { $0.kind == .routeMap }) {
+                await VideoRouteMapSnapshotter.make(samples: samples)
+            } else {
+                nil
+            }
             let cache = VideoOverlayFrameCache(
                 recordingStart: telemetryStart,
                 sourceStartSeconds: startSeconds,
                 samples: samples,
-                template: template
+                template: template,
+                routeMap: routeMap
             )
             exporter.videoComposition = try await makeVideoComposition(asset: asset, cache: cache)
         }
@@ -519,11 +530,119 @@ enum DriveVideoPhotoLibrarySaver {
     }
 }
 
+struct VideoRouteMapPoint: Sendable {
+    let timestamp: Date
+    let position: CGPoint
+}
+
+struct VideoRouteMapSnapshot: @unchecked Sendable {
+    let image: CGImage
+    let points: [VideoRouteMapPoint]
+
+    func pointIndex(at timestamp: Date) -> Int? {
+        guard !points.isEmpty else { return nil }
+        var lower = 0
+        var upper = points.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if points[middle].timestamp < timestamp { lower = middle + 1 } else { upper = middle }
+        }
+        if lower == 0 { return 0 }
+        if lower == points.count { return points.count - 1 }
+        return abs(points[lower - 1].timestamp.timeIntervalSince(timestamp)) <=
+            abs(points[lower].timestamp.timeIntervalSince(timestamp)) ? lower - 1 : lower
+    }
+}
+
+enum VideoRouteMapSnapshotter {
+    static let snapshotSize = CGSize(width: 642, height: 408)
+
+    static func make(samples: [VideoTelemetryFrame]) async -> VideoRouteMapSnapshot? {
+        let located = samples.compactMap { sample -> (VideoTelemetryFrame, CLLocationCoordinate2D)? in
+            guard let latitude = sample.latitude,
+                  let longitude = sample.longitude,
+                  (-90...90).contains(latitude),
+                  (-180...180).contains(longitude) else { return nil }
+            return (sample, CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+        }
+        guard !located.isEmpty else { return nil }
+
+        let latitudes = located.map { $0.1.latitude }
+        let longitudes = located.map { $0.1.longitude }
+        guard let minimumLatitude = latitudes.min(), let maximumLatitude = latitudes.max(),
+              let minimumLongitude = longitudes.min(), let maximumLongitude = longitudes.max() else { return nil }
+        let latitudeDelta = max(0.0032, (maximumLatitude - minimumLatitude) * 1.42)
+        let longitudeDelta = max(0.0048, (maximumLongitude - minimumLongitude) * 1.42)
+
+        let options = MKMapSnapshotter.Options()
+        options.region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(
+                latitude: (minimumLatitude + maximumLatitude) / 2,
+                longitude: (minimumLongitude + maximumLongitude) / 2
+            ),
+            span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
+        )
+        options.size = snapshotSize
+        options.scale = 1
+        options.mapType = .mutedStandard
+        options.showsBuildings = false
+        options.pointOfInterestFilter = .excludingAll
+        options.traitCollection = UITraitCollection(userInterfaceStyle: .dark)
+
+        if let snapshot = try? await MKMapSnapshotter(options: options).start(),
+           let image = snapshot.image.cgImage {
+            let points = located.map { sample, coordinate in
+                let point = snapshot.point(for: coordinate)
+                return VideoRouteMapPoint(
+                    timestamp: sample.timestamp,
+                    position: CGPoint(
+                        x: min(1, max(0, point.x / snapshotSize.width)),
+                        y: min(1, max(0, point.y / snapshotSize.height))
+                    )
+                )
+            }
+            return VideoRouteMapSnapshot(image: image, points: points)
+        }
+
+        let fallback = UIGraphicsImageRenderer(size: snapshotSize).image { rendererContext in
+            UIColor(red: 0.018, green: 0.05, blue: 0.064, alpha: 1).setFill()
+            rendererContext.fill(CGRect(origin: .zero, size: snapshotSize))
+            rendererContext.cgContext.setStrokeColor(UIColor.systemCyan.withAlphaComponent(0.1).cgColor)
+            rendererContext.cgContext.setLineWidth(1)
+            stride(from: 0.0, through: snapshotSize.width, by: 54).forEach { x in
+                rendererContext.cgContext.move(to: CGPoint(x: x, y: 0))
+                rendererContext.cgContext.addLine(to: CGPoint(x: x, y: snapshotSize.height))
+            }
+            stride(from: 0.0, through: snapshotSize.height, by: 54).forEach { y in
+                rendererContext.cgContext.move(to: CGPoint(x: 0, y: y))
+                rendererContext.cgContext.addLine(to: CGPoint(x: snapshotSize.width, y: y))
+            }
+            rendererContext.cgContext.strokePath()
+        }
+        guard let fallbackImage = fallback.cgImage else { return nil }
+        let latitudeCenter = (minimumLatitude + maximumLatitude) / 2
+        let longitudeCenter = (minimumLongitude + maximumLongitude) / 2
+        let latitudeRange = (latitudeCenter - latitudeDelta / 2)...(latitudeCenter + latitudeDelta / 2)
+        let longitudeRange = (longitudeCenter - longitudeDelta / 2)...(longitudeCenter + longitudeDelta / 2)
+        let fallbackPoints = located.map { sample, coordinate in
+            VideoRouteMapPoint(
+                timestamp: sample.timestamp,
+                position: CGPoint(
+                    x: 0.1 + 0.8 * (coordinate.longitude - longitudeRange.lowerBound) / max(0.000001, longitudeRange.upperBound - longitudeRange.lowerBound),
+                    y: 0.9 - 0.8 * (coordinate.latitude - latitudeRange.lowerBound) / max(0.000001, latitudeRange.upperBound - latitudeRange.lowerBound)
+                )
+            )
+        }
+        return VideoRouteMapSnapshot(image: fallbackImage, points: fallbackPoints)
+    }
+}
+
 private final class VideoOverlayFrameCache: @unchecked Sendable {
     private let recordingStart: Date
     private let sourceStartSeconds: Double
     private let samples: [VideoTelemetryFrame]
     private let template: VideoOverlayTemplate
+    private let routeMap: VideoRouteMapSnapshot?
     private let lock = NSLock()
     private var cachedIndex = -1
     private var cachedSize = CGSize.zero
@@ -533,12 +652,14 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
         recordingStart: Date,
         sourceStartSeconds: Double,
         samples: [VideoTelemetryFrame],
-        template: VideoOverlayTemplate
+        template: VideoOverlayTemplate,
+        routeMap: VideoRouteMapSnapshot? = nil
     ) {
         self.recordingStart = recordingStart
         self.sourceStartSeconds = sourceStartSeconds
         self.samples = samples
         self.template = template
+        self.routeMap = routeMap
     }
 
     func image(at seconds: Double, size: CGSize) -> CIImage? {
@@ -552,7 +673,8 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
         guard let cgImage = VideoOverlayCGRenderer.render(
             size: size,
             sample: samples[index],
-            template: template
+            template: template,
+            routeMap: routeMap
         ) else { return nil }
         let image = CIImage(cgImage: cgImage)
         cachedIndex = index
@@ -577,7 +699,32 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
 }
 
 enum VideoOverlayCGRenderer {
-    static func render(size: CGSize, sample: VideoTelemetryFrame, template: VideoOverlayTemplate) -> CGImage? {
+    static func renderRouteMap(
+        size: CGSize,
+        sample: VideoTelemetryFrame,
+        element: VideoOverlayElement,
+        routeMap: VideoRouteMapSnapshot?
+    ) -> CGImage? {
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format).image { rendererContext in
+            drawRouteMap(
+                element: element,
+                sample: sample,
+                routeMap: routeMap,
+                rect: CGRect(origin: .zero, size: size),
+                context: rendererContext.cgContext
+            )
+        }.cgImage
+    }
+
+    static func render(
+        size: CGSize,
+        sample: VideoTelemetryFrame,
+        template: VideoOverlayTemplate,
+        routeMap: VideoRouteMapSnapshot? = nil
+    ) -> CGImage? {
         let format = UIGraphicsImageRendererFormat()
         format.opaque = false
         format.scale = 1
@@ -602,6 +749,7 @@ enum VideoOverlayCGRenderer {
                     style: template.style,
                     configuration: template.gaugeConfiguration,
                     sample: sample,
+                    routeMap: routeMap,
                     rect: rect,
                     context: context,
                     baseScale: baseScale
@@ -621,6 +769,7 @@ enum VideoOverlayCGRenderer {
         case .neonTach: return CGSize(width: 184 * scale, height: 150 * scale)
         case .streetShiftTach: return CGSize(width: 190 * scale, height: 150 * scale)
         case .blacklistTach, .carbonTach: return CGSize(width: 150 * scale, height: 150 * scale)
+        case .routeMap: return CGSize(width: 214 * scale, height: 136 * scale)
         }
     }
 
@@ -641,6 +790,7 @@ enum VideoOverlayCGRenderer {
         style: VideoOverlayStyle,
         configuration: VideoOverlayGaugeConfiguration,
         sample: VideoTelemetryFrame,
+        routeMap: VideoRouteMapSnapshot?,
         rect: CGRect,
         context: CGContext,
         baseScale: CGFloat
@@ -661,7 +811,139 @@ enum VideoOverlayCGRenderer {
             drawOilCluster(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
         case .neonTach, .blacklistTach, .carbonTach, .streetShiftTach:
             drawArcadeTach(element: element, configuration: configuration, sample: sample, rect: rect, context: context)
+        case .routeMap:
+            drawRouteMap(element: element, sample: sample, routeMap: routeMap, rect: rect, context: context)
         }
+    }
+
+    private static func drawRouteMap(
+        element: VideoOverlayElement,
+        sample: VideoTelemetryFrame,
+        routeMap: VideoRouteMapSnapshot?,
+        rect: CGRect,
+        context: CGContext
+    ) {
+        let accent = element.accent.uiColor
+        let radius = max(8, rect.width * 0.065)
+        let mapRect = rect.insetBy(dx: rect.width * 0.018, dy: rect.width * 0.018)
+
+        context.saveGState()
+        context.addPath(UIBezierPath(roundedRect: mapRect, cornerRadius: radius).cgPath)
+        context.clip()
+        if let routeMap {
+            UIImage(cgImage: routeMap.image).draw(in: mapRect)
+        } else {
+            context.setFillColor(UIColor(red: 0.02, green: 0.055, blue: 0.07, alpha: 0.96).cgColor)
+            context.fill(mapRect)
+            context.setStrokeColor(accent.withAlphaComponent(0.11).cgColor)
+            context.setLineWidth(max(0.6, rect.width * 0.003))
+            let grid = rect.width * 0.1
+            stride(from: mapRect.minX, through: mapRect.maxX, by: grid).forEach { x in
+                context.move(to: CGPoint(x: x, y: mapRect.minY))
+                context.addLine(to: CGPoint(x: x, y: mapRect.maxY))
+            }
+            stride(from: mapRect.minY, through: mapRect.maxY, by: grid).forEach { y in
+                context.move(to: CGPoint(x: mapRect.minX, y: y))
+                context.addLine(to: CGPoint(x: mapRect.maxX, y: y))
+            }
+            context.strokePath()
+        }
+        context.setFillColor(UIColor.black.withAlphaComponent(routeMap == nil ? 0.18 : 0.38).cgColor)
+        context.fill(mapRect)
+
+        if let routeMap, !routeMap.points.isEmpty {
+            let mapped = routeMap.points.map { point in
+                CGPoint(
+                    x: mapRect.minX + point.position.x * mapRect.width,
+                    y: mapRect.minY + point.position.y * mapRect.height
+                )
+            }
+            strokeRoute(mapped, color: UIColor.black.withAlphaComponent(0.78), width: rect.width * 0.026, context: context)
+            strokeRoute(mapped, color: UIColor.white.withAlphaComponent(0.36), width: rect.width * 0.011, context: context)
+
+            if let currentIndex = routeMap.pointIndex(at: sample.timestamp) {
+                let travelled = Array(mapped.prefix(currentIndex + 1))
+                strokeRoute(travelled, color: accent.withAlphaComponent(0.3), width: rect.width * 0.032, context: context)
+                strokeRoute(travelled, color: accent, width: rect.width * 0.013, context: context)
+
+                let current = mapped[currentIndex]
+                let previous = mapped[max(0, currentIndex - 1)]
+                let next = mapped[min(mapped.count - 1, currentIndex + 1)]
+                let direction = CGPoint(x: next.x - previous.x, y: next.y - previous.y)
+                let angle = atan2(direction.y, direction.x) + .pi / 2
+                let markerSize = rect.width * 0.052
+                context.saveGState()
+                context.translateBy(x: current.x, y: current.y)
+                context.rotate(by: angle)
+                let marker = UIBezierPath()
+                marker.move(to: CGPoint(x: 0, y: -markerSize))
+                marker.addLine(to: CGPoint(x: markerSize * 0.68, y: markerSize * 0.78))
+                marker.addLine(to: CGPoint(x: 0, y: markerSize * 0.46))
+                marker.addLine(to: CGPoint(x: -markerSize * 0.68, y: markerSize * 0.78))
+                marker.close()
+                context.setShadow(offset: .zero, blur: markerSize * 0.9, color: accent.cgColor)
+                context.setFillColor(UIColor.white.cgColor)
+                context.addPath(marker.cgPath)
+                context.fillPath()
+                context.setStrokeColor(accent.cgColor)
+                context.setLineWidth(max(1, rect.width * 0.008))
+                context.addPath(marker.cgPath)
+                context.strokePath()
+                context.restoreGState()
+            }
+        }
+        context.restoreGState()
+
+        context.setStrokeColor(UIColor.black.withAlphaComponent(0.85).cgColor)
+        context.setLineWidth(max(4, rect.width * 0.026))
+        context.addPath(UIBezierPath(roundedRect: mapRect, cornerRadius: radius).cgPath)
+        context.strokePath()
+        context.setStrokeColor(accent.withAlphaComponent(0.92).cgColor)
+        context.setLineWidth(max(1.2, rect.width * 0.008))
+        context.addPath(UIBezierPath(roundedRect: mapRect, cornerRadius: radius).cgPath)
+        context.strokePath()
+
+        let labelFont = UIFont.monospacedSystemFont(ofSize: rect.width * 0.047, weight: .black)
+        let speedFont = UIFont.monospacedDigitSystemFont(ofSize: rect.width * 0.074, weight: .black)
+        let badge = CGRect(
+            x: mapRect.minX + rect.width * 0.032,
+            y: mapRect.minY + rect.width * 0.028,
+            width: rect.width * 0.43,
+            height: rect.width * 0.105
+        )
+        context.setFillColor(UIColor.black.withAlphaComponent(0.76).cgColor)
+        fillRoundedRect(badge, context: context)
+        let routeLabel = (routeMap == nil ? localized("BRAK GPS") : "ROUTE // LIVE") as NSString
+        routeLabel.draw(
+            at: CGPoint(x: badge.minX + rect.width * 0.025, y: badge.minY + rect.width * 0.026),
+            withAttributes: [.font: labelFont, .foregroundColor: routeMap == nil ? UIColor.systemOrange : accent]
+        )
+
+        let speed = "\(Int(sample.speed.rounded())) KM/H" as NSString
+        let speedSize = speed.size(withAttributes: [.font: speedFont])
+        let speedBadge = CGRect(
+            x: mapRect.maxX - speedSize.width - rect.width * 0.075,
+            y: mapRect.maxY - rect.width * 0.132,
+            width: speedSize.width + rect.width * 0.05,
+            height: rect.width * 0.105
+        )
+        context.setFillColor(UIColor.black.withAlphaComponent(0.78).cgColor)
+        fillRoundedRect(speedBadge, context: context)
+        speed.draw(
+            at: CGPoint(x: speedBadge.minX + rect.width * 0.025, y: speedBadge.minY + rect.width * 0.016),
+            withAttributes: [.font: speedFont, .foregroundColor: UIColor.white]
+        )
+    }
+
+    private static func strokeRoute(_ points: [CGPoint], color: UIColor, width: CGFloat, context: CGContext) {
+        guard points.count > 1 else { return }
+        context.setStrokeColor(color.cgColor)
+        context.setLineWidth(max(1, width))
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.move(to: points[0])
+        points.dropFirst().forEach { context.addLine(to: $0) }
+        context.strokePath()
     }
 
     private static func drawDigital(

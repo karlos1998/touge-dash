@@ -196,12 +196,16 @@ class VideoRepository(
                 .setEndPositionMs(((project.videoTrimStartSeconds + project.exportDurationSeconds) * 1000).toLong())
                 .build()
             val item = MediaItem.Builder().setUri(project.localUri).setClippingConfiguration(clipping).build()
+            val routeMap = if (definition.resolvedElements().any { it.kind == OverlayElementKind.ROUTE_MAP }) {
+                createRouteMapSnapshot(context, samples)
+            } else null
             val overlay = TelemetryBitmapOverlay(
                 samples,
                 project.telemetryTrimStartSeconds,
                 definition,
                 project.pixelWidth,
-                project.pixelHeight
+                project.pixelHeight,
+                routeMap
             )
             val edited = EditedMediaItem.Builder(item).setEffects(Effects(emptyList(), listOf(OverlayEffect(listOf(overlay))))).build()
             val encodingPlan = VideoExportQuality.plan(project.pixelWidth, project.pixelHeight, project.framesPerSecond)
@@ -300,7 +304,8 @@ class VideoRepository(
         template("NEON_CIRCUIT", "Neon Circuit", VideoOverlayTemplateDefinition.neonCircuit()),
         template("BLACKLIST_CLASSIC", "Blacklist Classic", VideoOverlayTemplateDefinition.blacklistClassic()),
         template("CARBON_GOLD", "Carbon Gold", VideoOverlayTemplateDefinition.carbonGold()),
-        template("STREET_SHIFT", "Street Shift", VideoOverlayTemplateDefinition.streetShift())
+        template("STREET_SHIFT", "Street Shift", VideoOverlayTemplateDefinition.streetShift()),
+        template("ROUTE_RADAR", "Route Radar", VideoOverlayTemplateDefinition.routeRadar())
     )
 
     private fun template(id: String, name: String, definition: VideoOverlayTemplateDefinition): VideoOverlayTemplate {

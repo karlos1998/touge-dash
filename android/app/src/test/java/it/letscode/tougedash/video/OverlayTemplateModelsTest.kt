@@ -75,4 +75,12 @@ class OverlayTemplateModelsTest {
         presets.forEach { assertEquals(it, json.decodeFromString<VideoOverlayTemplateDefinition>(json.encodeToString(it))) }
         assertEquals(10_000.0, presets.first().range(TelemetryMetric.RPM).endInclusive, 0.0)
     }
+
+    @Test
+    fun `route radar combines a gps minimap with a telemetry tachometer`() {
+        val template = VideoOverlayTemplateDefinition.routeRadar()
+
+        assertEquals(listOf(OverlayElementKind.ROUTE_MAP, OverlayElementKind.NEON_TACH), template.elements.map { it.kind })
+        assertEquals(template, json.decodeFromString<VideoOverlayTemplateDefinition>(json.encodeToString(template)))
+    }
 }

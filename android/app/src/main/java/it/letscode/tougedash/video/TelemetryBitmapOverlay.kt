@@ -27,7 +27,8 @@ class TelemetryBitmapOverlay(
     private val telemetryStartSeconds: Double,
     private val definition: VideoOverlayTemplateDefinition,
     width: Int,
-    height: Int
+    height: Int,
+    private val routeMap: RouteMapSnapshot? = null
 ) : BitmapOverlay() {
     private val bitmapSize = overlayBitmapSize(width, height)
     private val bitmapWidth = bitmapSize.first
@@ -82,7 +83,108 @@ class TelemetryBitmapOverlay(
             OverlayElementKind.BLACKLIST_TACH -> drawBlacklistTach(sample, element, cx, cy, scale)
             OverlayElementKind.CARBON_TACH -> drawCarbonTach(sample, element, cx, cy, scale)
             OverlayElementKind.STREET_SHIFT_TACH -> drawStreetShiftTach(sample, element, cx, cy, scale)
+            OverlayElementKind.ROUTE_MAP -> drawRouteMap(sample, element, cx, cy, scale)
         }
+    }
+
+    private fun drawRouteMap(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
+        val width = 535f * scale
+        val height = 340f * scale
+        val rect = RectF(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2)
+        val radius = 28f * scale
+        canvas.save()
+        canvas.clipPath(Path().apply { addRoundRect(rect, radius, radius, Path.Direction.CW) })
+        routeMap?.let { snapshot ->
+            paint.alpha = 255
+            canvas.drawBitmap(snapshot.bitmap, null, rect, paint)
+        } ?: run {
+            paint.style = Paint.Style.FILL
+            paint.color = 0xf0051116.toInt()
+            canvas.drawRect(rect, paint)
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 1.5f * scale
+            paint.color = element.accent.colorInt() and 0x22ffffff
+            val spacing = 48f * scale
+            var x = rect.left
+            while (x <= rect.right) { canvas.drawLine(x, rect.top, x, rect.bottom, paint); x += spacing }
+            var y = rect.top
+            while (y <= rect.bottom) { canvas.drawLine(rect.left, y, rect.right, y, paint); y += spacing }
+        }
+        paint.style = Paint.Style.FILL
+        paint.color = if (routeMap == null) 0x22000000 else 0x66000000
+        canvas.drawRect(rect, paint)
+
+        routeMap?.takeIf { it.points.isNotEmpty() }?.let { snapshot ->
+            fun mapped(point: RouteMapPoint) = android.graphics.PointF(
+                rect.left + point.x * rect.width(),
+                rect.top + point.y * rect.height()
+            )
+            val mappedPoints = snapshot.points.map(::mapped)
+            fun stroke(points: List<android.graphics.PointF>, color: Int, strokeWidth: Float) {
+                if (points.size < 2) return
+                paint.style = Paint.Style.STROKE
+                paint.strokeCap = Paint.Cap.ROUND
+                paint.strokeJoin = Paint.Join.ROUND
+                paint.strokeWidth = strokeWidth
+                paint.color = color
+                canvas.drawPath(Path().apply {
+                    moveTo(points.first().x, points.first().y)
+                    points.drop(1).forEach { lineTo(it.x, it.y) }
+                }, paint)
+            }
+            stroke(mappedPoints, 0xc9000000.toInt(), 14f * scale)
+            stroke(mappedPoints, 0x88ffffff.toInt(), 6f * scale)
+
+            val currentIndex = snapshot.points.indices.minByOrNull { index ->
+                kotlin.math.abs(snapshot.points[index].recordedAt - sample.recordedAt)
+            } ?: 0
+            val travelled = mappedPoints.take(currentIndex + 1)
+            stroke(travelled, element.accent.colorInt() and 0x66ffffff, 18f * scale)
+            stroke(travelled, element.accent.colorInt(), 8f * scale)
+
+            val current = mappedPoints[currentIndex]
+            val previous = mappedPoints[(currentIndex - 1).coerceAtLeast(0)]
+            val next = mappedPoints[(currentIndex + 1).coerceAtMost(mappedPoints.lastIndex)]
+            val angle = Math.toDegrees(kotlin.math.atan2((next.y - previous.y).toDouble(), (next.x - previous.x).toDouble())).toFloat() + 90f
+            canvas.save()
+            canvas.rotate(angle, current.x, current.y)
+            val marker = 18f * scale
+            val arrow = Path().apply {
+                moveTo(current.x, current.y - marker)
+                lineTo(current.x + marker * .68f, current.y + marker * .78f)
+                lineTo(current.x, current.y + marker * .46f)
+                lineTo(current.x - marker * .68f, current.y + marker * .78f)
+                close()
+            }
+            paint.style = Paint.Style.FILL
+            paint.color = Color.WHITE
+            paint.setShadowLayer(15f * scale, 0f, 0f, element.accent.colorInt())
+            canvas.drawPath(arrow, paint)
+            paint.clearShadowLayer()
+            paint.style = Paint.Style.STROKE
+            paint.strokeWidth = 4f * scale
+            paint.color = element.accent.colorInt()
+            canvas.drawPath(arrow, paint)
+            canvas.restore()
+        }
+        canvas.restore()
+
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 10f * scale
+        paint.color = 0xdd000000.toInt()
+        canvas.drawRoundRect(rect, radius, radius, paint)
+        paint.strokeWidth = 3f * scale
+        paint.color = element.accent.colorInt()
+        canvas.drawRoundRect(rect, radius, radius, paint)
+        paint.style = Paint.Style.FILL
+
+        val labelLeft = rect.left + 17f * scale
+        pill(labelLeft, rect.top + 15f * scale, labelLeft + 156f * scale, rect.top + 53f * scale, 0xcc000000.toInt())
+        text(if (routeMap == null) "NO GPS" else "ROUTE // LIVE", labelLeft + 13f * scale, rect.top + 42f * scale, 18f * scale, if (routeMap == null) 0xffffa03d.toInt() else element.accent.colorInt())
+        val speedRight = rect.right - 17f * scale
+        pill(speedRight - 142f * scale, rect.bottom - 55f * scale, speedRight, rect.bottom - 16f * scale, 0xcc000000.toInt())
+        rightText("${sample.speedKph.toInt()} KM/H", speedRight - 11f * scale, rect.bottom - 28f * scale, 20f * scale, Color.WHITE)
+        text("© OpenStreetMap", rect.left + 13f * scale, rect.bottom - 12f * scale, 10f * scale, 0xbbffffff.toInt())
     }
 
     private fun drawDigital(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {

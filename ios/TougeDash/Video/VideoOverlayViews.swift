@@ -3,6 +3,7 @@ import SwiftUI
 struct VideoTelemetryOverlayView: View {
     let template: VideoOverlayTemplate
     let sample: TelemetryHistorySample?
+    var samples: [TelemetryHistorySample] = []
 
     var body: some View {
         GeometryReader { proxy in
@@ -14,6 +15,7 @@ struct VideoTelemetryOverlayView: View {
                     style: template.style,
                     configuration: template.gaugeConfiguration,
                     sample: sample,
+                    routeSamples: samples,
                     canvasSize: proxy.size
                 )
                 .position(
@@ -31,6 +33,7 @@ struct EditableVideoTelemetryOverlayView: View {
     @Binding var template: VideoOverlayTemplate
     @Binding var selectedElementID: UUID?
     let sample: TelemetryHistorySample?
+    var samples: [TelemetryHistorySample] = []
     @State private var draggingElementID: UUID?
     @State private var magnifyingElementID: UUID?
     @State private var magnificationBase = 1.0
@@ -46,6 +49,7 @@ struct EditableVideoTelemetryOverlayView: View {
                     style: template.style,
                     configuration: template.gaugeConfiguration,
                     sample: sample,
+                    routeSamples: samples,
                     canvasSize: proxy.size
                 )
                 .overlay {
@@ -145,6 +149,7 @@ private struct VideoOverlayElementView: View {
     let style: VideoOverlayStyle
     let configuration: VideoOverlayGaugeConfiguration
     let sample: TelemetryHistorySample?
+    let routeSamples: [TelemetryHistorySample]
     let canvasSize: CGSize
 
     private var value: Double { sample.map { element.metric.value(in: $0) } ?? 0 }
@@ -165,6 +170,13 @@ private struct VideoOverlayElementView: View {
             case .speedCluster: speedCluster
             case .oilCluster: oilCluster
             case .neonTach, .blacklistTach, .carbonTach, .streetShiftTach: arcadeTach
+            case .routeMap:
+                VideoRouteMapElementView(
+                    element: element,
+                    sample: sample,
+                    samples: routeSamples,
+                    scale: scale
+                )
             }
         }
         .shadow(color: shadowColor, radius: 5 * scale)
@@ -527,6 +539,49 @@ private struct VideoOverlayElementView: View {
         case .minimal:
             RoundedRectangle(cornerRadius: 6 * scale)
                 .fill(Color.black.opacity(0.42))
+        }
+    }
+}
+
+private struct VideoRouteMapElementView: View {
+    let element: VideoOverlayElement
+    let sample: TelemetryHistorySample?
+    let samples: [TelemetryHistorySample]
+    let scale: CGFloat
+    @State private var snapshot: VideoRouteMapSnapshot?
+
+    private var frames: [VideoTelemetryFrame] { samples.map(VideoTelemetryFrame.init(sample:)) }
+    private var routeSignature: String {
+        let first = samples.first?.timestamp.timeIntervalSince1970 ?? 0
+        let last = samples.last?.timestamp.timeIntervalSince1970 ?? 0
+        return "\(samples.count):\(first):\(last)"
+    }
+
+    var body: some View {
+        let size = CGSize(width: 214 * scale, height: 136 * scale)
+        Group {
+            if let sample,
+               let image = VideoOverlayCGRenderer.renderRouteMap(
+                    size: size,
+                    sample: VideoTelemetryFrame(sample: sample),
+                    element: element,
+                    routeMap: snapshot
+               ) {
+                Image(decorative: image, scale: 1)
+                    .resizable()
+            } else {
+                RoundedRectangle(cornerRadius: 12 * scale)
+                    .fill(Color.black.opacity(0.82))
+                    .overlay {
+                        Text(localized("BRAK GPS"))
+                            .font(.system(size: 10 * scale, weight: .black, design: .monospaced))
+                            .foregroundStyle(.orange)
+                    }
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .task(id: routeSignature) {
+            snapshot = await VideoRouteMapSnapshotter.make(samples: frames)
         }
     }
 }
