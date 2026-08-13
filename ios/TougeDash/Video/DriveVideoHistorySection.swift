@@ -786,8 +786,6 @@ private struct DriveVideoExportSheet: View {
     @State private var exportRangeStart = 0.0
     @State private var exportRangeEnd: Double
     @State private var exportScrubPosition: VideoExportScrubPosition?
-    @State private var exportScrubFrame: CGImage?
-    @State private var sourceVideoURL: URL?
 
     init(
         session: DriveSession,
@@ -832,9 +830,6 @@ private struct DriveVideoExportSheet: View {
             .task(id: recording.id) {
                 await loadExportRangeThumbnails()
             }
-            .task(id: exportScrubPosition) {
-                await loadExportScrubFrame()
-            }
             .task(id: showsAdvancedAlignment) {
                 guard showsAdvancedAlignment, thumbnails.isEmpty else { return }
                 await loadTimelineThumbnails()
@@ -849,6 +844,7 @@ private struct DriveVideoExportSheet: View {
                 exportRangeEnd = selectedWholePreviousRange
                     ? newDuration
                     : min(max(exportRangeStart + minimumExportDuration, exportRangeEnd), newDuration)
+                keepPreviewInsideExportRange()
             }
         }
     }
@@ -873,13 +869,6 @@ private struct DriveVideoExportSheet: View {
             Color.black
             if let player {
                 VideoPlayer(player: player)
-                if let exportScrubFrame, exportScrubPosition != nil {
-                    Image(decorative: exportScrubFrame, scale: 1)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color.black)
-                }
                 if addsOverlay {
                     EditableVideoTelemetryOverlayView(
                         template: $overlayDraft,
@@ -942,11 +931,7 @@ private struct DriveVideoExportSheet: View {
             if let exportScrubPosition {
                 HStack(spacing: 7) {
                     Image(systemName: "viewfinder")
-                    Text(
-                        exportScrubPosition.edge == .start
-                            ? localized("Klatka początku")
-                            : localized("Klatka końca")
-                    )
+                    Text(exportScrubTitle(for: exportScrubPosition.edge))
                     Text(exportScrubPosition.relativeSeconds.videoPreciseDurationText)
                         .foregroundStyle(Color.tougeYellow)
                 }
@@ -962,6 +947,14 @@ private struct DriveVideoExportSheet: View {
     private var exportAspectRatio: CGFloat {
         guard recording.pixelWidth > 0, recording.pixelHeight > 0 else { return 16 / 9 }
         return CGFloat(recording.pixelWidth) / CGFloat(recording.pixelHeight)
+    }
+
+    private func exportScrubTitle(for edge: VideoExportScrubPosition.Edge) -> String {
+        switch edge {
+        case .start: localized("Klatka początku")
+        case .end: localized("Klatka końca")
+        case .cursor: localized("Podgląd fragmentu")
+        }
     }
 
     private func addWidget(_ source: VideoOverlayElement) {
@@ -1076,10 +1069,12 @@ private struct DriveVideoExportSheet: View {
                 VideoExportRangeSelector(
                     start: $exportRangeStart,
                     end: $exportRangeEnd,
+                    position: $previewRelativeSeconds,
                     scrubPosition: $exportScrubPosition,
                     totalDuration: alignment.duration,
                     thumbnails: exportRangeThumbnails,
-                    onScrub: scrubExportPreview
+                    onScrub: { scrubExportPreview(to: $0, exactly: false) },
+                    onScrubEnded: { scrubExportPreview(to: $0, exactly: true) }
                 )
                 .frame(height: 76)
             }
@@ -1269,19 +1264,19 @@ private struct DriveVideoExportSheet: View {
         guard let url = try? DriveVideoFileStore.url(for: recording),
               FileManager.default.fileExists(atPath: url.path) else {
             fileIsMissing = true
-            sourceVideoURL = nil
             return
         }
-        sourceVideoURL = url
         let newPlayer = AVPlayer(url: url)
         player = newPlayer
         await newPlayer.seek(
-            to: CMTime(seconds: alignment.videoStartSeconds, preferredTimescale: 600),
+            to: CMTime(seconds: alignment.videoStartSeconds + exportRangeStart, preferredTimescale: 600),
             toleranceBefore: .zero,
             toleranceAfter: .zero
         )
-        previewTelemetryTime = alignment.telemetryStartDate(session: session)
-        previewRelativeSeconds = 0
+        previewTelemetryTime = session.startedAt.addingTimeInterval(
+            alignment.telemetryStartSeconds + exportRangeStart
+        )
+        previewRelativeSeconds = exportRangeStart
         isPreviewPlaying = false
         while !Task.isCancelled, player === newPlayer {
             let seconds = newPlayer.currentTime().seconds
@@ -1295,10 +1290,9 @@ private struct DriveVideoExportSheet: View {
                     previewRelativeSeconds = relative
                     previewTelemetryTime = session.startedAt.addingTimeInterval(alignment.telemetryStartSeconds + relative)
                 }
-                let playbackEnd = playsSelectedExportRange ? exportRangeEnd : alignment.duration
-                if relative > playbackEnd + 0.05 {
+                if relative > exportRangeEnd + 0.05 {
                     newPlayer.pause()
-                    let restart = playsSelectedExportRange ? exportRangeStart : 0
+                    let restart = exportRangeStart
                     await newPlayer.seek(
                         to: CMTime(seconds: alignment.videoStartSeconds + restart, preferredTimescale: 600),
                         toleranceBefore: .zero,
@@ -1342,37 +1336,18 @@ private struct DriveVideoExportSheet: View {
         exportRangeThumbnails = loaded
     }
 
-    @MainActor
-    private func loadExportScrubFrame() async {
-        guard let position = exportScrubPosition,
-              let sourceVideoURL else {
-            exportScrubFrame = nil
-            return
-        }
-        do {
-            try await Task.sleep(for: .milliseconds(45))
-        } catch {
-            return
-        }
-        guard !Task.isCancelled else { return }
-        let frame = await VideoTimelineThumbnailLoader.frame(
-            url: sourceVideoURL,
-            at: alignment.videoStartSeconds + position.relativeSeconds
-        )
-        guard !Task.isCancelled, exportScrubPosition == position else { return }
-        exportScrubFrame = frame
-    }
-
-    private func scrubExportPreview(to relativeSeconds: Double) {
+    private func scrubExportPreview(to relativeSeconds: Double, exactly: Bool) {
         playsSelectedExportRange = false
-        previewPositionBinding.wrappedValue = relativeSeconds
+        updatePreviewPosition(relativeSeconds, exactly: exactly)
     }
 
-    private func seekPreview(to seconds: Double) {
+    private func seekPreview(to seconds: Double, exactly: Bool = true) {
+        player?.currentItem?.cancelPendingSeeks()
+        let tolerance = exactly ? CMTime.zero : CMTime(seconds: 1.0 / 30.0, preferredTimescale: 600)
         player?.seek(
             to: CMTime(seconds: seconds, preferredTimescale: 600),
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
+            toleranceBefore: tolerance,
+            toleranceAfter: tolerance
         )
     }
 
@@ -1402,9 +1377,12 @@ private struct DriveVideoExportSheet: View {
 
             HStack(spacing: 10) {
                 Text(previewRelativeSeconds.videoPreciseDurationText)
-                Slider(value: previewPositionBinding, in: 0...max(0.1, alignment.duration))
+                Slider(
+                    value: previewPositionBinding,
+                    in: exportRangeStart...max(exportRangeStart + 0.001, exportRangeEnd)
+                )
                     .tint(.tougeMint)
-                Text(alignment.duration.videoPreciseDurationText)
+                Text(exportRangeEnd.videoPreciseDurationText)
             }
             .font(.caption2.monospacedDigit().weight(.bold))
             .foregroundStyle(.secondary)
@@ -1415,17 +1393,36 @@ private struct DriveVideoExportSheet: View {
 
     private var previewPositionBinding: Binding<Double> {
         Binding(
-            get: { min(previewRelativeSeconds, alignment.duration) },
+            get: { VideoExportRangeMath.clampCursor(previewRelativeSeconds, start: exportRangeStart, end: exportRangeEnd) },
             set: { relative in
-                player?.pause()
-                isPreviewPlaying = false
-                previewRelativeSeconds = min(max(0, relative), alignment.duration)
-                previewTelemetryTime = session.startedAt.addingTimeInterval(
-                    alignment.telemetryStartSeconds + previewRelativeSeconds
-                )
-                seekPreview(to: alignment.videoStartSeconds + previewRelativeSeconds)
+                updatePreviewPosition(relative, exactly: false)
             }
         )
+    }
+
+    private func updatePreviewPosition(_ relative: Double, exactly: Bool) {
+        player?.pause()
+        isPreviewPlaying = false
+        let clamped = VideoExportRangeMath.clampCursor(
+            relative,
+            start: exportRangeStart,
+            end: exportRangeEnd
+        )
+        previewRelativeSeconds = clamped
+        previewTelemetryTime = session.startedAt.addingTimeInterval(
+            alignment.telemetryStartSeconds + clamped
+        )
+        seekPreview(to: alignment.videoStartSeconds + clamped, exactly: exactly)
+    }
+
+    private func keepPreviewInsideExportRange() {
+        let clamped = VideoExportRangeMath.clampCursor(
+            previewRelativeSeconds,
+            start: exportRangeStart,
+            end: exportRangeEnd
+        )
+        guard abs(clamped - previewRelativeSeconds) > 0.000_1 else { return }
+        updatePreviewPosition(clamped, exactly: true)
     }
 
     private func togglePreviewPlayback() {
@@ -1435,10 +1432,10 @@ private struct DriveVideoExportSheet: View {
             isPreviewPlaying = false
             return
         }
-        if previewRelativeSeconds >= alignment.duration - 0.05 {
+        if previewRelativeSeconds < exportRangeStart - 0.05 || previewRelativeSeconds >= exportRangeEnd - 0.05 {
             resetPreview()
         }
-        playsSelectedExportRange = false
+        playsSelectedExportRange = true
         player.play()
         isPreviewPlaying = true
     }
@@ -1463,10 +1460,12 @@ private struct DriveVideoExportSheet: View {
     private func resetPreview(seeksVideo: Bool) {
         player?.pause()
         isPreviewPlaying = false
-        playsSelectedExportRange = false
-        previewRelativeSeconds = 0
-        previewTelemetryTime = alignment.telemetryStartDate(session: session)
-        if seeksVideo { seekPreview(to: alignment.videoStartSeconds) }
+        playsSelectedExportRange = true
+        previewRelativeSeconds = exportRangeStart
+        previewTelemetryTime = session.startedAt.addingTimeInterval(
+            alignment.telemetryStartSeconds + exportRangeStart
+        )
+        if seeksVideo { seekPreview(to: alignment.videoStartSeconds + exportRangeStart) }
     }
 
     @ViewBuilder
@@ -1700,6 +1699,7 @@ private struct VideoExportScrubPosition: Hashable {
     enum Edge: Hashable {
         case start
         case end
+        case cursor
     }
 
     let edge: Edge
@@ -1709,10 +1709,12 @@ private struct VideoExportScrubPosition: Hashable {
 private struct VideoExportRangeSelector: View {
     @Binding var start: Double
     @Binding var end: Double
+    @Binding var position: Double
     @Binding var scrubPosition: VideoExportScrubPosition?
     let totalDuration: Double
     let thumbnails: [CGImage]
     let onScrub: (Double) -> Void
+    let onScrubEnded: (Double) -> Void
 
     @State private var initialStart: Double?
     @State private var initialEnd: Double?
@@ -1725,6 +1727,8 @@ private struct VideoExportRangeSelector: View {
             let width = max(1, proxy.size.width)
             let leftX = width * start / safeTotal
             let rightX = width * end / safeTotal
+            let cursorSeconds = VideoExportRangeMath.clampCursor(position, start: start, end: end)
+            let cursorX = width * cursorSeconds / safeTotal
             let minimumDuration = min(1, safeTotal)
 
             ZStack(alignment: .leading) {
@@ -1745,6 +1749,22 @@ private struct VideoExportRangeSelector: View {
                         Rectangle().stroke(Color.tougeYellow, lineWidth: 3)
                     }
                     .offset(x: leftX)
+                    .contentShape(Rectangle())
+                    .gesture(cursorGesture(width: width, totalDuration: safeTotal))
+
+                Capsule()
+                    .fill(Color.white)
+                    .frame(width: 4, height: 66)
+                    .shadow(color: .black.opacity(0.85), radius: 2)
+                    .overlay(alignment: .top) {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 10, height: 10)
+                            .offset(y: -3)
+                    }
+                    .offset(x: min(max(0, cursorX - 2), max(0, width - 4)), y: 5)
+                    .allowsHitTesting(false)
+                    .zIndex(1)
 
                 rangeHandle(systemImage: "chevron.compact.left")
                     .offset(x: min(max(0, leftX), max(0, width - handleWidth)))
@@ -1755,11 +1775,13 @@ private struct VideoExportRangeSelector: View {
                                 initialStart = origin
                                 let delta = value.translation.width / width * safeTotal
                                 start = min(max(0, origin + delta), max(0, end - minimumDuration))
+                                position = start
                                 scrubPosition = VideoExportScrubPosition(edge: .start, relativeSeconds: start)
                                 onScrub(start)
                             }
                             .onEnded { _ in
                                 initialStart = nil
+                                onScrubEnded(start)
                                 scrubPosition = nil
                             }
                     )
@@ -1774,11 +1796,13 @@ private struct VideoExportRangeSelector: View {
                                 initialEnd = origin
                                 let delta = value.translation.width / width * safeTotal
                                 end = max(min(safeTotal, origin + delta), min(safeTotal, start + minimumDuration))
+                                position = end
                                 scrubPosition = VideoExportScrubPosition(edge: .end, relativeSeconds: end)
                                 onScrub(end)
                             }
                             .onEnded { _ in
                                 initialEnd = nil
+                                onScrubEnded(end)
                                 scrubPosition = nil
                             }
                     )
@@ -1788,9 +1812,11 @@ private struct VideoExportRangeSelector: View {
             .clipped()
             .overlay(alignment: .topLeading) {
                 if let scrubPosition {
-                    let anchorX = scrubPosition.edge == .start
-                        ? leftX + handleWidth / 2
-                        : rightX - handleWidth / 2
+                    let anchorX = switch scrubPosition.edge {
+                    case .start: leftX + handleWidth / 2
+                    case .end: rightX - handleWidth / 2
+                    case .cursor: cursorX
+                    }
                     Text(scrubPosition.relativeSeconds.videoPreciseDurationText)
                         .font(.caption.monospacedDigit().weight(.black))
                         .foregroundStyle(.black)
@@ -1814,6 +1840,30 @@ private struct VideoExportRangeSelector: View {
         .frame(width: handleWidth)
         .contentShape(Rectangle().inset(by: -8))
         .zIndex(2)
+    }
+
+    private func cursorGesture(width: CGFloat, totalDuration: Double) -> some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                let seconds = Double(value.location.x / max(1, width)) * totalDuration
+                let clamped = VideoExportRangeMath.clampCursor(seconds, start: start, end: end)
+                position = clamped
+                scrubPosition = VideoExportScrubPosition(edge: .cursor, relativeSeconds: clamped)
+                onScrub(clamped)
+            }
+            .onEnded { value in
+                let seconds = Double(value.location.x / max(1, width)) * totalDuration
+                let clamped = VideoExportRangeMath.clampCursor(seconds, start: start, end: end)
+                position = clamped
+                onScrubEnded(clamped)
+                scrubPosition = nil
+            }
+    }
+}
+
+enum VideoExportRangeMath {
+    static func clampCursor(_ position: Double, start: Double, end: Double) -> Double {
+        min(max(position, min(start, end)), max(start, end))
     }
 }
 
