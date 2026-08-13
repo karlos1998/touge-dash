@@ -826,7 +826,8 @@ private struct DriveVideoExportSheet: View {
                         template: $overlayDraft,
                         selectedElementID: $selectedElementID,
                         sample: previewSample,
-                        samples: samples
+                        samples: samples,
+                        routeTimestamp: previewTelemetryTime
                     )
                     .padding(5)
                 }
@@ -1231,7 +1232,7 @@ private struct DriveVideoExportSheet: View {
             }
             if playing, seconds.isFinite {
                 let relative = min(max(0, seconds - alignment.videoStartSeconds), alignment.duration)
-                if abs(previewRelativeSeconds - relative) >= 0.1 {
+                if abs(previewRelativeSeconds - relative) >= 1.0 / 30.0 {
                     previewRelativeSeconds = relative
                     previewTelemetryTime = session.startedAt.addingTimeInterval(alignment.telemetryStartSeconds + relative)
                 }
@@ -1251,7 +1252,7 @@ private struct DriveVideoExportSheet: View {
                     isPreviewPlaying = false
                 }
             }
-            try? await Task.sleep(for: .milliseconds(playing ? 120 : 300))
+            try? await Task.sleep(for: .milliseconds(playing ? 33 : 300))
         }
     }
 

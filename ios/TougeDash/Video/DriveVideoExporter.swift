@@ -546,41 +546,117 @@ struct VideoRouteMapSnapshot: @unchecked Sendable {
     var lightImage: CGImage? = nil
     let points: [VideoRouteMapPoint]
 
+    init(image: CGImage, lightImage: CGImage? = nil, points: [VideoRouteMapPoint]) {
+        self.image = image
+        self.lightImage = lightImage
+        self.points = Self.compacted(points)
+    }
+
     func pose(at timestamp: Date) -> VideoRouteMapPose? {
         guard !points.isEmpty else { return nil }
-        let current = interpolatedPosition(at: timestamp)
-        var before = interpolatedPosition(at: timestamp.addingTimeInterval(-1.25))
-        var after = interpolatedPosition(at: timestamp.addingTimeInterval(1.25))
-        if hypot(after.x - before.x, after.y - before.y) < 0.0005 {
-            before = interpolatedPosition(at: timestamp.addingTimeInterval(-3))
-            after = interpolatedPosition(at: timestamp.addingTimeInterval(3))
+        let motion = interpolatedMotion(at: timestamp)
+        var direction = motion.velocity
+        if hypot(direction.x, direction.y) < 0.000001 {
+            let before = interpolatedMotion(at: timestamp.addingTimeInterval(-1.5)).position
+            let after = interpolatedMotion(at: timestamp.addingTimeInterval(1.5)).position
+            direction = CGPoint(x: after.x - before.x, y: after.y - before.y)
         }
-        let direction = CGPoint(x: after.x - before.x, y: after.y - before.y)
         let heading = hypot(direction.x, direction.y) >= 0.000001
             ? atan2(direction.y, direction.x)
             : -.pi / 2
         let passed = points.partitioningIndex { $0.timestamp > timestamp }
         return VideoRouteMapPose(
-            position: current,
+            position: motion.position,
             heading: heading,
             passedPointCount: min(points.count, max(1, passed))
         )
     }
 
-    private func interpolatedPosition(at timestamp: Date) -> CGPoint {
-        guard points.count > 1 else { return points[0].position }
+    /// A time-aware Hermite curve keeps both position and velocity continuous at GPS updates.
+    /// This prevents stale copied coordinates from producing a hold-then-jump camera motion.
+    private func interpolatedMotion(at timestamp: Date) -> (position: CGPoint, velocity: CGPoint) {
+        guard points.count > 1 else { return (points[0].position, .zero) }
         let upper = points.partitioningIndex { $0.timestamp >= timestamp }
-        if upper == 0 { return points[0].position }
-        if upper == points.count { return points[points.count - 1].position }
-        let start = points[upper - 1]
-        let end = points[upper]
+        if upper == 0 { return (points[0].position, velocity(at: 0)) }
+        if upper == points.count { return (points[points.count - 1].position, velocity(at: points.count - 1)) }
+        let startIndex = upper - 1
+        let endIndex = upper
+        let start = points[startIndex]
+        let end = points[endIndex]
         let duration = end.timestamp.timeIntervalSince(start.timestamp)
-        guard duration > 0 else { return end.position }
+        guard duration > 0 else { return (end.position, velocity(at: endIndex)) }
+        let interval = CGFloat(duration)
+
         let fraction = CGFloat(min(1, max(0, timestamp.timeIntervalSince(start.timestamp) / duration)))
-        return CGPoint(
-            x: start.position.x + (end.position.x - start.position.x) * fraction,
-            y: start.position.y + (end.position.y - start.position.y) * fraction
+        let fraction2 = fraction * fraction
+        let fraction3 = fraction2 * fraction
+        let segment = CGPoint(
+            x: end.position.x - start.position.x,
+            y: end.position.y - start.position.y
         )
+        let startTangent = limitedTangent(velocity(at: startIndex), segment: segment, duration: duration)
+        let endTangent = limitedTangent(velocity(at: endIndex), segment: segment, duration: duration)
+        let m0 = CGPoint(x: startTangent.x * interval, y: startTangent.y * interval)
+        let m1 = CGPoint(x: endTangent.x * interval, y: endTangent.y * interval)
+
+        let h00 = 2 * fraction3 - 3 * fraction2 + 1
+        let h10 = fraction3 - 2 * fraction2 + fraction
+        let h01 = -2 * fraction3 + 3 * fraction2
+        let h11 = fraction3 - fraction2
+        let position = CGPoint(
+            x: h00 * start.position.x + h10 * m0.x + h01 * end.position.x + h11 * m1.x,
+            y: h00 * start.position.y + h10 * m0.y + h01 * end.position.y + h11 * m1.y
+        )
+
+        let dh00 = 6 * fraction2 - 6 * fraction
+        let dh10 = 3 * fraction2 - 4 * fraction + 1
+        let dh01 = -6 * fraction2 + 6 * fraction
+        let dh11 = 3 * fraction2 - 2 * fraction
+        let velocity = CGPoint(
+            x: (dh00 * start.position.x + dh10 * m0.x + dh01 * end.position.x + dh11 * m1.x) / interval,
+            y: (dh00 * start.position.y + dh10 * m0.y + dh01 * end.position.y + dh11 * m1.y) / interval
+        )
+        return (position, velocity)
+    }
+
+    private func velocity(at index: Int) -> CGPoint {
+        let before = points[max(0, index - 1)]
+        let after = points[min(points.count - 1, index + 1)]
+        let duration = after.timestamp.timeIntervalSince(before.timestamp)
+        guard duration > 0 else { return .zero }
+        let interval = CGFloat(duration)
+        return CGPoint(
+            x: (after.position.x - before.position.x) / interval,
+            y: (after.position.y - before.position.y) / interval
+        )
+    }
+
+    private func limitedTangent(_ velocity: CGPoint, segment: CGPoint, duration: TimeInterval) -> CGPoint {
+        let segmentLength = hypot(segment.x, segment.y)
+        guard segmentLength > 0.0000001, duration > 0 else { return .zero }
+        guard velocity.x * segment.x + velocity.y * segment.y > 0 else { return .zero }
+        let maximum = 2 * segmentLength / CGFloat(duration)
+        let speed = hypot(velocity.x, velocity.y)
+        guard speed > maximum else { return velocity }
+        let ratio = maximum / speed
+        return CGPoint(x: velocity.x * ratio, y: velocity.y * ratio)
+    }
+
+    private static func compacted(_ source: [VideoRouteMapPoint]) -> [VideoRouteMapPoint] {
+        var result: [VideoRouteMapPoint] = []
+        result.reserveCapacity(source.count)
+        for point in source {
+            guard let previous = result.last else {
+                result.append(point)
+                continue
+            }
+            guard point.timestamp > previous.timestamp else { continue }
+            let distance = hypot(point.position.x - previous.position.x, point.position.y - previous.position.y)
+            // Location updates are copied into faster telemetry samples. Collapse those stale copies.
+            guard distance > 0.000001 else { continue }
+            result.append(point)
+        }
+        return result
     }
 }
 

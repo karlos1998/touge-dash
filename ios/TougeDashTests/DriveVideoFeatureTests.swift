@@ -272,6 +272,31 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(first.heading, second.heading, accuracy: 0.0001)
     }
 
+    func testRouteMapCollapsesStaleLocationCopiesAndMovesBetweenGpsUpdates() throws {
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let background = UIGraphicsImageRenderer(size: CGSize(width: 10, height: 10)).image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 10, height: 10))
+        }
+        let routeMap = VideoRouteMapSnapshot(
+            image: try XCTUnwrap(background.cgImage),
+            points: [
+                .init(timestamp: startedAt, position: CGPoint(x: 0.1, y: 0.5)),
+                .init(timestamp: startedAt.addingTimeInterval(0.4), position: CGPoint(x: 0.1, y: 0.5)),
+                .init(timestamp: startedAt.addingTimeInterval(0.8), position: CGPoint(x: 0.1, y: 0.5)),
+                .init(timestamp: startedAt.addingTimeInterval(1), position: CGPoint(x: 0.5, y: 0.5)),
+                .init(timestamp: startedAt.addingTimeInterval(1.4), position: CGPoint(x: 0.5, y: 0.5)),
+                .init(timestamp: startedAt.addingTimeInterval(2), position: CGPoint(x: 0.9, y: 0.5))
+            ]
+        )
+
+        XCTAssertEqual(routeMap.points.count, 3)
+        let halfway = try XCTUnwrap(routeMap.pose(at: startedAt.addingTimeInterval(0.5)))
+        XCTAssertEqual(halfway.position.x, 0.3, accuracy: 0.0001)
+        XCTAssertEqual(halfway.position.y, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(halfway.heading, 0, accuracy: 0.0001)
+    }
+
     func testRouteMapCameraZoomClampsAndPersists() throws {
         var element = try XCTUnwrap(VideoOverlayTemplate.streetAtlas.elements.first)
         element.setMapZoom(4)

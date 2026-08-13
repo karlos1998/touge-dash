@@ -4,6 +4,7 @@ struct VideoTelemetryOverlayView: View {
     let template: VideoOverlayTemplate
     let sample: TelemetryHistorySample?
     var samples: [TelemetryHistorySample] = []
+    var routeTimestamp: Date? = nil
 
     var body: some View {
         GeometryReader { proxy in
@@ -16,6 +17,7 @@ struct VideoTelemetryOverlayView: View {
                     configuration: template.gaugeConfiguration,
                     sample: sample,
                     routeSamples: samples,
+                    routeTimestamp: routeTimestamp,
                     canvasSize: proxy.size
                 )
                 .position(
@@ -34,7 +36,7 @@ struct EditableVideoTelemetryOverlayView: View {
     @Binding var selectedElementID: UUID?
     let sample: TelemetryHistorySample?
     var samples: [TelemetryHistorySample] = []
-    @State private var draggingElementID: UUID?
+    var routeTimestamp: Date? = nil
     @State private var magnifyingElementID: UUID?
     @State private var magnificationBase = 1.0
 
@@ -50,6 +52,7 @@ struct EditableVideoTelemetryOverlayView: View {
                     configuration: template.gaugeConfiguration,
                     sample: sample,
                     routeSamples: samples,
+                    routeTimestamp: routeTimestamp,
                     canvasSize: proxy.size
                 )
                 .overlay {
@@ -59,6 +62,12 @@ struct EditableVideoTelemetryOverlayView: View {
                             .padding(-5)
                     }
                 }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    selectedElementID = element.id
+                }
+                .gesture(dragGesture(for: element.id, canvasSize: proxy.size, orientation: orientation))
+                .simultaneousGesture(magnifyGesture(for: element.id))
                 .overlay(alignment: position.x > 0.7 ? .leading : .trailing) {
                     if element.kind.isRouteMap {
                         VStack(spacing: 3) {
@@ -79,7 +88,6 @@ struct EditableVideoTelemetryOverlayView: View {
                         .offset(x: position.x > 0.7 ? -31 : 31)
                     }
                 }
-                .contentShape(Rectangle())
                 .position(
                     x: proxy.size.width * position.x,
                     y: proxy.size.height * position.y
@@ -87,50 +95,36 @@ struct EditableVideoTelemetryOverlayView: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
-            .contentShape(Rectangle())
-            .highPriorityGesture(dragGesture(canvasSize: proxy.size, orientation: orientation))
-            .simultaneousGesture(magnifyGesture(orientation: orientation), including: .all)
         }
         .coordinateSpace(name: "video-overlay-canvas")
     }
 
     private func dragGesture(
+        for id: UUID,
         canvasSize: CGSize,
         orientation: VideoOverlayCanvasOrientation
     ) -> some Gesture {
         DragGesture(minimumDistance: 3, coordinateSpace: .named("video-overlay-canvas"))
             .onChanged { value in
                 guard magnifyingElementID == nil else { return }
-                let start = normalized(value.startLocation, canvasSize: canvasSize)
-                guard let targetID = draggingElementID ?? nearestElementID(to: start, orientation: orientation),
-                      let index = template.elements.firstIndex(where: { $0.id == targetID }) else { return }
-                if draggingElementID == nil {
-                    draggingElementID = targetID
-                    selectedElementID = targetID
-                }
+                guard let index = template.elements.firstIndex(where: { $0.id == id }) else { return }
+                selectedElementID = id
                 template.elements[index].setPosition(
                     normalized(value.location, canvasSize: canvasSize),
                     for: orientation
                 )
             }
-            .onEnded { _ in
-                draggingElementID = nil
-            }
     }
 
-    private func magnifyGesture(orientation: VideoOverlayCanvasOrientation) -> some Gesture {
+    private func magnifyGesture(for id: UUID) -> some Gesture {
         MagnifyGesture(minimumScaleDelta: 0.005)
             .onChanged { value in
-                let anchor = VideoOverlayPosition(
-                    x: Double(value.startAnchor.x),
-                    y: Double(value.startAnchor.y)
-                )
-                guard let targetID = magnifyingElementID ?? nearestElementID(to: anchor, orientation: orientation),
-                      let index = template.elements.firstIndex(where: { $0.id == targetID }) else { return }
+                guard magnifyingElementID == nil || magnifyingElementID == id,
+                      let index = template.elements.firstIndex(where: { $0.id == id }) else { return }
                 if magnifyingElementID == nil {
-                    magnifyingElementID = targetID
+                    magnifyingElementID = id
                     magnificationBase = template.elements[index].sizeMultiplier
-                    selectedElementID = targetID
+                    selectedElementID = id
                 }
                 template.elements[index].setSizeMultiplier(magnificationBase * value.magnification)
             }
@@ -138,22 +132,6 @@ struct EditableVideoTelemetryOverlayView: View {
                 magnifyingElementID = nil
                 magnificationBase = 1
             }
-    }
-
-    private func nearestElementID(
-        to point: VideoOverlayPosition,
-        orientation: VideoOverlayCanvasOrientation
-    ) -> UUID? {
-        template.elements.min { lhs, rhs in
-            distanceSquared(lhs.position(for: orientation), point) <
-                distanceSquared(rhs.position(for: orientation), point)
-        }?.id
-    }
-
-    private func distanceSquared(_ lhs: VideoOverlayPosition, _ rhs: VideoOverlayPosition) -> Double {
-        let dx = lhs.x - rhs.x
-        let dy = lhs.y - rhs.y
-        return dx * dx + dy * dy
     }
 
     private func normalized(_ point: CGPoint, canvasSize: CGSize) -> VideoOverlayPosition {
@@ -179,6 +157,7 @@ struct EditableVideoTelemetryOverlayView: View {
                 .background(Color.white.opacity(0.14), in: Circle())
         }
         .buttonStyle(.plain)
+        .contentShape(Circle())
     }
 }
 
@@ -188,6 +167,7 @@ private struct VideoOverlayElementView: View {
     let configuration: VideoOverlayGaugeConfiguration
     let sample: TelemetryHistorySample?
     let routeSamples: [TelemetryHistorySample]
+    let routeTimestamp: Date?
     let canvasSize: CGSize
 
     private var value: Double { sample.map { element.metric.value(in: $0) } ?? 0 }
@@ -213,6 +193,7 @@ private struct VideoOverlayElementView: View {
                     element: element,
                     sample: sample,
                     samples: routeSamples,
+                    routeTimestamp: routeTimestamp,
                     scale: scale
                 )
             }
@@ -585,6 +566,7 @@ private struct VideoRouteMapElementView: View {
     let element: VideoOverlayElement
     let sample: TelemetryHistorySample?
     let samples: [TelemetryHistorySample]
+    let routeTimestamp: Date?
     let scale: CGFloat
     @State private var snapshot: VideoRouteMapSnapshot?
 
@@ -605,7 +587,8 @@ private struct VideoRouteMapElementView: View {
                     size: size,
                     sample: VideoTelemetryFrame(sample: sample),
                     element: element,
-                    routeMap: snapshot
+                    routeMap: snapshot,
+                    routeTimestamp: routeTimestamp
                ) {
                 Image(decorative: image, scale: 1)
                     .resizable()

@@ -222,7 +222,8 @@ private fun VideoAlignmentEditor(
     LaunchedEffect(player) { while (true) { position = player.currentPosition; if (position / 1000.0 >= value.videoTrimStartSeconds + value.exportDurationSeconds) { player.pause(); player.seekTo((value.videoTrimStartSeconds * 1000).toLong()) }; delay(50) } }
     val telemetrySecond = value.telemetryTrimStartSeconds + (position / 1000.0 - value.videoTrimStartSeconds).coerceAtLeast(0.0)
     val first = samples.firstOrNull()?.recordedAt ?: 0
-    val sample = samples.nearestTo((first + telemetrySecond * 1000).toLong())
+    val previewRecordedAt = (first + telemetrySecond * 1000).toLong()
+    val sample = samples.nearestTo(previewRecordedAt)
     val preview: @Composable BoxScope.() -> Unit = {
         AndroidView(
             factory = { PlayerView(it).apply { useController = false; this.player = player } },
@@ -232,6 +233,7 @@ private fun VideoAlignmentEditor(
             EditableHudPreview(
                 sample = current,
                 samples = samples,
+                routeTimestamp = previewRecordedAt,
                 definition = overlayDefinition,
                 portrait = portraitVideo,
                 canvasSize = previewSize,
@@ -460,6 +462,7 @@ private fun GaugeScaleSlider(
 private fun BoxScope.EditableHudPreview(
     sample: TelemetrySampleEntity,
     samples: List<TelemetrySampleEntity>,
+    routeTimestamp: Long,
     definition: VideoOverlayTemplateDefinition,
     portrait: Boolean,
     canvasSize: IntSize,
@@ -487,6 +490,7 @@ private fun BoxScope.EditableHudPreview(
             HudElementPreview(
                 sample = sample,
                 samples = samples,
+                routeTimestamp = routeTimestamp,
                 element = element,
                 definition = definition,
                 style = definition.style,
@@ -532,6 +536,7 @@ private fun MapZoomButton(label: String, action: () -> Unit) {
 private fun HudElementPreview(
     sample: TelemetrySampleEntity,
     samples: List<TelemetrySampleEntity>,
+    routeTimestamp: Long,
     element: VideoOverlayElement,
     definition: VideoOverlayTemplateDefinition,
     style: OverlayStyle,
@@ -601,14 +606,14 @@ private fun HudElementPreview(
         OverlayElementKind.ROUTE_MAP_FOLLOW,
         OverlayElementKind.ROUTE_MAP_LIGHT,
         OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR,
-        OverlayElementKind.ROUTE_MAP_AMBER -> NfsRouteMapPreview(samples, sample, element.kind, element.mapZoom, accent, circularMap, shell)
+        OverlayElementKind.ROUTE_MAP_AMBER -> NfsRouteMapPreview(samples, routeTimestamp, element.kind, element.mapZoom, accent, circularMap, shell)
     }
 }
 
 @Composable
 private fun NfsRouteMapPreview(
     samples: List<TelemetrySampleEntity>,
-    sample: TelemetrySampleEntity,
+    routeTimestamp: Long,
     kind: OverlayElementKind,
     mapZoom: Float,
     accent: Color,
@@ -621,15 +626,23 @@ private fun NfsRouteMapPreview(
             val latitude = value.latitude
             val longitude = value.longitude
             if (latitude == null || longitude == null) null else value to GeoPoint(latitude, longitude)
+        }.fold(mutableListOf<Pair<TelemetrySampleEntity, GeoPoint>>()) { result, point ->
+            val previous = result.lastOrNull()?.second
+            if (previous == null || previous.latitude != point.second.latitude || previous.longitude != point.second.longitude) {
+                result += point
+            }
+            result
         }
     }
-    val travelled = remember(located, sample.recordedAt) {
-        located.takeWhile { it.first.recordedAt <= sample.recordedAt }.map { it.second }
+    val currentPosition = remember(located, routeTimestamp) { located.interpolatePosition(routeTimestamp) }
+    val previousPosition = remember(located, routeTimestamp) { located.interpolatePosition(routeTimestamp - 1_500) }
+    val nextPosition = remember(located, routeTimestamp) { located.interpolatePosition(routeTimestamp + 1_500) }
+    val travelled = remember(located, routeTimestamp, currentPosition) {
+        located.takeWhile { it.first.recordedAt <= routeTimestamp }.map { it.second }.toMutableList().apply {
+            currentPosition?.let(::add)
+        }
     }
     val points = remember(located) { located.map { it.second } }
-    val currentPointIndex = remember(located, sample.recordedAt) {
-        located.indexOfLast { it.first.recordedAt <= sample.recordedAt }.coerceAtLeast(0)
-    }
     val routeKey = remember(points) { points.firstOrNull()?.let { "${points.size}:${it.latitude}:${it.longitude}:${points.last().latitude}:${points.last().longitude}" } }
     val sizeModifier = if (circular) Modifier.size(172.dp) else Modifier.width(240.dp).height(150.dp)
     val mapShape = if (circular) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(12.dp)
@@ -659,9 +672,6 @@ private fun NfsRouteMapPreview(
                     map.overlays.clear()
                     map.overlays.add(fullRoute)
                     map.overlays.add(currentRoute)
-                    val currentPosition = points.getOrNull(currentPointIndex)
-                    val previousPosition = points.getOrNull((currentPointIndex - 2).coerceAtLeast(0))
-                    val nextPosition = points.getOrNull((currentPointIndex + 2).coerceAtMost(points.lastIndex))
                     if (currentPosition != null) {
                         map.controller.setCenter(currentPosition)
                         map.controller.setZoom(17.5 + kotlin.math.log2(mapZoom.coerceIn(.65f, 1.85f).toDouble()))
@@ -1019,6 +1029,24 @@ private fun List<TelemetrySampleEntity>.nearestTo(target: Long): TelemetrySample
         target - before.recordedAt <= after.recordedAt - target -> before
         else -> after
     }
+}
+
+private fun List<Pair<TelemetrySampleEntity, GeoPoint>>.interpolatePosition(target: Long): GeoPoint? {
+    if (isEmpty()) return null
+    if (size == 1 || target <= first().first.recordedAt) return first().second
+    if (target >= last().first.recordedAt) return last().second
+    val found = binarySearchBy(target) { it.first.recordedAt }
+    if (found >= 0) return this[found].second
+    val upper = -found - 1
+    val before = this[upper - 1]
+    val after = this[upper]
+    val duration = after.first.recordedAt - before.first.recordedAt
+    if (duration <= 0) return after.second
+    val fraction = ((target - before.first.recordedAt).toDouble() / duration).coerceIn(0.0, 1.0)
+    return GeoPoint(
+        before.second.latitude + (after.second.latitude - before.second.latitude) * fraction,
+        before.second.longitude + (after.second.longitude - before.second.longitude) * fraction
+    )
 }
 
 private fun videoDuration(seconds: Double): String { val value = seconds.coerceAtLeast(0.0).roundToInt(); return "%d:%02d".format(value / 60, value % 60) }

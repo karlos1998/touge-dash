@@ -29,41 +29,117 @@ data class RouteMapPose(
     val passedPointCount: Int
 )
 
-data class RouteMapSnapshot(
+class RouteMapSnapshot(
     val bitmap: Bitmap,
-    val points: List<RouteMapPoint>
+    sourcePoints: List<RouteMapPoint>
 ) {
+    val points: List<RouteMapPoint> = compacted(sourcePoints)
+
     fun poseAt(recordedAt: Long): RouteMapPose? {
         if (points.isEmpty()) return null
-        val current = interpolatedPosition(recordedAt)
-        var before = interpolatedPosition(recordedAt - 1_250)
-        var after = interpolatedPosition(recordedAt + 1_250)
-        if (kotlin.math.hypot(after.first - before.first, after.second - before.second) < .0005f) {
-            before = interpolatedPosition(recordedAt - 3_000)
-            after = interpolatedPosition(recordedAt + 3_000)
+        val motion = interpolatedMotion(recordedAt)
+        var dx = motion.vx
+        var dy = motion.vy
+        if (kotlin.math.hypot(dx, dy) < .000001f) {
+            val before = interpolatedMotion(recordedAt - 1_500)
+            val after = interpolatedMotion(recordedAt + 1_500)
+            dx = after.x - before.x
+            dy = after.y - before.y
         }
-        val dx = after.first - before.first
-        val dy = after.second - before.second
         val heading = if (kotlin.math.hypot(dx, dy) >= .000001f) {
             Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
         } else -90f
         val passed = points.indexOfFirst { it.recordedAt > recordedAt }.let { if (it < 0) points.size else it }
-        return RouteMapPose(current.first, current.second, heading, passed.coerceIn(1, points.size))
+        return RouteMapPose(motion.x, motion.y, heading, passed.coerceIn(1, points.size))
     }
 
-    private fun interpolatedPosition(recordedAt: Long): Pair<Float, Float> {
-        if (points.size == 1) return points[0].x to points[0].y
+    private data class Motion(val x: Float, val y: Float, val vx: Float, val vy: Float)
+
+    /** Keeps camera position and velocity continuous between asynchronous GPS updates. */
+    private fun interpolatedMotion(recordedAt: Long): Motion {
+        if (points.size == 1) return Motion(points[0].x, points[0].y, 0f, 0f)
         val found = points.binarySearchBy(recordedAt) { it.recordedAt }
-        if (found >= 0) return points[found].x to points[found].y
-        val upper = -found - 1
-        if (upper <= 0) return points.first().x to points.first().y
-        if (upper >= points.size) return points.last().x to points.last().y
-        val start = points[upper - 1]
+        val upper = if (found >= 0) found else -found - 1
+        if (upper <= 0) {
+            val velocity = velocityAt(0)
+            return Motion(points.first().x, points.first().y, velocity.first, velocity.second)
+        }
+        if (upper >= points.size) {
+            val velocity = velocityAt(points.lastIndex)
+            return Motion(points.last().x, points.last().y, velocity.first, velocity.second)
+        }
+        val startIndex = upper - 1
+        val start = points[startIndex]
         val end = points[upper]
-        val duration = end.recordedAt - start.recordedAt
-        if (duration <= 0) return end.x to end.y
-        val fraction = ((recordedAt - start.recordedAt).toFloat() / duration).coerceIn(0f, 1f)
-        return (start.x + (end.x - start.x) * fraction) to (start.y + (end.y - start.y) * fraction)
+        val durationSeconds = (end.recordedAt - start.recordedAt) / 1_000f
+        if (durationSeconds <= 0f) {
+            val velocity = velocityAt(upper)
+            return Motion(end.x, end.y, velocity.first, velocity.second)
+        }
+        val fraction = ((recordedAt - start.recordedAt) / (durationSeconds * 1_000f)).coerceIn(0f, 1f)
+        val fraction2 = fraction * fraction
+        val fraction3 = fraction2 * fraction
+        val segmentX = end.x - start.x
+        val segmentY = end.y - start.y
+        val startVelocity = limitedTangent(velocityAt(startIndex), segmentX, segmentY, durationSeconds)
+        val endVelocity = limitedTangent(velocityAt(upper), segmentX, segmentY, durationSeconds)
+        val m0x = startVelocity.first * durationSeconds
+        val m0y = startVelocity.second * durationSeconds
+        val m1x = endVelocity.first * durationSeconds
+        val m1y = endVelocity.second * durationSeconds
+        val h00 = 2 * fraction3 - 3 * fraction2 + 1
+        val h10 = fraction3 - 2 * fraction2 + fraction
+        val h01 = -2 * fraction3 + 3 * fraction2
+        val h11 = fraction3 - fraction2
+        val x = h00 * start.x + h10 * m0x + h01 * end.x + h11 * m1x
+        val y = h00 * start.y + h10 * m0y + h01 * end.y + h11 * m1y
+        val dh00 = 6 * fraction2 - 6 * fraction
+        val dh10 = 3 * fraction2 - 4 * fraction + 1
+        val dh01 = -6 * fraction2 + 6 * fraction
+        val dh11 = 3 * fraction2 - 2 * fraction
+        val vx = (dh00 * start.x + dh10 * m0x + dh01 * end.x + dh11 * m1x) / durationSeconds
+        val vy = (dh00 * start.y + dh10 * m0y + dh01 * end.y + dh11 * m1y) / durationSeconds
+        return Motion(x, y, vx, vy)
+    }
+
+    private fun velocityAt(index: Int): Pair<Float, Float> {
+        val before = points[(index - 1).coerceAtLeast(0)]
+        val after = points[(index + 1).coerceAtMost(points.lastIndex)]
+        val durationSeconds = (after.recordedAt - before.recordedAt) / 1_000f
+        if (durationSeconds <= 0f) return 0f to 0f
+        return (after.x - before.x) / durationSeconds to (after.y - before.y) / durationSeconds
+    }
+
+    private fun limitedTangent(
+        velocity: Pair<Float, Float>,
+        segmentX: Float,
+        segmentY: Float,
+        durationSeconds: Float
+    ): Pair<Float, Float> {
+        val segmentLength = kotlin.math.hypot(segmentX, segmentY)
+        if (segmentLength <= .0000001f || durationSeconds <= 0f) return 0f to 0f
+        if (velocity.first * segmentX + velocity.second * segmentY <= 0f) return 0f to 0f
+        val maximum = 2f * segmentLength / durationSeconds
+        val speed = kotlin.math.hypot(velocity.first, velocity.second)
+        if (speed <= maximum) return velocity
+        val ratio = maximum / speed
+        return velocity.first * ratio to velocity.second * ratio
+    }
+
+    private companion object {
+        fun compacted(source: List<RouteMapPoint>): List<RouteMapPoint> = buildList(source.size) {
+            source.forEach { point ->
+                val previous = lastOrNull()
+                if (previous == null) {
+                    add(point)
+                } else if (point.recordedAt > previous.recordedAt &&
+                    kotlin.math.hypot(point.x - previous.x, point.y - previous.y) > .000001f
+                ) {
+                    // Location updates are copied into faster telemetry samples; keep one copy only.
+                    add(point)
+                }
+            }
+        }
     }
 }
 
