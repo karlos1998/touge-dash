@@ -12,7 +12,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
@@ -69,6 +72,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,10 +81,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -205,6 +212,7 @@ private fun VideoAlignmentEditor(
     var selectedElementId by remember { mutableStateOf<String?>(null) }
     var deletingElementId by remember { mutableStateOf<String?>(null) }
     var widgetMenuOpen by remember { mutableStateOf(false) }
+    var elementBounds by remember { mutableStateOf<Map<String, Rect>>(emptyMap()) }
     val portraitVideo = initial.pixelHeight > initial.pixelWidth
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
     LaunchedEffect(templates, templateId) {
@@ -225,6 +233,20 @@ private fun VideoAlignmentEditor(
     val first = samples.firstOrNull()?.recordedAt ?: 0
     val previewRecordedAt = (first + telemetrySecond * 1000).toLong()
     val sample = samples.nearestTo(previewRecordedAt)
+    val transformElement: (String, Float, Float, Float) -> Unit = { id, dx, dy, zoom ->
+        overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements.map { element ->
+            if (element.id != id || previewSize.width == 0 || previewSize.height == 0) element
+            else {
+                val old = element.position(portraitVideo)
+                element
+                    .positioned(portraitVideo, OverlayPosition(old.x + dx / previewSize.width, old.y + dy / previewSize.height))
+                    .resized(zoom)
+            }
+        })
+    }
+    val currentOverlayDefinition by rememberUpdatedState(overlayDefinition)
+    val currentTransformElement by rememberUpdatedState(transformElement)
+    val currentElementBounds by rememberUpdatedState(elementBounds)
     val preview: @Composable BoxScope.() -> Unit = {
         AndroidView(
             factory = { PlayerView(it).apply { useController = false; this.player = player } },
@@ -240,16 +262,8 @@ private fun VideoAlignmentEditor(
                 canvasSize = previewSize,
                 selectedElementId = selectedElementId,
                 select = { selectedElementId = it },
-                transform = { id, dx, dy, zoom ->
-                    overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements.map { element ->
-                        if (element.id != id || previewSize.width == 0 || previewSize.height == 0) element
-                        else {
-                            val old = element.position(portraitVideo)
-                            element
-                                .positioned(portraitVideo, OverlayPosition(old.x + dx / previewSize.width, old.y + dy / previewSize.height))
-                                .resized(zoom)
-                        }
-                    })
+                elementBoundsChanged = { id, bounds ->
+                    if (elementBounds[id] != bounds) elementBounds = elementBounds + (id to bounds)
                 },
                 mapZoom = { id, delta ->
                     overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements.map { element ->
@@ -384,7 +398,49 @@ private fun VideoAlignmentEditor(
                     } else {
                         Modifier.fillMaxWidth().aspectRatio(aspect)
                     }
-                    Box(stageModifier.background(Color.Black).onSizeChanged { previewSize = it }, content = preview)
+                    Box(
+                        stageModifier
+                            .background(Color.Black)
+                            .onSizeChanged { previewSize = it }
+                            .pointerInput(portraitVideo, previewSize) {
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    val activeElementID = currentElementBounds.elementIDAt(
+                                        down.position,
+                                        currentOverlayDefinition.elements.mapTo(mutableSetOf()) { it.id }
+                                    )
+                                        ?: return@awaitEachGesture
+                                    selectedElementId = activeElementID
+                                    var hasPressedPointers = true
+                                    while (hasPressedPointers) {
+                                        val event = awaitPointerEvent()
+                                        val pressedPointers = event.changes.count { it.pressed }
+                                        val previouslyPressedPointers = event.changes.count { it.previousPressed }
+                                        // One finger moves the locked widget. Once another finger joins,
+                                        // only their distance changes its size, so it cannot drift toward
+                                        // the second widget under that finger.
+                                        val pan = if (pressedPointers == 1 && previouslyPressedPointers == 1) {
+                                            event.calculatePan()
+                                        } else {
+                                            Offset.Zero
+                                        }
+                                        val zoom = if (pressedPointers >= 2 && previouslyPressedPointers >= 2) {
+                                            event.calculateZoom()
+                                        } else {
+                                            1f
+                                        }
+                                        if (pan != Offset.Zero || zoom != 1f) {
+                                            currentTransformElement(activeElementID, pan.x, pan.y, zoom)
+                                            event.changes.forEach { change ->
+                                                if (change.pressed) change.consume()
+                                            }
+                                        }
+                                        hasPressedPointers = event.changes.any { it.pressed }
+                                    }
+                                }
+                            },
+                        content = preview
+                    )
                 }
                 Box(Modifier.fillMaxWidth().heightIn(max = 350.dp).background(MaterialTheme.colorScheme.surface)) { controls() }
                 Row(
@@ -488,7 +544,7 @@ private fun BoxScope.EditableHudPreview(
     canvasSize: IntSize,
     selectedElementId: String?,
     select: (String) -> Unit,
-    transform: (String, Float, Float, Float) -> Unit,
+    elementBoundsChanged: (String, Rect) -> Unit,
     mapZoom: (String, Float) -> Unit,
     requestDelete: (String) -> Unit
 ) {
@@ -507,6 +563,7 @@ private fun BoxScope.EditableHudPreview(
                     scaleX = previewScale
                     scaleY = previewScale
                 }
+                .onGloballyPositioned { elementBoundsChanged(element.id, it.boundsInParent()) }
         ) {
             HudElementPreview(
                 sample = sample,
@@ -516,12 +573,7 @@ private fun BoxScope.EditableHudPreview(
                 definition = definition,
                 style = definition.style,
                 selected = selectedElementId == element.id,
-                modifier = Modifier.pointerInput(element.id, canvasSize, portrait) {
-                    detectTransformGestures { _, pan, zoom, _ ->
-                        select(element.id)
-                        transform(element.id, pan.x, pan.y, zoom)
-                    }
-                }.clickable { select(element.id) }
+                modifier = Modifier.clickable { select(element.id) }
             )
             if (selectedElementId == element.id) {
                 IconButton(
@@ -1074,6 +1126,17 @@ private fun List<TelemetrySampleEntity>.nearestTo(target: Long): TelemetrySample
         target - before.recordedAt <= after.recordedAt - target -> before
         else -> after
     }
+}
+
+private fun Map<String, Rect>.elementIDAt(point: Offset, validIDs: Set<String>): String? {
+    return entries
+        .filter { (id, bounds) -> id in validIDs && bounds.contains(point) }
+        .minByOrNull { (_, bounds) ->
+            val dx = bounds.center.x - point.x
+            val dy = bounds.center.y - point.y
+            dx * dx + dy * dy
+        }
+        ?.key
 }
 
 private fun List<Pair<TelemetrySampleEntity, GeoPoint>>.interpolatePosition(target: Long): GeoPoint? {

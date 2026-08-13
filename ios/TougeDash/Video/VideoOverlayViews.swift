@@ -1,5 +1,13 @@
 import SwiftUI
 
+private struct VideoOverlayElementFramesPreferenceKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
 struct VideoTelemetryOverlayView: View {
     let template: VideoOverlayTemplate
     let sample: TelemetryHistorySample?
@@ -37,8 +45,11 @@ struct EditableVideoTelemetryOverlayView: View {
     let sample: TelemetryHistorySample?
     var samples: [TelemetryHistorySample] = []
     var routeTimestamp: Date? = nil
-    @State private var magnifyingElementID: UUID?
-    @State private var magnificationBase = 1.0
+    @State private var activeTouchLocations: [SpatialEventCollection.Event.ID: CGPoint] = [:]
+    @State private var touchStartedAt: [SpatialEventCollection.Event.ID: TimeInterval] = [:]
+    @State private var gestureSessionStarted = false
+    @State private var gestureElementID: UUID?
+    @State private var elementFrames: [UUID: CGRect] = [:]
     @State private var elementPendingDeletion: UUID?
 
     var body: some View {
@@ -67,8 +78,14 @@ struct EditableVideoTelemetryOverlayView: View {
                 .onTapGesture {
                     selectedElementID = element.id
                 }
-                .gesture(dragGesture(for: element.id, canvasSize: proxy.size, orientation: orientation))
-                .simultaneousGesture(magnifyGesture(for: element.id))
+                .background {
+                    GeometryReader { elementProxy in
+                        Color.clear.preference(
+                            key: VideoOverlayElementFramesPreferenceKey.self,
+                            value: [element.id: elementProxy.frame(in: .named("video-overlay-canvas"))]
+                        )
+                    }
+                }
                 .overlay(alignment: deletionControlAlignment(for: position)) {
                     if selectedElementID == element.id {
                         Button {
@@ -117,6 +134,14 @@ struct EditableVideoTelemetryOverlayView: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                spatialTransformGesture(canvasSize: proxy.size, orientation: orientation),
+                including: .all
+            )
+            .onPreferenceChange(VideoOverlayElementFramesPreferenceKey.self) {
+                elementFrames = $0
+            }
         }
         .coordinateSpace(name: "video-overlay-canvas")
         .alert(localized("Usunąć widget?"), isPresented: deletionConfirmationBinding) {
@@ -146,46 +171,112 @@ struct EditableVideoTelemetryOverlayView: View {
         return position.x < 0.3 ? .topTrailing : .topLeading
     }
 
-    private func dragGesture(
-        for id: UUID,
+    private func spatialTransformGesture(
         canvasSize: CGSize,
         orientation: VideoOverlayCanvasOrientation
     ) -> some Gesture {
-        DragGesture(minimumDistance: 3, coordinateSpace: .named("video-overlay-canvas"))
-            .onChanged { value in
-                guard magnifyingElementID == nil else { return }
-                guard let index = template.elements.firstIndex(where: { $0.id == id }) else { return }
-                selectedElementID = id
-                template.elements[index].setPosition(
-                    normalized(value.location, canvasSize: canvasSize),
-                    for: orientation
+        SpatialEventGesture(coordinateSpace: .named("video-overlay-canvas"))
+            .onChanged { events in
+                updateSpatialTransform(events, canvasSize: canvasSize, orientation: orientation)
+            }
+            .onEnded { _ in resetSpatialTransform() }
+    }
+
+    private func updateSpatialTransform(
+        _ events: SpatialEventCollection,
+        canvasSize: CGSize,
+        orientation: VideoOverlayCanvasOrientation
+    ) {
+        let previousLocations = activeTouchLocations
+        var updatedLocations = activeTouchLocations
+        var updatedStartTimes = touchStartedAt
+
+        for event in events where event.kind == .touch {
+            switch event.phase {
+            case .active:
+                updatedLocations[event.id] = event.location
+                if updatedStartTimes[event.id] == nil { updatedStartTimes[event.id] = event.timestamp }
+            case .ended, .cancelled:
+                updatedLocations[event.id] = nil
+            @unknown default:
+                updatedLocations[event.id] = nil
+            }
+        }
+
+        activeTouchLocations = updatedLocations
+        touchStartedAt = updatedStartTimes
+
+        guard !updatedLocations.isEmpty else {
+            resetSpatialTransform()
+            return
+        }
+
+        let orderedIDs = updatedLocations.keys.sorted {
+            (updatedStartTimes[$0] ?? 0) < (updatedStartTimes[$1] ?? 0)
+        }
+
+        if !gestureSessionStarted {
+            gestureSessionStarted = true
+            guard let firstID = orderedIDs.first,
+                  let firstLocation = updatedLocations[firstID],
+                  let targetID = elementID(at: firstLocation) else { return }
+            gestureElementID = targetID
+            selectedElementID = targetID
+            return
+        }
+
+        guard let targetID = gestureElementID,
+              let index = template.elements.firstIndex(where: { $0.id == targetID }) else { return }
+
+        if orderedIDs.count == 1,
+           previousLocations.count == 1,
+           let touchID = orderedIDs.first,
+           let previous = previousLocations[touchID],
+           let current = updatedLocations[touchID] {
+            let oldPosition = template.elements[index].position(for: orientation)
+            template.elements[index].setPosition(
+                VideoOverlayPosition(
+                    x: oldPosition.x + (current.x - previous.x) / max(1, canvasSize.width),
+                    y: oldPosition.y + (current.y - previous.y) / max(1, canvasSize.height)
+                ),
+                for: orientation
+            )
+        } else if orderedIDs.count >= 2,
+                  let first = updatedLocations[orderedIDs[0]],
+                  let second = updatedLocations[orderedIDs[1]],
+                  let previousFirst = previousLocations[orderedIDs[0]],
+                  let previousSecond = previousLocations[orderedIDs[1]] {
+            let previousDistance = hypot(previousSecond.x - previousFirst.x, previousSecond.y - previousFirst.y)
+            let currentDistance = hypot(second.x - first.x, second.y - first.y)
+            if previousDistance > 1, currentDistance > 1 {
+                template.elements[index].setSizeMultiplier(
+                    template.elements[index].sizeMultiplier * Double(currentDistance / previousDistance)
                 )
             }
+        }
     }
 
-    private func magnifyGesture(for id: UUID) -> some Gesture {
-        MagnifyGesture(minimumScaleDelta: 0.005)
-            .onChanged { value in
-                guard magnifyingElementID == nil || magnifyingElementID == id,
-                      let index = template.elements.firstIndex(where: { $0.id == id }) else { return }
-                if magnifyingElementID == nil {
-                    magnifyingElementID = id
-                    magnificationBase = template.elements[index].sizeMultiplier
-                    selectedElementID = id
-                }
-                template.elements[index].setSizeMultiplier(magnificationBase * value.magnification)
-            }
-            .onEnded { _ in
-                magnifyingElementID = nil
-                magnificationBase = 1
-            }
+    private func elementID(at point: CGPoint) -> UUID? {
+        let matchingFrames = elementFrames.filter {
+            $0.value.insetBy(dx: -12, dy: -12).contains(point)
+        }
+        return matchingFrames.min {
+            squaredDistance(from: CGPoint(x: $0.value.midX, y: $0.value.midY), to: point)
+                < squaredDistance(from: CGPoint(x: $1.value.midX, y: $1.value.midY), to: point)
+        }?.key
     }
 
-    private func normalized(_ point: CGPoint, canvasSize: CGSize) -> VideoOverlayPosition {
-        VideoOverlayPosition(
-            x: point.x / max(1, canvasSize.width),
-            y: point.y / max(1, canvasSize.height)
-        )
+    private func squaredDistance(from lhs: CGPoint, to rhs: CGPoint) -> CGFloat {
+        let dx = lhs.x - rhs.x
+        let dy = lhs.y - rhs.y
+        return dx * dx + dy * dy
+    }
+
+    private func resetSpatialTransform() {
+        activeTouchLocations.removeAll()
+        touchStartedAt.removeAll()
+        gestureSessionStarted = false
+        gestureElementID = nil
     }
 
     private func changeMapZoom(for id: UUID, by delta: Double) {
