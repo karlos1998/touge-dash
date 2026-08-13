@@ -1,6 +1,7 @@
 @preconcurrency import ActivityKit
 import NetworkExtension
 import SwiftUI
+import UIKit
 
 @MainActor
 private final class SeventyMaiImportActivityManager {
@@ -216,7 +217,10 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
         isBusy = true
         errorMessage = nil
         errorTitle = localized("Nie udało się ukończyć importu")
+        let previousIdleTimerState = UIApplication.shared.isIdleTimerDisabled
+        UIApplication.shared.isIdleTimerDisabled = true
         defer {
+            UIApplication.shared.isIdleTimerDisabled = previousIdleTimerState
             isBusy = false
             progress = nil
         }
