@@ -119,7 +119,8 @@ final class DriveVideoExporter: ObservableObject {
         samples: [TelemetryHistorySample],
         template: VideoOverlayTemplate?,
         alignment: DriveVideoTimelineAlignment? = nil,
-        telemetryStartDate: Date? = nil
+        telemetryStartDate: Date? = nil,
+        quality: DriveVideoExportQuality = .original
     ) async {
         guard !state.isWorking else { return }
         wasCancelled = false
@@ -131,6 +132,7 @@ final class DriveVideoExporter: ObservableObject {
                 template: template,
                 alignment: alignment,
                 telemetryStartDate: telemetryStartDate,
+                quality: quality,
                 continuedTask: task
             )
         }
@@ -169,6 +171,7 @@ final class DriveVideoExporter: ObservableObject {
         template: VideoOverlayTemplate?,
         alignment: DriveVideoTimelineAlignment?,
         telemetryStartDate: Date?,
+        quality: DriveVideoExportQuality,
         continuedTask: BGContinuedProcessingTask?
     ) async throws {
         var temporaryURL: URL?
@@ -195,6 +198,7 @@ final class DriveVideoExporter: ObservableObject {
                     videoStartSeconds: alignment?.videoStartSeconds ?? 0,
                     duration: alignment?.duration,
                     outputURL: renderedURL,
+                    quality: quality,
                     progressHandler: { [weak continuedTask] progress in
                         Self.updateSystemProgress(continuedTask, fraction: progress * 0.94)
                     }
@@ -252,7 +256,8 @@ final class DriveVideoExporter: ObservableObject {
             template: template,
             videoStartSeconds: 0,
             duration: nil,
-            outputURL: outputURL
+            outputURL: outputURL,
+            quality: .original
         )
     }
 
@@ -264,6 +269,7 @@ final class DriveVideoExporter: ObservableObject {
         videoStartSeconds: Double,
         duration requestedDuration: Double?,
         outputURL: URL,
+        quality: DriveVideoExportQuality = .original,
         progressHandler: (@MainActor (Double) -> Void)? = nil
     ) async throws -> URL {
         let asset = AVURLAsset(url: sourceURL)
@@ -273,7 +279,7 @@ final class DriveVideoExporter: ObservableObject {
         let exportDuration = min(max(0, requestedDuration ?? availableDuration), availableDuration)
         guard exportDuration > 0 else { throw DriveVideoExportError.emptyTimeRange }
 
-        let preset = template == nil ? AVAssetExportPresetHighestQuality : AVAssetExportPresetHEVCHighestQuality
+        let preset = quality.exportPreset(hasOverlay: template != nil)
         guard let exporter = AVAssetExportSession(asset: asset, presetName: preset) else {
             throw DriveVideoExportError.exportUnavailable
         }
@@ -294,6 +300,7 @@ final class DriveVideoExporter: ObservableObject {
                 sourceStartSeconds: startSeconds,
                 samples: samples,
                 template: template,
+                quality: quality,
                 routeMap: routeMap
             )
             exporter.videoComposition = try await makeVideoComposition(asset: asset, cache: cache)
@@ -834,13 +841,19 @@ enum VideoRouteMapSnapshotter {
 }
 
 private final class VideoOverlayFrameCache: @unchecked Sendable {
+    private struct FrameKey: Equatable {
+        let visualBucket: Int
+        let wallClockSecond: Int?
+    }
+
     private let recordingStart: Date
     private let sourceStartSeconds: Double
     private let samples: [VideoTelemetryFrame]
     private let template: VideoOverlayTemplate
+    private let quality: DriveVideoExportQuality
     private let routeMap: VideoRouteMapSnapshot?
     private let lock = NSLock()
-    private var cachedTimeBucket = -1
+    private var cachedFrameKey: FrameKey?
     private var cachedSize = CGSize.zero
     private var cachedImage: CIImage?
 
@@ -849,12 +862,14 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
         sourceStartSeconds: Double,
         samples: [VideoTelemetryFrame],
         template: VideoOverlayTemplate,
+        quality: DriveVideoExportQuality,
         routeMap: VideoRouteMapSnapshot? = nil
     ) {
         self.recordingStart = recordingStart
         self.sourceStartSeconds = sourceStartSeconds
         self.samples = samples
         self.template = template
+        self.quality = quality
         self.routeMap = routeMap
     }
 
@@ -864,27 +879,42 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
         let index = nearestIndex(to: timestamp)
         let containsMap = template.elements.contains { $0.kind.isRouteMap }
         let containsTimestamp = template.elements.contains { $0.kind == .telemetryTimestamp }
-        let timeBucket: Int
-        if containsMap {
-            timeBucket = Int((seconds * 30).rounded(.down))
-        } else if containsTimestamp {
-            timeBucket = Int(timestamp.timeIntervalSince1970.rounded(.down))
-        } else {
-            timeBucket = index
+        let containsTelemetry = template.elements.contains {
+            !$0.kind.isRouteMap && $0.kind != .telemetryTimestamp
         }
+        let visualBucket: Int
+        if quality == .original, containsTelemetry, !containsMap {
+            visualBucket = index
+        } else if containsMap || containsTelemetry {
+            visualBucket = Int((seconds * VideoOverlayRenderPolicy.maximumFramesPerSecond(for: quality)).rounded(.down))
+        } else {
+            visualBucket = 0
+        }
+        let frameKey = FrameKey(
+            visualBucket: visualBucket,
+            wallClockSecond: containsTimestamp
+                ? Int(timestamp.timeIntervalSince1970.rounded(.down))
+                : nil
+        )
 
         lock.lock()
         defer { lock.unlock() }
-        if timeBucket == cachedTimeBucket, size == cachedSize { return cachedImage }
+        if frameKey == cachedFrameKey, size == cachedSize { return cachedImage }
+        let renderSize = VideoOverlayRenderPolicy.renderSize(for: size, quality: quality)
         guard let cgImage = VideoOverlayCGRenderer.render(
-            size: size,
+            size: renderSize,
             sample: samples[index],
             template: template,
             routeMap: routeMap,
             routeTimestamp: timestamp
         ) else { return nil }
-        let image = CIImage(cgImage: cgImage)
-        cachedTimeBucket = timeBucket
+        let image = CIImage(cgImage: cgImage).transformed(
+            by: CGAffineTransform(
+                scaleX: size.width / renderSize.width,
+                y: size.height / renderSize.height
+            )
+        )
+        cachedFrameKey = frameKey
         cachedSize = size
         cachedImage = image
         return image
@@ -902,6 +932,28 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
         let before = lower - 1
         return abs(samples[before].timestamp.timeIntervalSince(timestamp)) <=
             abs(samples[lower].timestamp.timeIntervalSince(timestamp)) ? before : lower
+    }
+}
+
+enum VideoOverlayRenderPolicy {
+    static let maximumLongEdge: CGFloat = 1_600
+
+    static func maximumFramesPerSecond(for quality: DriveVideoExportQuality) -> Double {
+        quality == .fastFullHD ? 15 : 30
+    }
+
+    static func renderSize(
+        for canvasSize: CGSize,
+        quality: DriveVideoExportQuality = .fastFullHD
+    ) -> CGSize {
+        guard canvasSize.width > 0, canvasSize.height > 0 else { return .zero }
+        guard quality == .fastFullHD else { return canvasSize }
+        let longEdge = max(canvasSize.width, canvasSize.height)
+        let scale = min(1, maximumLongEdge / longEdge)
+        return CGSize(
+            width: max(1, (canvasSize.width * scale).rounded()),
+            height: max(1, (canvasSize.height * scale).rounded())
+        )
     }
 }
 

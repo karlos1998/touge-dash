@@ -6,6 +6,50 @@ import XCTest
 @testable import TougeDash
 
 final class DriveVideoFeatureTests: XCTestCase {
+    func testExportQualitySelectsFastHEVCAndLosslessPassthrough() {
+        XCTAssertEqual(
+            DriveVideoExportQuality.fastFullHD.exportPreset(hasOverlay: true),
+            AVAssetExportPresetHEVC1920x1080
+        )
+        XCTAssertEqual(
+            DriveVideoExportQuality.original.exportPreset(hasOverlay: true),
+            AVAssetExportPresetHEVCHighestQuality
+        )
+        XCTAssertEqual(
+            DriveVideoExportQuality.original.exportPreset(hasOverlay: false),
+            AVAssetExportPresetPassthrough
+        )
+    }
+
+    @MainActor
+    func testOverlayRenderPolicyReducesM300HUDWorkWithoutChangingVideoSize() throws {
+        var snapshot = TelemetrySnapshot.preview
+        snapshot.speedKPH = 128
+        snapshot.rpm = 5_600
+        snapshot.boostBar = 1.1
+        let timestamp = Date(timeIntervalSince1970: 1_800_000_000)
+        let frame = VideoTelemetryFrame(sample: TelemetryHistorySample(snapshot: snapshot, timestamp: timestamp))
+        let videoSize = CGSize(width: 2_304, height: 1_296)
+        let renderSize = VideoOverlayRenderPolicy.renderSize(for: videoSize, quality: .fastFullHD)
+        XCTAssertEqual(renderSize, CGSize(width: 1_600, height: 900))
+        XCTAssertLessThan(renderSize.width * renderSize.height, videoSize.width * videoSize.height / 2)
+        XCTAssertEqual(
+            VideoOverlayRenderPolicy.renderSize(for: videoSize, quality: .original),
+            videoSize
+        )
+        XCTAssertEqual(VideoOverlayRenderPolicy.maximumFramesPerSecond(for: .fastFullHD), 15)
+        XCTAssertEqual(VideoOverlayRenderPolicy.maximumFramesPerSecond(for: .original), 30)
+
+        for index in 0..<15 {
+            _ = try XCTUnwrap(VideoOverlayCGRenderer.render(
+                size: renderSize,
+                sample: frame,
+                template: .racing,
+                routeTimestamp: timestamp.addingTimeInterval(Double(index) / 30)
+            ))
+        }
+    }
+
     func testTelemetryTimestampUsesExactWallClockSecond() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
@@ -796,6 +840,48 @@ final class DriveVideoFeatureTests: XCTestCase {
     }
 
     @MainActor
+    func testFastExportDownscalesM300VideoToFullHD() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: "TougeDashFastExportTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let sourceURL = directory.appending(path: "m300-source.mov")
+        let outputURL = directory.appending(path: "m300-fast.mp4")
+        try await makeTestVideo(at: sourceURL, width: 2_304, height: 1_296, frameCount: 10)
+
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let frame = VideoTelemetryFrame(sample: TelemetryHistorySample(
+            snapshot: .preview,
+            timestamp: startedAt
+        ))
+        let rendered = try await DriveVideoExporter().renderVideo(
+            sourceURL: sourceURL,
+            telemetryStart: startedAt,
+            samples: [frame],
+            template: .minimal,
+            videoStartSeconds: 0,
+            duration: nil,
+            outputURL: outputURL,
+            quality: .fastFullHD
+        )
+
+        let metadata = try await DriveVideoAssetInspector.metadata(for: rendered)
+        XCTAssertEqual(metadata.width, 1_920)
+        XCTAssertEqual(metadata.height, 1_080)
+        XCTAssertEqual(metadata.duration, 10.0 / 30.0, accuracy: 0.08)
+
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: rendered))
+        generator.appliesPreferredTrackTransform = true
+        let preview = try await generator.image(
+            at: CMTime(seconds: 0.1, preferredTimescale: 600)
+        ).image
+        let attachment = XCTAttachment(image: UIImage(cgImage: preview))
+        attachment.name = "Fast-M300-Export-With-HUD"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testImportedVideoIsInspectedAndCopiedIntoLocalDriveStorage() async throws {
         let sourceURL = FileManager.default.temporaryDirectory
             .appending(path: "dashcam-\(UUID().uuidString).mov")
@@ -910,12 +996,17 @@ final class DriveVideoFeatureTests: XCTestCase {
     }
 
     @MainActor
-    private func makeTestVideo(at url: URL) async throws {
+    private func makeTestVideo(
+        at url: URL,
+        width: Int = 320,
+        height: Int = 180,
+        frameCount: Int = 30
+    ) async throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let settings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
-            AVVideoWidthKey: 320,
-            AVVideoHeightKey: 180
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height
         ]
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
         input.expectsMediaDataInRealTime = false
@@ -923,8 +1014,8 @@ final class DriveVideoFeatureTests: XCTestCase {
             assetWriterInput: input,
             sourcePixelBufferAttributes: [
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-                kCVPixelBufferWidthKey as String: 320,
-                kCVPixelBufferHeightKey as String: 180
+                kCVPixelBufferWidthKey as String: width,
+                kCVPixelBufferHeightKey as String: height
             ]
         )
         XCTAssertTrue(writer.canAdd(input))
@@ -932,15 +1023,15 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertTrue(writer.startWriting())
         writer.startSession(atSourceTime: .zero)
 
-        for frameIndex in 0..<30 {
+        for frameIndex in 0..<frameCount {
             while !input.isReadyForMoreMediaData {
                 try await Task.sleep(for: .milliseconds(2))
             }
             var buffer: CVPixelBuffer?
             let status = CVPixelBufferCreate(
                 nil,
-                320,
-                180,
+                width,
+                height,
                 kCVPixelFormatType_32BGRA,
                 nil,
                 &buffer

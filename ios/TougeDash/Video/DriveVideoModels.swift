@@ -283,6 +283,36 @@ enum DriveVideoQuality: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum DriveVideoExportQuality: String, CaseIterable, Identifiable, Sendable {
+    case fastFullHD
+    case original
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fastFullHD: localized("Szybki · 1080p")
+        case .original: localized("Oryginalna rozdzielczość")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .fastFullHD: localized("Szybszy eksport i mniejszy plik, nadal w wysokiej jakości")
+        case .original: localized("Pełna rozdzielczość kamery i dłuższy czas renderowania")
+        }
+    }
+
+    func exportPreset(hasOverlay: Bool) -> String {
+        switch self {
+        case .fastFullHD:
+            AVAssetExportPresetHEVC1920x1080
+        case .original:
+            hasOverlay ? AVAssetExportPresetHEVCHighestQuality : AVAssetExportPresetPassthrough
+        }
+    }
+}
+
 struct DriveVideoCamera: Identifiable, Hashable, Sendable {
     let id: String
     let name: String

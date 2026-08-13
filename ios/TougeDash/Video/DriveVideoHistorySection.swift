@@ -791,6 +791,7 @@ private struct DriveVideoExportSheet: View {
     @State private var exportRangeStart = 0.0
     @State private var exportRangeEnd: Double
     @State private var exportScrubPosition: VideoExportScrubPosition?
+    @AppStorage("TougeDash.video.exportQuality") private var exportQuality = DriveVideoExportQuality.fastFullHD
 
     init(
         session: DriveSession,
@@ -1030,6 +1031,19 @@ private struct DriveVideoExportSheet: View {
                 }
                 .buttonStyle(.bordered)
             }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Picker(localized("Jakość eksportu"), selection: $exportQuality) {
+                    ForEach(DriveVideoExportQuality.allCases) { quality in
+                        Text(quality.title).tag(quality)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text(exportQuality.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(16)
         .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
@@ -1049,7 +1063,8 @@ private struct DriveVideoExportSheet: View {
                     samples: exportSamples(),
                     template: addsOverlay ? overlayDraft : nil,
                     alignment: trimmedAlignment,
-                    telemetryStartDate: trimmedAlignment.telemetryStartDate(session: session)
+                    telemetryStartDate: trimmedAlignment.telemetryStartDate(session: session),
+                    quality: exportQuality
                 )
             }
         } label: {

@@ -688,6 +688,11 @@
 "Dodaj widget" = "Add widget";
 "Data i czas telemetrii" = "Telemetry date and time";
 "CZAS TELEMETRII" = "TELEMETRY TIME";
+"Jakość eksportu" = "Export quality";
+"Szybki · 1080p" = "Fast · 1080p";
+"Oryginalna rozdzielczość" = "Original resolution";
+"Szybszy eksport i mniejszy plik, nadal w wysokiej jakości" = "Faster export and a smaller file, still in high quality";
+"Pełna rozdzielczość kamery i dłuższy czas renderowania" = "Full camera resolution with a longer render time";
 "Minimapa śledząca" = "Follow minimap";
 "Route Chase" = "Route Chase";
 "Skale zegarów" = "Gauge scales";
