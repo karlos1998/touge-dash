@@ -106,7 +106,27 @@
 "Zamknij" = "Zamknij";
 "Utwórz link" = "Utwórz link";
 
-/* Import 70mai M300 */
+/* Import kamer 70mai */
+"Przód" = "Przód";
+"Tył" = "Tył";
+"Wnętrze" = "Wnętrze";
+"Kamera 70mai" = "Kamera 70mai";
+"MODEL I KANAŁ" = "MODEL I KANAŁ";
+"Model kamery" = "Model kamery";
+"Kanał nagrania" = "Kanał nagrania";
+"Wybierz kamerę, której obraz ma zostać nałożony na telemetrię. Kanał tylny wymaga podłączonej kamery tylnej." = "Wybierz kamerę, której obraz ma zostać nałożony na telemetrię. Kanał tylny wymaga podłączonej kamery tylnej.";
+"Nie ma Twojej kamery na liście?" = "Nie ma Twojej kamery na liście?";
+"Dodajmy obsługę Twojej kamery" = "Dodajmy obsługę Twojej kamery";
+"Instagram: WWY_SUPRA" = "Instagram: WWY_SUPRA";
+"E-mail: kontakt@letscode.it" = "E-mail: kontakt@letscode.it";
+"Napisz do nas i podaj dokładny model kamery oraz wersję firmware. Sprawdzimy, czy możemy dodać jej obsługę." = "Napisz do nas i podaj dokładny model kamery oraz wersję firmware. Sprawdzimy, czy możemy dodać jej obsługę.";
+"Włącz Wi‑Fi w %@. Nazwę hotspotu znajdziesz na kamerze lub jej ekranie." = "Włącz Wi‑Fi w %@. Nazwę hotspotu znajdziesz na kamerze lub jej ekranie.";
+"Potwierdź połączenie przyciskiem lub na ekranie kamery, zgodnie z jej komunikatem." = "Potwierdź połączenie przyciskiem lub na ekranie kamery, zgodnie z jej komunikatem.";
+"Nie udało się połączyć z kamerą 70mai" = "Nie udało się połączyć z kamerą 70mai";
+"Podaj pełną nazwę hotspotu, np. %@." = "Podaj pełną nazwę hotspotu, np. %@.";
+"Podczas przeglądania pamięci kamera może wstrzymać bieżące nagrywanie. Touge Dash nie usuwa plików ani nie zmienia ustawień kamery." = "Podczas przeglądania pamięci kamera może wstrzymać bieżące nagrywanie. Touge Dash nie usuwa plików ani nie zmienia ustawień kamery.";
+"Pełną nazwę hotspotu znajdziesz na kamerze, jej ekranie lub w instrukcji. Fabryczne hasło większości modeli to 12345678." = "Pełną nazwę hotspotu znajdziesz na kamerze, jej ekranie lub w instrukcji. Fabryczne hasło większości modeli to 12345678.";
+"Nie znaleziono kamery 70mai pod adresem 192.168.0.1. Sprawdź, czy Wi‑Fi kamery jest włączone i iPhone jest z nim połączony." = "Nie znaleziono kamery 70mai pod adresem 192.168.0.1. Sprawdź, czy Wi‑Fi kamery jest włączone i iPhone jest z nim połączony.";
 "Gotowe do połączenia" = "Gotowe do połączenia";
 "Szukanie kamery…" = "Szukanie kamery…";
 "Rozpoczynanie autoryzacji…" = "Rozpoczynanie autoryzacji…";

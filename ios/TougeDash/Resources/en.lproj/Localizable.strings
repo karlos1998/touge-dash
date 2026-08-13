@@ -190,7 +190,27 @@
 "Udostępnij raport" = "Share report";
 "Utwórz link" = "Create link";
 
-/* 70mai M300 import */
+/* 70mai camera import */
+"Przód" = "Front";
+"Tył" = "Rear";
+"Wnętrze" = "Interior";
+"Kamera 70mai" = "70mai camera";
+"MODEL I KANAŁ" = "MODEL AND CHANNEL";
+"Model kamery" = "Camera model";
+"Kanał nagrania" = "Recording channel";
+"Wybierz kamerę, której obraz ma zostać nałożony na telemetrię. Kanał tylny wymaga podłączonej kamery tylnej." = "Choose the camera view to use with telemetry. The rear channel requires a connected rear camera.";
+"Nie ma Twojej kamery na liście?" = "Is your camera missing?";
+"Dodajmy obsługę Twojej kamery" = "Let's support your camera";
+"Instagram: WWY_SUPRA" = "Instagram: WWY_SUPRA";
+"E-mail: kontakt@letscode.it" = "Email: kontakt@letscode.it";
+"Napisz do nas i podaj dokładny model kamery oraz wersję firmware. Sprawdzimy, czy możemy dodać jej obsługę." = "Contact us with the exact camera model and firmware version. We will check whether we can add support for it.";
+"Włącz Wi‑Fi w %@. Nazwę hotspotu znajdziesz na kamerze lub jej ekranie." = "Turn on Wi‑Fi on %@. You can find the hotspot name on the camera or its screen.";
+"Potwierdź połączenie przyciskiem lub na ekranie kamery, zgodnie z jej komunikatem." = "Confirm the connection with the camera button or screen, as prompted by the camera.";
+"Nie udało się połączyć z kamerą 70mai" = "Could not connect to the 70mai camera";
+"Podaj pełną nazwę hotspotu, np. %@." = "Enter the full hotspot name, for example %@.";
+"Podczas przeglądania pamięci kamera może wstrzymać bieżące nagrywanie. Touge Dash nie usuwa plików ani nie zmienia ustawień kamery." = "The camera may stop its current recording while storage is being browsed. Touge Dash does not delete files or change camera settings.";
+"Pełną nazwę hotspotu znajdziesz na kamerze, jej ekranie lub w instrukcji. Fabryczne hasło większości modeli to 12345678." = "You can find the full hotspot name on the camera, its screen, or in the manual. The factory password for most models is 12345678.";
+"Nie znaleziono kamery 70mai pod adresem 192.168.0.1. Sprawdź, czy Wi‑Fi kamery jest włączone i iPhone jest z nim połączony." = "No 70mai camera was found at 192.168.0.1. Check that camera Wi‑Fi is on and the iPhone is connected to it.";
 "Gotowe do połączenia" = "Ready to connect";
 "Szukanie kamery…" = "Looking for the camera…";
 "Rozpoczynanie autoryzacji…" = "Starting authorization…";

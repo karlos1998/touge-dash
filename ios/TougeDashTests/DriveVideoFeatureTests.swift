@@ -175,6 +175,25 @@ final class DriveVideoFeatureTests: XCTestCase {
         )
     }
 
+    func test70maiCameraProfilesMapNormalRecordingChannels() {
+        XCTAssertEqual(SeventyMaiCameraModel.m300.channels, [.front])
+        XCTAssertEqual(SeventyMaiCameraModel.m300.recordingType(for: .front), "0")
+        XCTAssertNil(SeventyMaiCameraModel.m300.recordingType(for: .rear))
+
+        XCTAssertEqual(SeventyMaiCameraModel.m500.channels, [.front])
+        XCTAssertEqual(SeventyMaiCameraModel.m500.recordingType(for: .front), "0")
+
+        let dualChannelModels: [SeventyMaiCameraModel] = [
+            .a200, .a400, .a500s, .a510, .a800s, .a810, .s500
+        ]
+        for camera in dualChannelModels {
+            XCTAssertEqual(camera.channels, [.front, .rear], camera.displayName)
+            XCTAssertEqual(camera.recordingType(for: .front), "4", camera.displayName)
+            XCTAssertEqual(camera.recordingType(for: .rear), "8", camera.displayName)
+            XCTAssertNil(camera.recordingType(for: .interior), camera.displayName)
+        }
+    }
+
     func testM300ClipParserCorrectsCameraClockAndMatchesDrive() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))

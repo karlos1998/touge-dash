@@ -78,8 +78,8 @@ struct DriveVideoHistorySection: View {
     @State private var isImportingVideo = false
     @State private var importStage: GalleryVideoImportStage = .retrieving(nil)
     @State private var importError: String?
-    @State private var showingM300Import = false
-    @State private var importedM300Recording: DriveVideoRecording?
+    @State private var showingSeventyMaiImport = false
+    @State private var importedSeventyMaiRecording: DriveVideoRecording?
 
     private var capturedRecordings: [DriveVideoRecording] {
         recordings
@@ -133,9 +133,9 @@ struct DriveVideoHistorySection: View {
                     overlayStore: overlayStore
                 )
             }
-            .sheet(isPresented: $showingM300Import, onDismiss: openImportedM300Recording) {
-                SeventyMaiM300ImportView(session: session) { prepared in
-                    saveM300Import(prepared)
+            .sheet(isPresented: $showingSeventyMaiImport, onDismiss: openImportedSeventyMaiRecording) {
+                SeventyMaiImportView(session: session) { prepared in
+                    saveSeventyMaiImport(prepared)
                 }
             }
             .alert(localized("Nie udało się dodać filmu"), isPresented: Binding(
@@ -304,9 +304,9 @@ struct DriveVideoHistorySection: View {
                 Spacer()
                 Menu {
                     Button {
-                        showingM300Import = true
+                        showingSeventyMaiImport = true
                     } label: {
-                        Label(localized("70mai M300"), systemImage: "car.side.front.open")
+                        Label(localized("Kamera 70mai"), systemImage: "car.side.front.open")
                     }
                     PhotosPicker(selection: $selectedPhotoItem, matching: .videos, preferredItemEncoding: .current) {
                         Label(localized("Film z biblioteki"), systemImage: "photo.on.rectangle")
@@ -403,7 +403,7 @@ struct DriveVideoHistorySection: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(project.sourceKind == .dashCamera
-                    ? (project.sourceDisplayName ?? localized("70mai M300"))
+                    ? (project.sourceDisplayName ?? localized("Kamera 70mai"))
                     : String(format: localized("Montaż %d"), index))
                     .font(.subheadline.weight(.black))
                 Text("\(project.duration.videoDurationText) · \(DriveVideoFileStore.formattedSize(project.fileSizeBytes))")
@@ -480,7 +480,7 @@ struct DriveVideoHistorySection: View {
     }
 
     @MainActor
-    private func saveM300Import(_ prepared: PreparedSeventyMaiImport) {
+    private func saveSeventyMaiImport(_ prepared: PreparedSeventyMaiImport) {
         let recording = DriveVideoRecording(
             sessionID: session.id,
             fileName: prepared.fileName,
@@ -491,7 +491,7 @@ struct DriveVideoHistorySection: View {
             pixelWidth: prepared.metadata.width,
             pixelHeight: prepared.metadata.height,
             framesPerSecond: prepared.metadata.framesPerSecond,
-            cameraName: localized("70mai M300"),
+            cameraName: prepared.displayName,
             hasAudio: prepared.metadata.hasAudio,
             preferredOverlayTemplateID: overlayStore.selectedTemplateID,
             sourceKind: .dashCamera,
@@ -503,7 +503,7 @@ struct DriveVideoHistorySection: View {
         modelContext.insert(recording)
         do {
             try modelContext.save()
-            importedM300Recording = recording
+            importedSeventyMaiRecording = recording
         } catch {
             modelContext.delete(recording)
             if let directory = try? DriveVideoFileStore.directoryURL() {
@@ -514,9 +514,9 @@ struct DriveVideoHistorySection: View {
     }
 
     @MainActor
-    private func openImportedM300Recording() {
-        guard let recording = importedM300Recording else { return }
-        importedM300Recording = nil
+    private func openImportedSeventyMaiRecording() {
+        guard let recording = importedSeventyMaiRecording else { return }
+        importedSeventyMaiRecording = nil
         exportRecording = recording
     }
 

@@ -2,6 +2,91 @@ import AVFoundation
 import CryptoKit
 import Foundation
 
+enum SeventyMaiCameraChannel: String, CaseIterable, Identifiable, Sendable {
+    case front
+    case rear
+    case interior
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .front: localized("Przód")
+        case .rear: localized("Tył")
+        case .interior: localized("Wnętrze")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .front: "car.front.waves.up"
+        case .rear: "car.rear.waves.up"
+        case .interior: "person.crop.rectangle"
+        }
+    }
+}
+
+enum SeventyMaiCameraModel: String, CaseIterable, Identifiable, Sendable {
+    case m300
+    case m500
+    case a200
+    case a400
+    case a500s
+    case a510
+    case a800s
+    case a810
+    case s500
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .m300: "70mai M300"
+        case .m500: "70mai M500"
+        case .a200: "70mai A200"
+        case .a400: "70mai A400"
+        case .a500s: "70mai A500S / Pro Plus+"
+        case .a510: "70mai A510"
+        case .a800s: "70mai A800S"
+        case .a810: "70mai A810"
+        case .s500: "70mai S500"
+        }
+    }
+
+    var ssidPlaceholder: String {
+        switch self {
+        case .m300: "70mai_M300_XXXX"
+        case .m500: "70mai_M500_XXXX"
+        case .a200: "70mai_A200_XXXX"
+        case .a400: "70mai_A400_XXXX"
+        case .a500s: "70mai_A500S_XXXX"
+        case .a510: "70mai_A510_XXXX"
+        case .a800s: "70mai_A800S_XXXX"
+        case .a810: "70mai_A810_XXXX"
+        case .s500: "70mai_S500_XXXX"
+        }
+    }
+
+    var channels: [SeventyMaiCameraChannel] {
+        switch self {
+        case .m300, .m500:
+            [.front]
+        case .a200, .a400, .a500s, .a510, .a800s, .a810, .s500:
+            [.front, .rear]
+        }
+    }
+
+    func recordingType(for channel: SeventyMaiCameraChannel) -> String? {
+        guard channels.contains(channel) else { return nil }
+        switch (self, channel) {
+        case (.m300, .front), (.m500, .front): return "0"
+        case (_, .front): return "4"
+        case (_, .rear): return "8"
+        case (_, .interior): return "18"
+        }
+    }
+}
+
 struct SeventyMaiM300Clip: Identifiable, Hashable, Sendable {
     let path: String
     let name: String
@@ -38,6 +123,8 @@ struct SeventyMaiM300Clip: Identifiable, Hashable, Sendable {
 }
 
 struct SeventyMaiM300ScanResult: Sendable {
+    let cameraModel: SeventyMaiCameraModel
+    let channel: SeventyMaiCameraChannel
     let host: String
     let connectKey: String
     let clockOffsetSeconds: TimeInterval?
@@ -85,7 +172,7 @@ enum SeventyMaiM300Error: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .cameraUnavailable:
-            localized("Nie znaleziono kamery M300 pod adresem 192.168.0.1. Sprawdź, czy Wi‑Fi kamery jest włączone i iPhone jest z nim połączony.")
+            localized("Nie znaleziono kamery 70mai pod adresem 192.168.0.1. Sprawdź, czy Wi‑Fi kamery jest włączone i iPhone jest z nim połączony.")
         case .invalidResponse(let endpoint):
             String(format: localized("Kamera zwróciła nieprawidłową odpowiedź dla %@."), endpoint)
         case .cameraRejected(let code):
@@ -325,11 +412,16 @@ actor SeventyMaiM300Client {
     }
 
     func scan(
+        cameraModel: SeventyMaiCameraModel,
+        channel: SeventyMaiCameraChannel,
         sessionStartedAt: Date,
         sessionEndedAt: Date,
         progress: ProgressHandler? = nil
     ) async throws -> SeventyMaiM300ScanResult {
         let host = SeventyMaiM300Protocol.defaultHost
+        guard let recordingType = cameraModel.recordingType(for: channel) else {
+            throw SeventyMaiM300Error.noMatchingRecordings
+        }
         await progress?(.probing(host))
         let connectKey = try await authorize(host: host, progress: progress)
 
@@ -347,7 +439,8 @@ actor SeventyMaiM300Client {
                 host: host,
                 connectKey: connectKey,
                 start: start,
-                end: start + 99
+                end: start + 99,
+                recordingType: recordingType
             )
             let pageClips = dictionaries.compactMap {
                 SeventyMaiM300Protocol.correctedClip(
@@ -371,6 +464,8 @@ actor SeventyMaiM300Client {
         )
         guard !matching.isEmpty else { throw SeventyMaiM300Error.noMatchingRecordings }
         return SeventyMaiM300ScanResult(
+            cameraModel: cameraModel,
+            channel: channel,
             host: host,
             connectKey: connectKey,
             clockOffsetSeconds: clockOffset,
@@ -467,7 +562,9 @@ actor SeventyMaiM300Client {
             finishedImport = true
             return PreparedSeventyMaiImport(
                 fileName: outputURL.lastPathComponent,
-                displayName: "70mai M300 · \(scan.clips.count) klipów",
+                displayName: scan.cameraModel.displayName
+                    + (scan.cameraModel.channels.count > 1 ? " · \(scan.channel.displayName)" : "")
+                    + " · \(scan.clips.count) klipów",
                 startedAt: startedAt,
                 fileSizeBytes: size,
                 metadata: metadata,
@@ -590,7 +687,8 @@ actor SeventyMaiM300Client {
         host: String,
         connectKey: String,
         start: Int,
-        end: Int
+        end: Int,
+        recordingType: String
     ) async throws -> [[String: Any]] {
         let result = try await signedResult(
             host: host,
@@ -598,7 +696,7 @@ actor SeventyMaiM300Client {
             parameters: [
                 ("start", String(start)),
                 ("end", String(end)),
-                ("type", SeventyMaiM300Protocol.normalRecordingType)
+                ("type", recordingType)
             ],
             connectKey: connectKey
         )

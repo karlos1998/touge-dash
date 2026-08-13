@@ -10,7 +10,7 @@ private final class SeventyMaiImportActivityManager {
     private var pendingState: DashcamImportActivityAttributes.ContentState?
     private var updateTask: Task<Void, Never>?
 
-    func start(totalClips: Int, firstFileName: String) async {
+    func start(totalClips: Int, firstFileName: String, cameraName: String) async {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         if let existing = Activity<DashcamImportActivityAttributes>.activities.first {
             activity = existing
@@ -29,7 +29,7 @@ private final class SeventyMaiImportActivityManager {
             return
         }
         activity = try? Activity.request(
-            attributes: DashcamImportActivityAttributes(cameraName: "70mai M300"),
+            attributes: DashcamImportActivityAttributes(cameraName: cameraName),
             content: ActivityContent(state: state, staleDate: .now.addingTimeInterval(20)),
             pushType: nil
         )
@@ -98,8 +98,9 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
     @Published private(set) var progress: SeventyMaiM300Progress?
     @Published private(set) var isBusy = false
     @Published private(set) var errorMessage: String?
-    @Published private(set) var errorTitle = localized("Nie udało się połączyć z M300")
+    @Published private(set) var errorTitle = localized("Nie udało się połączyć z kamerą 70mai")
     @Published private(set) var diagnostics: [String] = []
+    @Published private(set) var activeCameraModel: SeventyMaiCameraModel = .m300
 
     private let client = SeventyMaiM300Client()
     private let activityManager = SeventyMaiImportActivityManager()
@@ -126,7 +127,10 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
 
     var statusDetail: String {
         guard let progress else {
-            return localized("Włącz Wi‑Fi w M300. Nazwę hotspotu znajdziesz na etykiecie kamery.")
+            return String(
+                format: localized("Włącz Wi‑Fi w %@. Nazwę hotspotu znajdziesz na kamerze lub jej ekranie."),
+                activeCameraModel.displayName
+            )
         }
         switch progress {
         case .probing(let host):
@@ -134,7 +138,7 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
         case .requestingAuthorization:
             return localized("Touge Dash wysyła do kamery żądanie bezpiecznego połączenia.")
         case .waitingForButton:
-            return localized("Naciśnij jeden raz przycisk zasilania M300. Kamera powinna głosowo poprosić o potwierdzenie.")
+            return localized("Potwierdź połączenie przyciskiem lub na ekranie kamery, zgodnie z jej komunikatem.")
         case .readingClock:
             return localized("Porównywanie czasu kamery z czasem iPhone’a.")
         case .readingRecordings(let page):
@@ -165,23 +169,43 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
     func connectAndScan(
         ssid: String,
         password: String,
+        cameraModel: SeventyMaiCameraModel,
+        channel: SeventyMaiCameraChannel,
         sessionStartedAt: Date,
         sessionEndedAt: Date
     ) async {
+        activeCameraModel = cameraModel
         let cleanSSID = ssid.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanSSID.isEmpty else {
-            errorTitle = localized("Nie udało się połączyć z M300")
-            errorMessage = localized("Podaj pełną nazwę hotspotu, np. 70mai_M300_ABCD.")
+            errorTitle = localized("Nie udało się połączyć z kamerą 70mai")
+            errorMessage = String(format: localized("Podaj pełną nazwę hotspotu, np. %@."), cameraModel.ssidPlaceholder)
             return
         }
-        await runScan(sessionStartedAt: sessionStartedAt, sessionEndedAt: sessionEndedAt) {
+        await runScan(
+            cameraModel: cameraModel,
+            channel: channel,
+            sessionStartedAt: sessionStartedAt,
+            sessionEndedAt: sessionEndedAt
+        ) {
             try await Self.joinHotspot(ssid: cleanSSID, password: password)
             diagnostics.append("Wi‑Fi: \(cleanSSID)")
         }
     }
 
-    func scanCurrentConnection(sessionStartedAt: Date, sessionEndedAt: Date) async {
-        await runScan(sessionStartedAt: sessionStartedAt, sessionEndedAt: sessionEndedAt, beforeScan: {})
+    func scanCurrentConnection(
+        cameraModel: SeventyMaiCameraModel,
+        channel: SeventyMaiCameraChannel,
+        sessionStartedAt: Date,
+        sessionEndedAt: Date
+    ) async {
+        activeCameraModel = cameraModel
+        await runScan(
+            cameraModel: cameraModel,
+            channel: channel,
+            sessionStartedAt: sessionStartedAt,
+            sessionEndedAt: sessionEndedAt,
+            beforeScan: {}
+        )
     }
 
     func importVideo(
@@ -198,7 +222,8 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
         }
         await activityManager.start(
             totalClips: scanResult.clips.count,
-            firstFileName: scanResult.clips.first?.name ?? ""
+            firstFileName: scanResult.clips.first?.name ?? "",
+            cameraName: scanResult.cameraModel.displayName
         )
         do {
             let prepared = try await client.importClips(
@@ -222,7 +247,18 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
         errorMessage = nil
     }
 
+    func resetSelection(cameraModel: SeventyMaiCameraModel) {
+        guard !isBusy else { return }
+        activeCameraModel = cameraModel
+        scanResult = nil
+        progress = nil
+        errorMessage = nil
+        diagnostics = []
+    }
+
     private func runScan(
+        cameraModel: SeventyMaiCameraModel,
+        channel: SeventyMaiCameraChannel,
         sessionStartedAt: Date,
         sessionEndedAt: Date,
         beforeScan: () async throws -> Void
@@ -231,17 +267,21 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
         isBusy = true
         scanResult = nil
         errorMessage = nil
-        errorTitle = localized("Nie udało się połączyć z M300")
+        errorTitle = localized("Nie udało się połączyć z kamerą 70mai")
         diagnostics = []
         defer { isBusy = false }
         do {
             try await beforeScan()
             let result = try await client.scan(
+                cameraModel: cameraModel,
+                channel: channel,
                 sessionStartedAt: sessionStartedAt,
                 sessionEndedAt: sessionEndedAt,
                 progress: progressHandler
             )
             scanResult = result
+            diagnostics.append("Model: \(cameraModel.displayName)")
+            diagnostics.append("Kanał: \(channel.displayName) · typ \(cameraModel.recordingType(for: channel) ?? "?")")
             diagnostics.append("Host: \(result.host)")
             if let offset = result.clockOffsetSeconds {
                 diagnostics.append("Różnica zegara: \(String(format: "%+.2f", offset)) s")
@@ -312,21 +352,41 @@ final class SeventyMaiM300ImportViewModel: ObservableObject {
     }
 }
 
-struct SeventyMaiM300ImportView: View {
+struct SeventyMaiImportView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     let session: DriveSession
     let onImported: (PreparedSeventyMaiImport) -> Void
 
     @StateObject private var model = SeventyMaiM300ImportViewModel()
     @AppStorage("TougeDash.dashcam.m300.ssid") private var ssid = ""
+    @AppStorage("TougeDash.dashcam.70mai.model") private var cameraModelRawValue = SeventyMaiCameraModel.m300.rawValue
+    @State private var selectedChannel = SeventyMaiCameraChannel.front
     @State private var password = "12345678"
     @State private var showsPassword = false
     @State private var showsDiagnostics = false
+    @State private var showsMissingCameraAlert = false
+
+    private var selectedCameraModel: SeventyMaiCameraModel {
+        SeventyMaiCameraModel(rawValue: cameraModelRawValue) ?? .m300
+    }
+
+    private var cameraModelBinding: Binding<SeventyMaiCameraModel> {
+        Binding(
+            get: { selectedCameraModel },
+            set: { newValue in
+                cameraModelRawValue = newValue.rawValue
+                selectedChannel = newValue.channels.first ?? .front
+                model.resetSelection(cameraModel: newValue)
+            }
+        )
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    cameraModelCard
                     warningCard
                     connectionCard
                     statusCard
@@ -336,7 +396,7 @@ struct SeventyMaiM300ImportView: View {
                 .padding()
             }
             .background(DashboardBackground())
-            .navigationTitle(localized("70mai M300"))
+            .navigationTitle(localized("Kamera 70mai"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -354,6 +414,62 @@ struct SeventyMaiM300ImportView: View {
             }
         }
         .interactiveDismissDisabled(model.isBusy)
+        .onAppear {
+            model.resetSelection(cameraModel: selectedCameraModel)
+        }
+    }
+
+    private var cameraModelCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(localized("MODEL I KANAŁ"), systemImage: "car.side.front.open")
+                .font(.system(size: 11, weight: .black))
+                .tracking(1.1)
+                .foregroundStyle(Color.tougeCyan)
+
+            Picker(localized("Model kamery"), selection: cameraModelBinding) {
+                ForEach(SeventyMaiCameraModel.allCases) { camera in
+                    Text(camera.displayName).tag(camera)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(model.isBusy)
+
+            if selectedCameraModel.channels.count > 1 {
+                Picker(localized("Kanał nagrania"), selection: $selectedChannel) {
+                    ForEach(selectedCameraModel.channels) { channel in
+                        Label(channel.displayName, systemImage: channel.systemImage).tag(channel)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .disabled(model.isBusy)
+                .onChange(of: selectedChannel) { _, _ in
+                    model.resetSelection(cameraModel: selectedCameraModel)
+                }
+
+                Text(localized("Wybierz kamerę, której obraz ma zostać nałożony na telemetrię. Kanał tylny wymaga podłączonej kamery tylnej."))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button(localized("Nie ma Twojej kamery na liście?")) {
+                showsMissingCameraAlert = true
+            }
+            .font(.caption.weight(.bold))
+            .disabled(model.isBusy)
+            .alert(localized("Dodajmy obsługę Twojej kamery"), isPresented: $showsMissingCameraAlert) {
+                Button(localized("Instagram: WWY_SUPRA")) {
+                    openURL(URL(string: "https://www.instagram.com/wwy_supra/")!)
+                }
+                Button(localized("E-mail: kontakt@letscode.it")) {
+                    openURL(URL(string: "mailto:kontakt@letscode.it?subject=Obs%C5%82uga%20kamery%2070mai%20w%20Touge%20Dash")!)
+                }
+                Button(localized("Anuluj"), role: .cancel) {}
+            } message: {
+                Text(localized("Napisz do nas i podaj dokładny model kamery oraz wersję firmware. Sprawdzimy, czy możemy dodać jej obsługę."))
+            }
+        }
+        .padding(16)
+        .background(Color.primary.opacity(0.065), in: RoundedRectangle(cornerRadius: 18))
     }
 
     private var warningCard: some View {
@@ -361,7 +477,7 @@ struct SeventyMaiM300ImportView: View {
             Label(localized("Importuj po zakończeniu jazdy"), systemImage: "exclamationmark.triangle.fill")
                 .font(.subheadline.weight(.black))
                 .foregroundStyle(Color.tougeYellow)
-            Text(localized("Podczas przeglądania karty pamięci M300 może wstrzymać bieżące nagrywanie. Touge Dash nie usuwa plików ani nie zmienia ustawień kamery."))
+            Text(localized("Podczas przeglądania pamięci kamera może wstrzymać bieżące nagrywanie. Touge Dash nie usuwa plików ani nie zmienia ustawień kamery."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -376,7 +492,7 @@ struct SeventyMaiM300ImportView: View {
                 .tracking(1.1)
                 .foregroundStyle(Color.tougeMint)
 
-            TextField(localized("70mai_M300_XXXX"), text: $ssid)
+            TextField(selectedCameraModel.ssidPlaceholder, text: $ssid)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .textFieldStyle(.roundedBorder)
@@ -400,7 +516,7 @@ struct SeventyMaiM300ImportView: View {
             .frame(minHeight: 42)
             .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
 
-            Text(localized("Pełną nazwę hotspotu znajdziesz na etykiecie M300. Fabryczne hasło to 12345678."))
+            Text(localized("Pełną nazwę hotspotu znajdziesz na kamerze, jej ekranie lub w instrukcji. Fabryczne hasło większości modeli to 12345678."))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 
@@ -409,6 +525,8 @@ struct SeventyMaiM300ImportView: View {
                     await model.connectAndScan(
                         ssid: ssid,
                         password: password,
+                        cameraModel: selectedCameraModel,
+                        channel: selectedChannel,
                         sessionStartedAt: session.startedAt,
                         sessionEndedAt: session.endedAt
                     )
@@ -426,6 +544,8 @@ struct SeventyMaiM300ImportView: View {
             Button {
                 Task {
                     await model.scanCurrentConnection(
+                        cameraModel: selectedCameraModel,
+                        channel: selectedChannel,
                         sessionStartedAt: session.startedAt,
                         sessionEndedAt: session.endedAt
                     )
