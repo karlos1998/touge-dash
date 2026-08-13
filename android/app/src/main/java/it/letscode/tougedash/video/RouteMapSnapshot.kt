@@ -82,8 +82,9 @@ suspend fun createRouteMapSnapshot(
     val snapshot = withTimeoutOrNull(8_000) {
         suspendCancellableCoroutine { continuation ->
             Configuration.getInstance().userAgentValue = context.packageName
-            val width = 642
-            val height = 408
+            // Oversampled so map-camera zoom does not scale up the HUD bitmap itself.
+            val width = 1600
+            val height = 1017
             val map = MapView(context).apply {
                 setTileSource(TileSourceFactory.MAPNIK)
                 setMultiTouchControls(false)
@@ -139,8 +140,8 @@ suspend fun createRouteMapSnapshot(
 private fun fallbackRouteMapSnapshot(
     located: List<Pair<TelemetrySampleEntity, GeoPoint>>
 ): RouteMapSnapshot {
-    val width = 642
-    val height = 408
+    val width = 1600
+    val height = 1017
     val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     canvas.drawColor(Color.rgb(5, 16, 21))

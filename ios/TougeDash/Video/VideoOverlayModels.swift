@@ -195,6 +195,7 @@ struct VideoOverlayElement: Codable, Hashable, Identifiable, Sendable {
     var slot: VideoOverlaySlot
     var scale: VideoOverlayScale
     var sizeMultiplier: Double
+    var mapZoom: Double
     var accent: DashboardAccent
     var kind: VideoOverlayElementKind
     var landscapePosition: VideoOverlayPosition?
@@ -206,6 +207,7 @@ struct VideoOverlayElement: Codable, Hashable, Identifiable, Sendable {
         slot: VideoOverlaySlot,
         scale: VideoOverlayScale = .medium,
         sizeMultiplier: Double = 1,
+        mapZoom: Double = 1,
         accent: DashboardAccent = .cyan,
         kind: VideoOverlayElementKind = .digital,
         landscapePosition: VideoOverlayPosition? = nil,
@@ -216,6 +218,7 @@ struct VideoOverlayElement: Codable, Hashable, Identifiable, Sendable {
         self.slot = slot
         self.scale = scale
         self.sizeMultiplier = Self.clampedSizeMultiplier(sizeMultiplier)
+        self.mapZoom = Self.clampedMapZoom(mapZoom)
         self.accent = accent
         self.kind = kind
         self.landscapePosition = landscapePosition
@@ -240,14 +243,22 @@ struct VideoOverlayElement: Codable, Hashable, Identifiable, Sendable {
         sizeMultiplier = Self.clampedSizeMultiplier(value)
     }
 
+    mutating func setMapZoom(_ value: Double) {
+        mapZoom = Self.clampedMapZoom(value)
+    }
+
     var effectiveScale: Double { scale.multiplier * sizeMultiplier }
 
     private static func clampedSizeMultiplier(_ value: Double) -> Double {
         min(2.5, max(0.45, value))
     }
 
+    private static func clampedMapZoom(_ value: Double) -> Double {
+        min(1.85, max(0.65, value))
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case id, metric, slot, scale, sizeMultiplier, accent, kind, landscapePosition, portraitPosition
+        case id, metric, slot, scale, sizeMultiplier, mapZoom, accent, kind, landscapePosition, portraitPosition
     }
 
     init(from decoder: Decoder) throws {
@@ -258,6 +269,9 @@ struct VideoOverlayElement: Codable, Hashable, Identifiable, Sendable {
         scale = try container.decode(VideoOverlayScale.self, forKey: .scale)
         sizeMultiplier = Self.clampedSizeMultiplier(
             try container.decodeIfPresent(Double.self, forKey: .sizeMultiplier) ?? 1
+        )
+        mapZoom = Self.clampedMapZoom(
+            try container.decodeIfPresent(Double.self, forKey: .mapZoom) ?? 1
         )
         accent = try container.decode(DashboardAccent.self, forKey: .accent)
         kind = try container.decodeIfPresent(VideoOverlayElementKind.self, forKey: .kind) ?? .digital
@@ -889,6 +903,7 @@ final class VideoOverlayTemplateStore: ObservableObject {
                     slot: $0.slot,
                     scale: $0.scale,
                     sizeMultiplier: $0.sizeMultiplier,
+                    mapZoom: $0.mapZoom,
                     accent: $0.accent,
                     kind: $0.kind,
                     landscapePosition: $0.landscapePosition,

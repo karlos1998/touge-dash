@@ -52,6 +52,7 @@ data class VideoOverlayElement(
     val kind: OverlayElementKind = OverlayElementKind.DIGITAL,
     val scale: OverlayElementScale = OverlayElementScale.MEDIUM,
     val sizeMultiplier: Float = 1f,
+    val mapZoom: Float = 1f,
     val accent: DashboardAccent = DashboardAccent.CYAN,
     val landscapePosition: OverlayPosition,
     val portraitPosition: OverlayPosition = landscapePosition
@@ -61,6 +62,7 @@ data class VideoOverlayElement(
     fun positioned(portrait: Boolean, position: OverlayPosition) =
         if (portrait) copy(portraitPosition = position.clamped()) else copy(landscapePosition = position.clamped())
     fun resized(zoom: Float) = copy(sizeMultiplier = (sizeMultiplier * zoom).coerceIn(.45f, 2.5f))
+    fun withMapZoom(zoom: Float) = copy(mapZoom = zoom.coerceIn(.65f, 1.85f))
 }
 
 @Serializable

@@ -134,7 +134,7 @@ class TelemetryBitmapOverlay(
         var mapContentRect = RectF(rect)
         routeMap?.let { snapshot ->
             paint.alpha = 255
-            val imageScale = maxOf(rect.width() / snapshot.bitmap.width, rect.height() / snapshot.bitmap.height) * 2.35f
+            val imageScale = maxOf(rect.width() / snapshot.bitmap.width, rect.height() / snapshot.bitmap.height) * 2.35f * element.mapZoom.coerceIn(.65f, 1.85f)
             val contentWidth = snapshot.bitmap.width * imageScale
             val contentHeight = snapshot.bitmap.height * imageScale
             if (pose != null) {

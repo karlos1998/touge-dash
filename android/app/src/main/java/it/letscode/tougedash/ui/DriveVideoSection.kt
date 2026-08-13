@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -246,6 +247,12 @@ private fun VideoAlignmentEditor(
                                 .resized(zoom)
                         }
                     })
+                },
+                mapZoom = { id, delta ->
+                    overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements.map { element ->
+                        if (element.id == id) element.withMapZoom(element.mapZoom + delta) else element
+                    })
+                    selectedElementId = id
                 }
             )
         }
@@ -458,21 +465,16 @@ private fun BoxScope.EditableHudPreview(
     canvasSize: IntSize,
     selectedElementId: String?,
     select: (String) -> Unit,
-    transform: (String, Float, Float, Float) -> Unit
+    transform: (String, Float, Float, Float) -> Unit,
+    mapZoom: (String, Float) -> Unit
 ) {
     val density = LocalDensity.current
     val previewWidthDp = with(density) { canvasSize.width.toDp().value }
     val fitScale = (previewWidthDp / if (portrait) 430f else 760f).coerceIn(.34f, .9f)
     definition.elements.forEach { element ->
         val position = element.position(portrait)
-        HudElementPreview(
-            sample = sample,
-            samples = samples,
-            element = element,
-            definition = definition,
-            style = definition.style,
-            selected = selectedElementId == element.id,
-            modifier = Modifier
+        Box(
+            Modifier
                 .align(Alignment.TopStart)
                 .graphicsLayer {
                     translationX = position.x * canvasSize.width - 55.dp.toPx()
@@ -481,14 +483,48 @@ private fun BoxScope.EditableHudPreview(
                     scaleX = previewScale
                     scaleY = previewScale
                 }
-                .pointerInput(element.id, canvasSize, portrait) {
+        ) {
+            HudElementPreview(
+                sample = sample,
+                samples = samples,
+                element = element,
+                definition = definition,
+                style = definition.style,
+                selected = selectedElementId == element.id,
+                modifier = Modifier.pointerInput(element.id, canvasSize, portrait) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         select(element.id)
                         transform(element.id, pan.x, pan.y, zoom)
                     }
+                }.clickable { select(element.id) }
+            )
+            if (element.kind.isRouteMap) {
+                Column(
+                    Modifier
+                        .align(if (position.x > .7f) Alignment.CenterStart else Alignment.CenterEnd)
+                        .offset(x = if (position.x > .7f) (-38).dp else 38.dp)
+                        .background(Color.Black.copy(alpha = .78f), RoundedCornerShape(40.dp))
+                        .border(1.dp, element.accent.color().copy(alpha = .85f), RoundedCornerShape(40.dp))
+                        .padding(3.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                ) {
+                    MapZoomButton("+") { mapZoom(element.id, .15f) }
+                    Text("%.1f".format(element.mapZoom), color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Black)
+                    MapZoomButton("−") { mapZoom(element.id, -.15f) }
                 }
-                .clickable { select(element.id) }
-        )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapZoomButton(label: String, action: () -> Unit) {
+    IconButton(
+        onClick = action,
+        modifier = Modifier.size(26.dp).background(Color.White.copy(alpha = .13f), androidx.compose.foundation.shape.CircleShape)
+    ) {
+        Text(label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -565,7 +601,7 @@ private fun HudElementPreview(
         OverlayElementKind.ROUTE_MAP_FOLLOW,
         OverlayElementKind.ROUTE_MAP_LIGHT,
         OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR,
-        OverlayElementKind.ROUTE_MAP_AMBER -> NfsRouteMapPreview(samples, sample, element.kind, accent, circularMap, shell)
+        OverlayElementKind.ROUTE_MAP_AMBER -> NfsRouteMapPreview(samples, sample, element.kind, element.mapZoom, accent, circularMap, shell)
     }
 }
 
@@ -574,6 +610,7 @@ private fun NfsRouteMapPreview(
     samples: List<TelemetrySampleEntity>,
     sample: TelemetrySampleEntity,
     kind: OverlayElementKind,
+    mapZoom: Float,
     accent: Color,
     circular: Boolean,
     modifier: Modifier
@@ -627,7 +664,7 @@ private fun NfsRouteMapPreview(
                     val nextPosition = points.getOrNull((currentPointIndex + 2).coerceAtMost(points.lastIndex))
                     if (currentPosition != null) {
                         map.controller.setCenter(currentPosition)
-                        map.controller.setZoom(17.5)
+                        map.controller.setZoom(17.5 + kotlin.math.log2(mapZoom.coerceIn(.65f, 1.85f).toDouble()))
                         map.mapOrientation = -(previousPosition?.bearingTo(nextPosition ?: currentPosition)?.toFloat() ?: 0f)
                     } else if (map.tag != routeKey) {
                         map.tag = routeKey

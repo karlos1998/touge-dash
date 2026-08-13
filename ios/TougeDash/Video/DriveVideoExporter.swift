@@ -597,7 +597,8 @@ private extension Array {
 }
 
 enum VideoRouteMapSnapshotter {
-    static let snapshotSize = CGSize(width: 642, height: 408)
+    // Oversampled so changing the map camera zoom does not enlarge the HUD bitmap itself.
+    static let snapshotSize = CGSize(width: 1_600, height: 1_017)
 
     static func make(samples: [VideoTelemetryFrame]) async -> VideoRouteMapSnapshot? {
         let located = samples.compactMap { sample -> (VideoTelemetryFrame, CLLocationCoordinate2D)? in
@@ -927,7 +928,7 @@ enum VideoOverlayCGRenderer {
         if let routeMap, let pose {
             let selectedImage = element.kind.usesLightMap ? (routeMap.lightImage ?? routeMap.image) : routeMap.image
             let imageSize = CGSize(width: selectedImage.width, height: selectedImage.height)
-            let imageScale = max(mapRect.width / imageSize.width, mapRect.height / imageSize.height) * 2.35
+            let imageScale = max(mapRect.width / imageSize.width, mapRect.height / imageSize.height) * 2.35 * element.mapZoom
             let scaledSize = CGSize(width: imageSize.width * imageScale, height: imageSize.height * imageScale)
             mapContentRect = CGRect(
                 x: mapRect.midX - pose.position.x * scaledSize.width,

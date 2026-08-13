@@ -100,5 +100,8 @@ class OverlayTemplateModelsTest {
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP_LIGHT), VideoOverlayTemplateDefinition.streetAtlas().elements.map { it.kind })
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR), VideoOverlayTemplateDefinition.iceOrbit().elements.map { it.kind })
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP_AMBER), VideoOverlayTemplateDefinition.amberRun().elements.map { it.kind })
+        val zoomed = VideoOverlayTemplateDefinition.streetAtlas().elements.single().withMapZoom(4f)
+        assertEquals(1.85f, zoomed.mapZoom)
+        assertEquals(zoomed, json.decodeFromString<VideoOverlayElement>(json.encodeToString(zoomed)))
     }
 }

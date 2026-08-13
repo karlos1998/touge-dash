@@ -272,6 +272,48 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(first.heading, second.heading, accuracy: 0.0001)
     }
 
+    func testRouteMapCameraZoomClampsAndPersists() throws {
+        var element = try XCTUnwrap(VideoOverlayTemplate.streetAtlas.elements.first)
+        element.setMapZoom(4)
+        XCTAssertEqual(element.mapZoom, 1.85, accuracy: 0.0001)
+        element.setMapZoom(0.1)
+        XCTAssertEqual(element.mapZoom, 0.65, accuracy: 0.0001)
+
+        var template = VideoOverlayTemplate.streetAtlas
+        element.setMapZoom(1.45)
+        template.elements[0] = element
+        let decoded = try JSONDecoder().decode(
+            VideoOverlayTemplate.self,
+            from: JSONEncoder().encode(template)
+        )
+        XCTAssertEqual(decoded.elements[0].mapZoom, 1.45, accuracy: 0.0001)
+    }
+
+    @MainActor
+    func testEditableMapPreviewShowsCameraZoomControls() throws {
+        var telemetry = TelemetrySnapshot.preview
+        telemetry.speedKPH = 72
+        let sample = TelemetryHistorySample(snapshot: telemetry, timestamp: .now)
+        let preview = ZStack {
+            Color.black
+            EditableVideoTelemetryOverlayView(
+                template: .constant(.routeChase),
+                selectedElementID: .constant(nil),
+                sample: sample,
+                samples: [sample]
+            )
+        }
+        .frame(width: 390, height: 220)
+        let renderer = ImageRenderer(content: preview)
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.uiImage)
+        XCTAssertEqual(image.size, CGSize(width: 390, height: 220))
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "Editable-Map-Zoom-Controls"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @MainActor
     func testRouteRadarBuildsRealMapSnapshotOnSimulator() async throws {
         let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
@@ -318,6 +360,20 @@ final class DriveVideoFeatureTests: XCTestCase {
             ))
             let attachment = XCTAttachment(image: UIImage(cgImage: image))
             attachment.name = "Simulator-Route-Chase-Frame-\(index)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        for zoom in [0.65, 1.85] {
+            var template = VideoOverlayTemplate.routeChase
+            template.elements[0].setMapZoom(zoom)
+            let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
+                size: CGSize(width: 390, height: 220),
+                sample: try XCTUnwrap(frames.last),
+                template: template,
+                routeMap: routeMap
+            ))
+            let attachment = XCTAttachment(image: UIImage(cgImage: image))
+            attachment.name = "Simulator-Map-Zoom-\(zoom)"
             attachment.lifetime = .keepAlways
             add(attachment)
         }

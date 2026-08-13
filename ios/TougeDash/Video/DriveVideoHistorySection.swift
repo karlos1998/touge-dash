@@ -910,6 +910,7 @@ private struct DriveVideoExportSheet: View {
             slot: source.slot,
             scale: source.scale,
             sizeMultiplier: source.sizeMultiplier,
+            mapZoom: source.mapZoom,
             accent: source.accent,
             kind: source.kind,
             landscapePosition: source.landscapePosition,

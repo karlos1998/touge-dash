@@ -59,6 +59,26 @@ struct EditableVideoTelemetryOverlayView: View {
                             .padding(-5)
                     }
                 }
+                .overlay(alignment: position.x > 0.7 ? .leading : .trailing) {
+                    if element.kind.isRouteMap {
+                        VStack(spacing: 3) {
+                            mapZoomButton(systemName: "plus") {
+                                changeMapZoom(for: element.id, by: 0.15)
+                            }
+                            Text(element.mapZoom.formatted(.number.precision(.fractionLength(1))))
+                                .font(.system(size: 7, weight: .black, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundStyle(.white)
+                            mapZoomButton(systemName: "minus") {
+                                changeMapZoom(for: element.id, by: -0.15)
+                            }
+                        }
+                        .padding(4)
+                        .background(Color.black.opacity(0.78), in: Capsule())
+                        .overlay(Capsule().stroke(element.accent.color.opacity(0.85), lineWidth: 1))
+                        .offset(x: position.x > 0.7 ? -31 : 31)
+                    }
+                }
                 .contentShape(Rectangle())
                 .position(
                     x: proxy.size.width * position.x,
@@ -78,7 +98,7 @@ struct EditableVideoTelemetryOverlayView: View {
         canvasSize: CGSize,
         orientation: VideoOverlayCanvasOrientation
     ) -> some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .named("video-overlay-canvas"))
+        DragGesture(minimumDistance: 3, coordinateSpace: .named("video-overlay-canvas"))
             .onChanged { value in
                 guard magnifyingElementID == nil else { return }
                 let start = normalized(value.startLocation, canvasSize: canvasSize)
@@ -141,6 +161,24 @@ struct EditableVideoTelemetryOverlayView: View {
             x: point.x / max(1, canvasSize.width),
             y: point.y / max(1, canvasSize.height)
         )
+    }
+
+    private func changeMapZoom(for id: UUID, by delta: Double) {
+        guard let index = template.elements.firstIndex(where: { $0.id == id }) else { return }
+        selectedElementID = id
+        template.elements[index].setMapZoom(template.elements[index].mapZoom + delta)
+        template.modifiedAt = .now
+    }
+
+    private func mapZoomButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .black))
+                .frame(width: 22, height: 22)
+                .foregroundStyle(.white)
+                .background(Color.white.opacity(0.14), in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
