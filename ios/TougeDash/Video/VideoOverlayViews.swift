@@ -170,7 +170,7 @@ private struct VideoOverlayElementView: View {
             case .speedCluster: speedCluster
             case .oilCluster: oilCluster
             case .neonTach, .blacklistTach, .carbonTach, .streetShiftTach: arcadeTach
-            case .routeMap, .routeMapCircular, .routeMapFollow:
+            case .routeMap, .routeMapCircular, .routeMapFollow, .routeMapLight, .routeMapLightCircular, .routeMapAmber:
                 VideoRouteMapElementView(
                     element: element,
                     sample: sample,
@@ -558,7 +558,7 @@ private struct VideoRouteMapElementView: View {
     }
 
     var body: some View {
-        let size = element.kind == .routeMapCircular || element.kind == .routeMapFollow
+        let size = element.kind.isCircularRouteMap
             ? CGSize(width: 154 * scale, height: 154 * scale)
             : CGSize(width: 214 * scale, height: 136 * scale)
         Group {

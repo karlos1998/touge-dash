@@ -921,7 +921,7 @@ private struct DriveVideoExportSheet: View {
 
     private func widgetTitle(_ element: VideoOverlayElement) -> String {
         switch element.kind {
-        case .routeMap, .routeMapCircular, .routeMapFollow:
+        case .routeMap, .routeMapCircular, .routeMapFollow, .routeMapLight, .routeMapLightCircular, .routeMapAmber:
             element.kind.title
         default:
             "\(element.kind.title) · \(element.metric.shortTitle)"

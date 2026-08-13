@@ -19,7 +19,20 @@ enum class OverlayElementKind {
     STREET_SHIFT_TACH,
     ROUTE_MAP,
     ROUTE_MAP_CIRCULAR,
-    ROUTE_MAP_FOLLOW
+    ROUTE_MAP_FOLLOW,
+    ROUTE_MAP_LIGHT,
+    ROUTE_MAP_LIGHT_CIRCULAR,
+    ROUTE_MAP_AMBER;
+
+    val isRouteMap: Boolean
+        get() = this == ROUTE_MAP || this == ROUTE_MAP_CIRCULAR || this == ROUTE_MAP_FOLLOW ||
+            this == ROUTE_MAP_LIGHT || this == ROUTE_MAP_LIGHT_CIRCULAR || this == ROUTE_MAP_AMBER
+
+    val isCircularRouteMap: Boolean
+        get() = this == ROUTE_MAP_CIRCULAR || this == ROUTE_MAP_FOLLOW || this == ROUTE_MAP_LIGHT_CIRCULAR
+
+    val usesLightMap: Boolean
+        get() = this == ROUTE_MAP_LIGHT || this == ROUTE_MAP_LIGHT_CIRCULAR || this == ROUTE_MAP_AMBER
 }
 
 @Serializable
@@ -198,6 +211,27 @@ data class VideoOverlayTemplateDefinition(
             elements = listOf(
                 element(TelemetryMetric.SPEED, OverlayElementKind.ROUTE_MAP_FOLLOW, OverlayElementScale.MEDIUM, DashboardAccent.BLUE, .18f, .26f, .50f, .20f),
                 element(TelemetryMetric.RPM, OverlayElementKind.NEON_TACH, OverlayElementScale.SMALL, DashboardAccent.BLUE, .83f, .73f, .50f, .79f)
+            )
+        )
+
+        fun streetAtlas() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.MINIMAL,
+            elements = listOf(
+                element(TelemetryMetric.SPEED, OverlayElementKind.ROUTE_MAP_LIGHT, OverlayElementScale.MEDIUM, DashboardAccent.BLUE, .20f, .24f, .50f, .19f)
+            )
+        )
+
+        fun iceOrbit() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.MINIMAL,
+            elements = listOf(
+                element(TelemetryMetric.SPEED, OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR, OverlayElementScale.MEDIUM, DashboardAccent.ICE, .18f, .26f, .50f, .20f)
+            )
+        )
+
+        fun amberRun() = VideoOverlayTemplateDefinition(
+            style = OverlayStyle.RACE,
+            elements = listOf(
+                element(TelemetryMetric.SPEED, OverlayElementKind.ROUTE_MAP_AMBER, OverlayElementScale.MEDIUM, DashboardAccent.ORANGE, .80f, .24f, .50f, .19f)
             )
         )
 

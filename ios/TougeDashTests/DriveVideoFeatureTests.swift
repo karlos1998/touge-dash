@@ -23,7 +23,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
 
         let store = VideoOverlayTemplateStore(defaults: defaults, keyPrefix: suite)
-        XCTAssertEqual(store.templates.count, 13)
+        XCTAssertEqual(store.templates.count, 16)
         XCTAssertEqual(store.selectedTemplate.style, .racing)
 
         let copy = store.createCopy()
@@ -203,6 +203,9 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(VideoOverlayTemplate.pursuitMap.elements.first?.accent, .red)
         XCTAssertEqual(VideoOverlayTemplate.routeChase.elements.map(\.kind), [.routeMapFollow, .neonTach])
         XCTAssertEqual(VideoOverlayTemplate.routeChase.elements.first?.accent, .blue)
+        XCTAssertEqual(VideoOverlayTemplate.streetAtlas.elements.map(\.kind), [.routeMapLight])
+        XCTAssertEqual(VideoOverlayTemplate.iceOrbit.elements.map(\.kind), [.routeMapLightCircular])
+        XCTAssertEqual(VideoOverlayTemplate.amberRun.elements.map(\.kind), [.routeMapAmber])
         let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
         var telemetry = TelemetrySnapshot.preview
         telemetry.speedKPH = 83
@@ -231,7 +234,7 @@ final class DriveVideoFeatureTests: XCTestCase {
                 .init(timestamp: startedAt.addingTimeInterval(4), position: CGPoint(x: 0.92, y: 0.36))
             ]
         )
-        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .pursuitMap, .routeChase] {
+        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .pursuitMap, .routeChase, .streetAtlas, .iceOrbit, .amberRun] {
             let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
                 size: CGSize(width: 390, height: 220),
                 sample: VideoTelemetryFrame(sample: sample),
@@ -243,6 +246,30 @@ final class DriveVideoFeatureTests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
         }
+    }
+
+    func testRouteMapPoseInterpolatesPositionAndKeepsHeadingStable() throws {
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        let background = UIGraphicsImageRenderer(size: CGSize(width: 10, height: 10)).image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 10, height: 10))
+        }
+        let routeMap = VideoRouteMapSnapshot(
+            image: try XCTUnwrap(background.cgImage),
+            points: [
+                .init(timestamp: startedAt, position: CGPoint(x: 0.1, y: 0.8)),
+                .init(timestamp: startedAt.addingTimeInterval(2), position: CGPoint(x: 0.5, y: 0.4)),
+                .init(timestamp: startedAt.addingTimeInterval(4), position: CGPoint(x: 0.9, y: 0.0))
+            ]
+        )
+
+        let first = try XCTUnwrap(routeMap.pose(at: startedAt.addingTimeInterval(1)))
+        let second = try XCTUnwrap(routeMap.pose(at: startedAt.addingTimeInterval(3)))
+        XCTAssertEqual(first.position.x, 0.3, accuracy: 0.0001)
+        XCTAssertEqual(first.position.y, 0.6, accuracy: 0.0001)
+        XCTAssertEqual(second.position.x, 0.7, accuracy: 0.0001)
+        XCTAssertEqual(second.position.y, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(first.heading, second.heading, accuracy: 0.0001)
     }
 
     @MainActor
@@ -269,7 +296,8 @@ final class DriveVideoFeatureTests: XCTestCase {
         let generatedRouteMap = await VideoRouteMapSnapshotter.make(samples: frames)
         let routeMap = try XCTUnwrap(generatedRouteMap)
         XCTAssertEqual(routeMap.points.count, samples.count)
-        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .routeChase] {
+        XCTAssertNotNil(routeMap.lightImage)
+        for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .routeChase, .streetAtlas, .iceOrbit, .amberRun] {
             let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
                 size: CGSize(width: 390, height: 220),
                 sample: try XCTUnwrap(frames.last),

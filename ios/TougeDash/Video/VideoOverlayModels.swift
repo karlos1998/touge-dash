@@ -31,6 +31,9 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
     case routeMap
     case routeMapCircular
     case routeMapFollow
+    case routeMapLight
+    case routeMapLightCircular
+    case routeMapAmber
 
     var id: String { rawValue }
 
@@ -48,6 +51,9 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
         case .routeMap: localized("Minimapa trasy")
         case .routeMapCircular: localized("Okrągła minimapa trasy")
         case .routeMapFollow: localized("Minimapa śledząca")
+        case .routeMapLight: localized("Jasna mapa ulic")
+        case .routeMapLightCircular: localized("Okrągła jasna mapa")
+        case .routeMapAmber: localized("Bursztynowa mapa")
         }
     }
 
@@ -65,7 +71,25 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
         case .routeMap: "map.fill"
         case .routeMapCircular: "circle.hexagongrid.fill"
         case .routeMapFollow: "location.north.circle.fill"
+        case .routeMapLight: "map.fill"
+        case .routeMapLightCircular: "circle.grid.cross.fill"
+        case .routeMapAmber: "location.north.line.fill"
         }
+    }
+
+    var isRouteMap: Bool {
+        switch self {
+        case .routeMap, .routeMapCircular, .routeMapFollow, .routeMapLight, .routeMapLightCircular, .routeMapAmber: true
+        default: false
+        }
+    }
+
+    var isCircularRouteMap: Bool {
+        self == .routeMapCircular || self == .routeMapFollow || self == .routeMapLightCircular
+    }
+
+    var usesLightMap: Bool {
+        self == .routeMapLight || self == .routeMapLightCircular || self == .routeMapAmber
     }
 }
 
@@ -707,10 +731,65 @@ extension VideoOverlayTemplate {
         modifiedAt: Date(timeIntervalSince1970: 1_786_874_400)
     )
 
+    static let streetAtlas = VideoOverlayTemplate(
+        id: UUID(uuidString: "13223B5A-C41A-43EA-8C84-190AE9295C2B")!,
+        name: localized("Street Atlas"),
+        style: .minimal,
+        elements: [
+            VideoOverlayElement(
+                metric: .speed,
+                slot: .topLeading,
+                scale: .medium,
+                accent: .blue,
+                kind: .routeMapLight,
+                landscapePosition: .init(x: 0.2, y: 0.24),
+                portraitPosition: .init(x: 0.5, y: 0.19)
+            )
+        ],
+        modifiedAt: Date(timeIntervalSince1970: 1_786_960_800)
+    )
+
+    static let iceOrbit = VideoOverlayTemplate(
+        id: UUID(uuidString: "301B2C62-5EA2-4FC3-A765-E818413AE73C")!,
+        name: localized("Ice Orbit"),
+        style: .minimal,
+        elements: [
+            VideoOverlayElement(
+                metric: .speed,
+                slot: .topLeading,
+                scale: .medium,
+                accent: .ice,
+                kind: .routeMapLightCircular,
+                landscapePosition: .init(x: 0.18, y: 0.26),
+                portraitPosition: .init(x: 0.5, y: 0.2)
+            )
+        ],
+        modifiedAt: Date(timeIntervalSince1970: 1_786_960_800)
+    )
+
+    static let amberRun = VideoOverlayTemplate(
+        id: UUID(uuidString: "A222C1C3-70E8-450A-964E-D13E90D22BCC")!,
+        name: localized("Amber Run"),
+        style: .racing,
+        elements: [
+            VideoOverlayElement(
+                metric: .speed,
+                slot: .topTrailing,
+                scale: .medium,
+                accent: .orange,
+                kind: .routeMapAmber,
+                landscapePosition: .init(x: 0.8, y: 0.24),
+                portraitPosition: .init(x: 0.5, y: 0.19)
+            )
+        ],
+        modifiedAt: Date(timeIntervalSince1970: 1_786_960_800)
+    )
+
     static let factoryTemplates: [VideoOverlayTemplate] = [
         .racing, .arcade, .minimal, .portrait, .streetLegends,
         .neonCircuit, .blacklistClassic, .carbonGold, .streetShift,
-        .routeRadar, .routeOrbit, .pursuitMap, .routeChase
+        .routeRadar, .routeOrbit, .pursuitMap, .routeChase,
+        .streetAtlas, .iceOrbit, .amberRun
     ]
 
     func migratedToFreeformLayout() -> VideoOverlayTemplate {

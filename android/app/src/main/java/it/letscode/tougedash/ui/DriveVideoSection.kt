@@ -3,13 +3,9 @@
 package it.letscode.tougedash.ui
 
 import android.net.Uri
-import android.graphics.Bitmap
-import android.graphics.Canvas as AndroidCanvas
 import android.graphics.Color as AndroidColor
-import android.graphics.Path as AndroidPath
 import android.graphics.Paint as AndroidPaint
 import android.graphics.Typeface
-import android.graphics.drawable.BitmapDrawable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -117,7 +113,6 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import kotlin.math.roundToInt
 import kotlin.math.cos
@@ -279,7 +274,7 @@ private fun VideoAlignmentEditor(
                                 Column {
                                     Text(widgetKindName(source.kind), fontWeight = FontWeight.Bold)
                                     Text(
-                                        template.entity.name + if (source.kind.isRouteMap()) "" else " · ${source.metric.shortName}",
+                                        template.entity.name + if (source.kind.isRouteMap) "" else " · ${source.metric.shortName}",
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 10.sp
                                     )
@@ -421,11 +416,6 @@ private fun VideoAlignmentEditor(
     }
 }
 
-private fun OverlayElementKind.isRouteMap() =
-    this == OverlayElementKind.ROUTE_MAP ||
-        this == OverlayElementKind.ROUTE_MAP_CIRCULAR ||
-        this == OverlayElementKind.ROUTE_MAP_FOLLOW
-
 @Composable
 private fun widgetKindName(kind: OverlayElementKind) = when (kind) {
     OverlayElementKind.DIGITAL -> appText("Digital value", "Wartość cyfrowa")
@@ -440,6 +430,9 @@ private fun widgetKindName(kind: OverlayElementKind) = when (kind) {
     OverlayElementKind.ROUTE_MAP -> appText("Route minimap", "Minimapa trasy")
     OverlayElementKind.ROUTE_MAP_CIRCULAR -> appText("Circular route minimap", "Okrągła minimapa trasy")
     OverlayElementKind.ROUTE_MAP_FOLLOW -> appText("Follow minimap", "Minimapa śledząca")
+    OverlayElementKind.ROUTE_MAP_LIGHT -> appText("Light street map", "Jasna mapa ulic")
+    OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR -> appText("Circular light map", "Okrągła jasna mapa")
+    OverlayElementKind.ROUTE_MAP_AMBER -> appText("Amber map", "Bursztynowa mapa")
 }
 
 @Composable
@@ -512,8 +505,7 @@ private fun HudElementPreview(
     val accent = element.accent.color()
     val background = if (style == OverlayStyle.UNDERGROUND) Color.Black.copy(alpha = .82f) else Color(0xE6071014)
     val value = element.metric.sampleValue(sample)
-    val circularMap = element.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR || element.kind == OverlayElementKind.ROUTE_MAP_FOLLOW
-    val followMap = element.kind == OverlayElementKind.ROUTE_MAP_FOLLOW
+    val circularMap = element.kind.isCircularRouteMap
     val shellShape = if (circularMap) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(12.dp)
     val shell = modifier
         .background(background, shellShape)
@@ -570,7 +562,10 @@ private fun HudElementPreview(
         OverlayElementKind.STREET_SHIFT_TACH -> ArcadeTachPreview(sample, element.kind, definition, shell)
         OverlayElementKind.ROUTE_MAP,
         OverlayElementKind.ROUTE_MAP_CIRCULAR,
-        OverlayElementKind.ROUTE_MAP_FOLLOW -> NfsRouteMapPreview(samples, sample, accent, circularMap, followMap, shell)
+        OverlayElementKind.ROUTE_MAP_FOLLOW,
+        OverlayElementKind.ROUTE_MAP_LIGHT,
+        OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR,
+        OverlayElementKind.ROUTE_MAP_AMBER -> NfsRouteMapPreview(samples, sample, element.kind, accent, circularMap, shell)
     }
 }
 
@@ -578,9 +573,9 @@ private fun HudElementPreview(
 private fun NfsRouteMapPreview(
     samples: List<TelemetrySampleEntity>,
     sample: TelemetrySampleEntity,
+    kind: OverlayElementKind,
     accent: Color,
     circular: Boolean,
-    followsPosition: Boolean,
     modifier: Modifier
 ) {
     val context = LocalContext.current
@@ -599,29 +594,6 @@ private fun NfsRouteMapPreview(
         located.indexOfLast { it.first.recordedAt <= sample.recordedAt }.coerceAtLeast(0)
     }
     val routeKey = remember(points) { points.firstOrNull()?.let { "${points.size}:${it.latitude}:${it.longitude}:${points.last().latitude}:${points.last().longitude}" } }
-    val markerDrawable = remember(accent) {
-        val bitmap = Bitmap.createBitmap(44, 44, Bitmap.Config.ARGB_8888)
-        val canvas = AndroidCanvas(bitmap)
-        val path = AndroidPath().apply {
-            moveTo(22f, 2f)
-            lineTo(39f, 39f)
-            lineTo(22f, 31f)
-            lineTo(5f, 39f)
-            close()
-        }
-        val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
-            color = AndroidColor.WHITE
-            style = AndroidPaint.Style.FILL
-            setShadowLayer(9f, 0f, 0f, accent.toArgb())
-        }
-        canvas.drawPath(path, paint)
-        paint.clearShadowLayer()
-        paint.color = accent.toArgb()
-        paint.style = AndroidPaint.Style.STROKE
-        paint.strokeWidth = 4f
-        canvas.drawPath(path, paint)
-        BitmapDrawable(context.resources, bitmap)
-    }
     val sizeModifier = if (circular) Modifier.size(172.dp) else Modifier.width(240.dp).height(150.dp)
     val mapShape = if (circular) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(12.dp)
     Box(modifier.then(sizeModifier).graphicsLayer { shape = mapShape; clip = true }.padding(0.dp)) {
@@ -653,19 +625,7 @@ private fun NfsRouteMapPreview(
                     val currentPosition = points.getOrNull(currentPointIndex)
                     val previousPosition = points.getOrNull((currentPointIndex - 2).coerceAtLeast(0))
                     val nextPosition = points.getOrNull((currentPointIndex + 2).coerceAtMost(points.lastIndex))
-                    if (!followsPosition) {
-                        currentPosition?.let { position ->
-                            map.overlays.add(Marker(map).apply {
-                                this.position = position
-                                icon = markerDrawable
-                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                                previousPosition?.let { previous ->
-                                    rotation = -previous.bearingTo(position).toFloat()
-                                }
-                            })
-                        }
-                    }
-                    if (followsPosition && currentPosition != null) {
+                    if (currentPosition != null) {
                         map.controller.setCenter(currentPosition)
                         map.controller.setZoom(17.5)
                         map.mapOrientation = -(previousPosition?.bearingTo(nextPosition ?: currentPosition)?.toFloat() ?: 0f)
@@ -680,23 +640,27 @@ private fun NfsRouteMapPreview(
                 },
                 modifier = Modifier.fillMaxSize()
             )
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = .37f)))
-            if (followsPosition) {
-                Canvas(Modifier.align(Alignment.Center).size(34.dp)) {
-                    val arrow = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(size.width / 2, size.height * .06f)
-                        lineTo(size.width * .84f, size.height * .88f)
-                        lineTo(size.width / 2, size.height * .69f)
-                        lineTo(size.width * .16f, size.height * .88f)
-                        close()
-                    }
-                    drawPath(arrow, Color.White)
-                    drawPath(
-                        arrow,
-                        accent,
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
-                    )
+            val mapTint = when {
+                kind == OverlayElementKind.ROUTE_MAP_AMBER -> Color(0x55F28B22)
+                kind.usesLightMap -> Color.White.copy(alpha = .05f)
+                kind == OverlayElementKind.ROUTE_MAP_CIRCULAR -> Color(0x4A002B24)
+                else -> Color.Black.copy(alpha = .37f)
+            }
+            Box(Modifier.fillMaxSize().background(mapTint))
+            Canvas(Modifier.align(Alignment.Center).size(34.dp)) {
+                val arrow = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(size.width / 2, size.height * .06f)
+                    lineTo(size.width * .84f, size.height * .88f)
+                    lineTo(size.width / 2, size.height * .69f)
+                    lineTo(size.width * .16f, size.height * .88f)
+                    close()
                 }
+                drawPath(arrow, Color.White)
+                drawPath(
+                    arrow,
+                    accent,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
+                )
             }
         } else {
             Box(Modifier.fillMaxSize().background(Color(0xF0051116)), contentAlignment = Alignment.Center) {

@@ -22,10 +22,50 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 
 data class RouteMapPoint(val recordedAt: Long, val x: Float, val y: Float)
 
+data class RouteMapPose(
+    val x: Float,
+    val y: Float,
+    val headingDegrees: Float,
+    val passedPointCount: Int
+)
+
 data class RouteMapSnapshot(
     val bitmap: Bitmap,
     val points: List<RouteMapPoint>
-)
+) {
+    fun poseAt(recordedAt: Long): RouteMapPose? {
+        if (points.isEmpty()) return null
+        val current = interpolatedPosition(recordedAt)
+        var before = interpolatedPosition(recordedAt - 1_250)
+        var after = interpolatedPosition(recordedAt + 1_250)
+        if (kotlin.math.hypot(after.first - before.first, after.second - before.second) < .0005f) {
+            before = interpolatedPosition(recordedAt - 3_000)
+            after = interpolatedPosition(recordedAt + 3_000)
+        }
+        val dx = after.first - before.first
+        val dy = after.second - before.second
+        val heading = if (kotlin.math.hypot(dx, dy) >= .000001f) {
+            Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
+        } else -90f
+        val passed = points.indexOfFirst { it.recordedAt > recordedAt }.let { if (it < 0) points.size else it }
+        return RouteMapPose(current.first, current.second, heading, passed.coerceIn(1, points.size))
+    }
+
+    private fun interpolatedPosition(recordedAt: Long): Pair<Float, Float> {
+        if (points.size == 1) return points[0].x to points[0].y
+        val found = points.binarySearchBy(recordedAt) { it.recordedAt }
+        if (found >= 0) return points[found].x to points[found].y
+        val upper = -found - 1
+        if (upper <= 0) return points.first().x to points.first().y
+        if (upper >= points.size) return points.last().x to points.last().y
+        val start = points[upper - 1]
+        val end = points[upper]
+        val duration = end.recordedAt - start.recordedAt
+        if (duration <= 0) return end.x to end.y
+        val fraction = ((recordedAt - start.recordedAt).toFloat() / duration).coerceIn(0f, 1f)
+        return (start.x + (end.x - start.x) * fraction) to (start.y + (end.y - start.y) * fraction)
+    }
+}
 
 suspend fun createRouteMapSnapshot(
     context: Context,
@@ -56,6 +96,7 @@ suspend fun createRouteMapSnapshot(
             val geoPoints = located.map { it.second }
             if (geoPoints.size > 1) {
                 map.zoomToBoundingBox(BoundingBox.fromGeoPointsSafe(geoPoints), false, 42)
+                map.controller.setZoom((map.zoomLevelDouble - 1.6).coerceAtLeast(map.minZoomLevel))
             } else {
                 map.controller.setCenter(geoPoints.first())
                 map.controller.setZoom(17.0)

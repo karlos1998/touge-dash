@@ -97,5 +97,8 @@ class OverlayTemplateModelsTest {
         assertEquals(DashboardAccent.RED, pursuit.elements.first().accent)
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP_FOLLOW, OverlayElementKind.NEON_TACH), chase.elements.map { it.kind })
         assertEquals(DashboardAccent.BLUE, chase.elements.first().accent)
+        assertEquals(listOf(OverlayElementKind.ROUTE_MAP_LIGHT), VideoOverlayTemplateDefinition.streetAtlas().elements.map { it.kind })
+        assertEquals(listOf(OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR), VideoOverlayTemplateDefinition.iceOrbit().elements.map { it.kind })
+        assertEquals(listOf(OverlayElementKind.ROUTE_MAP_AMBER), VideoOverlayTemplateDefinition.amberRun().elements.map { it.kind })
     }
 }

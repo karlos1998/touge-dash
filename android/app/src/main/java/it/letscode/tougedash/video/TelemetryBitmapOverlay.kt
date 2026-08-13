@@ -43,7 +43,7 @@ class TelemetryBitmapOverlay(
         bitmap.eraseColor(Color.TRANSPARENT)
         val target = firstTime + ((telemetryStartSeconds + presentationTimeUs / 1_000_000.0) * 1000).toLong()
         val sample = nearestSample(target) ?: return bitmap
-        definition.resolvedElements().forEach { drawElement(sample, it) }
+        definition.resolvedElements().forEach { drawElement(sample, target, it) }
         return bitmap
     }
 
@@ -67,7 +67,7 @@ class TelemetryBitmapOverlay(
         .setOverlayFrameAnchor(0f, 0f)
         .build()
 
-    private fun drawElement(sample: TelemetrySampleEntity, element: VideoOverlayElement) {
+    private fun drawElement(sample: TelemetrySampleEntity, targetTime: Long, element: VideoOverlayElement) {
         val position = element.position(portrait)
         val cx = bitmapWidth * position.x
         val cy = bitmapHeight * position.y
@@ -85,20 +85,20 @@ class TelemetryBitmapOverlay(
             OverlayElementKind.STREET_SHIFT_TACH -> drawStreetShiftTach(sample, element, cx, cy, scale)
             OverlayElementKind.ROUTE_MAP,
             OverlayElementKind.ROUTE_MAP_CIRCULAR,
-            OverlayElementKind.ROUTE_MAP_FOLLOW -> drawRouteMap(sample, element, cx, cy, scale)
+            OverlayElementKind.ROUTE_MAP_FOLLOW,
+            OverlayElementKind.ROUTE_MAP_LIGHT,
+            OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR,
+            OverlayElementKind.ROUTE_MAP_AMBER -> drawRouteMap(targetTime, element, cx, cy, scale)
         }
     }
 
-    private fun drawRouteMap(sample: TelemetrySampleEntity, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
-        val followsPosition = element.kind == OverlayElementKind.ROUTE_MAP_FOLLOW
-        val circular = element.kind == OverlayElementKind.ROUTE_MAP_CIRCULAR || followsPosition
+    private fun drawRouteMap(targetTime: Long, element: VideoOverlayElement, cx: Float, cy: Float, scale: Float) {
+        val circular = element.kind.isCircularRouteMap
         val width = (if (circular) 385f else 535f) * scale
         val height = (if (circular) 385f else 340f) * scale
         val rect = RectF(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2)
         val radius = if (circular) width / 2 else 28f * scale
-        val currentIndex = routeMap?.points?.indices?.minByOrNull { index ->
-            kotlin.math.abs(routeMap.points[index].recordedAt - sample.recordedAt)
-        }
+        val pose = routeMap?.poseAt(targetTime)
         var mapRotation = 0f
         val clippingPath = Path().apply {
             if (circular) addOval(rect, Path.Direction.CW)
@@ -134,33 +134,22 @@ class TelemetryBitmapOverlay(
         var mapContentRect = RectF(rect)
         routeMap?.let { snapshot ->
             paint.alpha = 255
-            val imageScale = maxOf(rect.width() / snapshot.bitmap.width, rect.height() / snapshot.bitmap.height) * if (followsPosition) 2.35f else 1f
+            val imageScale = maxOf(rect.width() / snapshot.bitmap.width, rect.height() / snapshot.bitmap.height) * 2.35f
             val contentWidth = snapshot.bitmap.width * imageScale
             val contentHeight = snapshot.bitmap.height * imageScale
-            if (followsPosition && currentIndex != null) {
-                val current = snapshot.points[currentIndex]
+            if (pose != null) {
                 mapContentRect = RectF(
-                    rect.centerX() - current.x * contentWidth,
-                    rect.centerY() - current.y * contentHeight,
-                    rect.centerX() + (1f - current.x) * contentWidth,
-                    rect.centerY() + (1f - current.y) * contentHeight
+                    rect.centerX() - pose.x * contentWidth,
+                    rect.centerY() - pose.y * contentHeight,
+                    rect.centerX() + (1f - pose.x) * contentWidth,
+                    rect.centerY() + (1f - pose.y) * contentHeight
                 )
-                val previous = snapshot.points[(currentIndex - 2).coerceAtLeast(0)]
-                val next = snapshot.points[(currentIndex + 2).coerceAtMost(snapshot.points.lastIndex)]
-                val heading = Math.toDegrees(kotlin.math.atan2((next.y - previous.y).toDouble(), (next.x - previous.x).toDouble())).toFloat()
-                mapRotation = -90f - heading
+                mapRotation = -90f - pose.headingDegrees
                 canvas.save()
                 canvas.rotate(mapRotation, rect.centerX(), rect.centerY())
-            } else {
-                mapContentRect = RectF(
-                    rect.centerX() - contentWidth / 2,
-                    rect.centerY() - contentHeight / 2,
-                    rect.centerX() + contentWidth / 2,
-                    rect.centerY() + contentHeight / 2
-                )
             }
             canvas.drawBitmap(snapshot.bitmap, null, mapContentRect, paint)
-            if (followsPosition && currentIndex != null) canvas.restore()
+            if (pose != null) canvas.restore()
         } ?: run {
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 1.5f * scale
@@ -172,7 +161,12 @@ class TelemetryBitmapOverlay(
             while (y <= rect.bottom) { canvas.drawLine(rect.left, y, rect.right, y, paint); y += spacing }
         }
         paint.style = Paint.Style.FILL
-        paint.color = if (routeMap == null) 0x22000000 else 0x66000000
+        paint.color = when {
+            element.kind == OverlayElementKind.ROUTE_MAP_AMBER -> 0x55f28b22
+            element.kind.usesLightMap -> 0x10ffffff
+            routeMap == null -> 0x22000000
+            else -> 0x66000000
+        }
         canvas.drawRect(rect, paint)
 
         routeMap?.takeIf { it.points.isNotEmpty() }?.let { snapshot ->
@@ -193,28 +187,25 @@ class TelemetryBitmapOverlay(
                     points.drop(1).forEach { lineTo(it.x, it.y) }
                 }, paint)
             }
-            if (followsPosition && currentIndex != null) {
+            if (pose != null) {
                 canvas.save()
                 canvas.rotate(mapRotation, rect.centerX(), rect.centerY())
             }
             stroke(mappedPoints, 0xc9000000.toInt(), 14f * scale)
             stroke(mappedPoints, 0x88ffffff.toInt(), 6f * scale)
 
-            currentIndex?.let { index ->
-                val travelled = mappedPoints.take(index + 1)
+            pose?.let { currentPose ->
+                val travelled = mappedPoints.take(currentPose.passedPointCount).toMutableList().apply {
+                    add(android.graphics.PointF(
+                        mapContentRect.left + currentPose.x * mapContentRect.width(),
+                        mapContentRect.top + currentPose.y * mapContentRect.height()
+                    ))
+                }
                 stroke(travelled, element.accent.colorInt() and 0x66ffffff, 18f * scale)
                 stroke(travelled, element.accent.colorInt(), 8f * scale)
-
-                if (!followsPosition) {
-                    val current = mappedPoints[index]
-                    val previous = mappedPoints[(index - 1).coerceAtLeast(0)]
-                    val next = mappedPoints[(index + 1).coerceAtMost(mappedPoints.lastIndex)]
-                    val angle = Math.toDegrees(kotlin.math.atan2((next.y - previous.y).toDouble(), (next.x - previous.x).toDouble())).toFloat() + 90f
-                    drawMarker(current.x, current.y, angle)
-                }
             }
-            if (followsPosition && currentIndex != null) canvas.restore()
-            if (followsPosition && currentIndex != null) drawMarker(rect.centerX(), rect.centerY(), 0f)
+            if (pose != null) canvas.restore()
+            if (pose != null) drawMarker(rect.centerX(), rect.centerY(), 0f)
         }
         canvas.restore()
 
