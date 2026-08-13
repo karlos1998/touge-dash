@@ -77,9 +77,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
@@ -125,6 +129,7 @@ import org.osmdroid.views.overlay.Polyline
 import kotlin.math.roundToInt
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.math.abs
 
 @Composable
 fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samples: List<TelemetrySampleEntity>, scrubber: Float) {
@@ -228,7 +233,19 @@ private fun VideoAlignmentEditor(
     val player = remember(initial.id) { ExoPlayer.Builder(context).build().apply { setMediaItem(MediaItem.fromUri(initial.localUri)); prepare(); seekTo((initial.videoTrimStartSeconds * 1000).toLong()) } }
     var position by remember { mutableLongStateOf((initial.videoTrimStartSeconds * 1000).toLong()) }
     DisposableEffect(player) { onDispose { player.release() } }
-    LaunchedEffect(player) { while (true) { position = player.currentPosition; if (position / 1000.0 >= value.videoTrimStartSeconds + value.exportDurationSeconds) { player.pause(); player.seekTo((value.videoTrimStartSeconds * 1000).toLong()) }; delay(50) } }
+    LaunchedEffect(player) {
+        while (true) {
+            position = player.currentPosition
+            val rangeStartMs = (value.videoTrimStartSeconds * 1000).toLong()
+            val rangeEndMs = ((value.videoTrimStartSeconds + value.exportDurationSeconds) * 1000).toLong()
+            if (position > rangeEndMs + 50) {
+                player.pause()
+                player.seekTo(rangeStartMs)
+                position = rangeStartMs
+            }
+            delay(if (player.isPlaying) 33 else 80)
+        }
+    }
     val telemetrySecond = value.telemetryTrimStartSeconds + (position / 1000.0 - value.videoTrimStartSeconds).coerceAtLeast(0.0)
     val first = samples.firstOrNull()?.recordedAt ?: 0
     val previewRecordedAt = (first + telemetrySecond * 1000).toLong()
@@ -335,14 +352,119 @@ private fun VideoAlignmentEditor(
         Column(
             Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            Text("${appText("VIDEO START", "POCZĄTEK FILMU")}  ${videoDuration(value.videoTrimStartSeconds)}", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Slider(value.videoTrimStartSeconds.toFloat(), { new -> value = value.copy(videoTrimStartSeconds = new.toDouble()); player.seekTo((new * 1000).toLong()) }, valueRange = 0f..(value.durationSeconds - value.exportDurationSeconds).coerceAtLeast(.01).toFloat())
-            Text("${appText("TELEMETRY START", "POCZĄTEK TELEMETRII")}  ${videoDuration(value.telemetryTrimStartSeconds)} ${appText("of", "z")} ${videoDuration(driveDuration)}", color = TougeMint, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Slider(value.telemetryTrimStartSeconds.toFloat(), { value = value.copy(telemetryTrimStartSeconds = it.toDouble()) }, valueRange = 0f..(driveDuration - value.exportDurationSeconds).coerceAtLeast(.01).toFloat())
-            val maxDuration = minOf(value.durationSeconds - value.videoTrimStartSeconds, driveDuration - value.telemetryTrimStartSeconds).coerceAtLeast(.1)
-            Text("${appText("EXPORT LENGTH", "DŁUGOŚĆ EKSPORTU")}  ${videoDuration(value.exportDurationSeconds)}", color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Slider(value.exportDurationSeconds.coerceAtMost(maxDuration).toFloat(), { value = value.copy(exportDurationSeconds = it.toDouble()) }, valueRange = .1f..maxDuration.coerceAtLeast(.11).toFloat())
-            Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Text(appText("CHOOSE CLIP TO EXPORT", "WYBIERZ FRAGMENT DO EKSPORTU"), color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Black)
+            Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(videoDuration(value.exportDurationSeconds), fontSize = 20.sp, fontWeight = FontWeight.Black)
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                Text(
+                    "${videoDuration(value.videoTrimStartSeconds)} – ${videoDuration(value.videoTrimStartSeconds + value.exportDurationSeconds)}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 9.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = {
+                        if (player.isPlaying) player.pause()
+                        else {
+                            val startMs = (value.videoTrimStartSeconds * 1000).toLong()
+                            val endMs = ((value.videoTrimStartSeconds + value.exportDurationSeconds) * 1000).toLong()
+                            if (position !in startMs..endMs) {
+                                player.seekTo(startMs)
+                                position = startMs
+                            }
+                            player.play()
+                        }
+                    },
+                    modifier = Modifier.size(54.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .12f), RoundedCornerShape(11.dp))
+                ) {
+                    Icon(if (player.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null)
+                }
+                VideoTrimRangeSelector(
+                    totalDuration = value.durationSeconds,
+                    start = value.videoTrimStartSeconds,
+                    end = value.videoTrimStartSeconds + value.exportDurationSeconds,
+                    cursor = position / 1000.0,
+                    speedValues = samples.map { it.speedKph },
+                    startChanged = { requested ->
+                        val oldStart = value.videoTrimStartSeconds
+                        val oldEnd = oldStart + value.exportDurationSeconds
+                        val newStart = requested.coerceIn(0.0, (oldEnd - .1).coerceAtLeast(0.0))
+                        val delta = newStart - oldStart
+                        val newDuration = oldEnd - newStart
+                        val newTelemetryStart = (value.telemetryTrimStartSeconds + delta)
+                            .coerceIn(0.0, (driveDuration - newDuration).coerceAtLeast(0.0))
+                        value = value.copy(
+                            videoTrimStartSeconds = newStart,
+                            telemetryTrimStartSeconds = newTelemetryStart,
+                            exportDurationSeconds = newDuration
+                        )
+                        player.pause()
+                        val target = (newStart * 1000).toLong()
+                        player.seekTo(target)
+                        position = target
+                    },
+                    endChanged = { requested ->
+                        val maximumEnd = minOf(
+                            value.durationSeconds,
+                            value.videoTrimStartSeconds + driveDuration - value.telemetryTrimStartSeconds
+                        )
+                        val newEnd = requested.coerceIn(value.videoTrimStartSeconds + .1, maximumEnd.coerceAtLeast(value.videoTrimStartSeconds + .1))
+                        value = value.copy(exportDurationSeconds = newEnd - value.videoTrimStartSeconds)
+                        player.pause()
+                        val target = (newEnd * 1000).toLong()
+                        player.seekTo(target)
+                        position = target
+                    },
+                    cursorChanged = { requested ->
+                        val target = (requested.coerceIn(value.videoTrimStartSeconds, value.videoTrimStartSeconds + value.exportDurationSeconds) * 1000).toLong()
+                        player.pause()
+                        player.seekTo(target)
+                        position = target
+                    },
+                    modifier = Modifier.weight(1f).height(76.dp)
+                )
+            }
+            Text(
+                appText(
+                    "Drag the yellow handles to trim. Drag the white line to inspect the selected clip.",
+                    "Przeciągnij żółte uchwyty, aby przyciąć film. Białą kreską szybko przejrzysz wybrany fragment."
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 6.dp, bottom = 14.dp)
+            )
+
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .045f))) {
+                Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                    Text(appText("MATCH TELEMETRY TO VIDEO", "DOPASUJ PARAMETRY DO FILMU"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        "${appText("Telemetry", "Dane")}: ${videoDuration(value.telemetryTrimStartSeconds)} – ${videoDuration(value.telemetryTrimStartSeconds + value.exportDurationSeconds)}",
+                        color = TougeMint,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 5.dp)
+                    )
+                    Slider(
+                        value.telemetryTrimStartSeconds.toFloat(),
+                        {
+                            value = value.copy(telemetryTrimStartSeconds = it.toDouble())
+                            position = position.coerceIn(
+                                (value.videoTrimStartSeconds * 1000).toLong(),
+                                ((value.videoTrimStartSeconds + value.exportDurationSeconds) * 1000).toLong()
+                            )
+                        },
+                        valueRange = 0f..(driveDuration - value.exportDurationSeconds).coerceAtLeast(.01).toFloat()
+                    )
+                }
+            }
+
+            Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 templates.forEach { item ->
                     FilterChip(
@@ -366,7 +488,6 @@ private fun VideoAlignmentEditor(
                 onClick = { editingTemplate = templates.firstOrNull { it.entity.id == templateId }?.copy(definition = overlayDefinition) },
                 modifier = Modifier.fillMaxWidth()
             ) { Icon(Icons.Default.Tune, null); Text(appText(" Edit HUD parameters", " Edytuj parametry HUD")) }
-            Text(appText("The upper timeline is the selected video. The lower one chooses the matching fragment of the recorded drive.", "Górna oś to wybrany film. Dolna wybiera pasujący fragment zapisanego przejazdu."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
         }
     }
     Dialog(
@@ -442,7 +563,7 @@ private fun VideoAlignmentEditor(
                         content = preview
                     )
                 }
-                Box(Modifier.fillMaxWidth().heightIn(max = 350.dp).background(MaterialTheme.colorScheme.surface)) { controls() }
+                Box(Modifier.fillMaxWidth().heightIn(max = 440.dp).background(MaterialTheme.colorScheme.surface)) { controls() }
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -498,6 +619,126 @@ private fun VideoAlignmentEditor(
             duplicate = { container.videoRepository.duplicateOverlayTemplate(current); editingTemplate = null },
             delete = { container.videoRepository.deleteOverlayTemplate(current); editingTemplate = null }
         )
+    }
+}
+
+private enum class VideoTrimDragTarget { START, END, CURSOR }
+
+@Composable
+private fun VideoTrimRangeSelector(
+    totalDuration: Double,
+    start: Double,
+    end: Double,
+    cursor: Double,
+    speedValues: List<Double>,
+    startChanged: (Double) -> Unit,
+    endChanged: (Double) -> Unit,
+    cursorChanged: (Double) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentStart by rememberUpdatedState(start)
+    val currentEnd by rememberUpdatedState(end)
+    val currentStartChanged by rememberUpdatedState(startChanged)
+    val currentEndChanged by rememberUpdatedState(endChanged)
+    val currentCursorChanged by rememberUpdatedState(cursorChanged)
+    val density = LocalDensity.current
+    val handleWidthPx = with(density) { 24.dp.toPx() }
+    val minimumDuration = minOf(1.0, totalDuration.coerceAtLeast(.1))
+    val safeTotal = totalDuration.coerceAtLeast(.1)
+    var trackSize by remember { mutableStateOf(IntSize.Zero) }
+
+    Canvas(
+        modifier
+            .background(Color.Black, RoundedCornerShape(10.dp))
+            .onSizeChanged { trackSize = it }
+            .pointerInput(safeTotal) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val width = trackSize.width.coerceAtLeast(1).toFloat()
+                    val startX = (currentStart / safeTotal * width).toFloat()
+                    val endX = (currentEnd / safeTotal * width).toFloat()
+                    val target = when {
+                        abs(down.position.x - startX) <= handleWidthPx -> VideoTrimDragTarget.START
+                        abs(down.position.x - endX) <= handleWidthPx -> VideoTrimDragTarget.END
+                        else -> VideoTrimDragTarget.CURSOR
+                    }
+
+                    fun update(x: Float) {
+                        val seconds = (x.coerceIn(0f, width) / width * safeTotal).toDouble()
+                        when (target) {
+                            VideoTrimDragTarget.START -> currentStartChanged(
+                                seconds.coerceIn(0.0, (currentEnd - minimumDuration).coerceAtLeast(0.0))
+                            )
+                            VideoTrimDragTarget.END -> currentEndChanged(
+                                seconds.coerceIn(currentStart + minimumDuration, safeTotal)
+                            )
+                            VideoTrimDragTarget.CURSOR -> currentCursorChanged(
+                                seconds.coerceIn(currentStart, currentEnd)
+                            )
+                        }
+                    }
+
+                    update(down.position.x)
+                    down.consume()
+                    var pressed = true
+                    while (pressed) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        update(change.position.x)
+                        change.consume()
+                        pressed = event.changes.any { it.pressed }
+                    }
+                }
+            }
+    ) {
+        val width = size.width.coerceAtLeast(1f)
+        val left = (width * (start / safeTotal).toFloat()).coerceIn(0f, width)
+        val right = (width * (end / safeTotal).toFloat()).coerceIn(left, width)
+        val cursorX = (width * (cursor.coerceIn(start, end) / safeTotal).toFloat()).coerceIn(left, right)
+
+        drawRect(Color.White.copy(alpha = .08f))
+        if (speedValues.size > 1) {
+            val maximum = speedValues.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
+            val path = Path()
+            speedValues.forEachIndexed { index, value ->
+                val x = width * index / (speedValues.size - 1).toFloat()
+                val y = size.height * (1f - (value / maximum).toFloat().coerceIn(0f, 1f))
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, TougeMint.copy(alpha = .72f), style = Stroke(width = 2.dp.toPx()))
+        }
+
+        drawRect(Color.Black.copy(alpha = .67f), size = Size(left, size.height))
+        drawRect(
+            Color.Black.copy(alpha = .67f),
+            topLeft = Offset(right, 0f),
+            size = Size((width - right).coerceAtLeast(0f), size.height)
+        )
+        drawRoundRect(
+            TougeOrange,
+            topLeft = Offset(left, 0f),
+            size = Size((right - left).coerceAtLeast(1f), size.height),
+            cornerRadius = CornerRadius(8.dp.toPx()),
+            style = Stroke(width = 3.dp.toPx())
+        )
+
+        val handleHalf = handleWidthPx / 2
+        drawRoundRect(
+            TougeOrange,
+            topLeft = Offset((left - handleHalf).coerceIn(0f, (width - handleWidthPx).coerceAtLeast(0f)), 0f),
+            size = Size(handleWidthPx, size.height),
+            cornerRadius = CornerRadius(7.dp.toPx())
+        )
+        drawRoundRect(
+            TougeOrange,
+            topLeft = Offset((right - handleHalf).coerceIn(0f, (width - handleWidthPx).coerceAtLeast(0f)), 0f),
+            size = Size(handleWidthPx, size.height),
+            cornerRadius = CornerRadius(7.dp.toPx())
+        )
+        drawLine(Color.Black, Offset(left - 3.dp.toPx(), size.height / 2), Offset(left + 3.dp.toPx(), size.height / 2), 3.dp.toPx())
+        drawLine(Color.Black, Offset(right - 3.dp.toPx(), size.height / 2), Offset(right + 3.dp.toPx(), size.height / 2), 3.dp.toPx())
+        drawLine(Color.White, Offset(cursorX, 5.dp.toPx()), Offset(cursorX, size.height - 5.dp.toPx()), 4.dp.toPx())
+        drawCircle(Color.White, radius = 5.dp.toPx(), center = Offset(cursorX, 7.dp.toPx()))
     }
 }
 
