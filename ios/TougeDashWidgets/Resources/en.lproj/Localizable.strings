@@ -1,3 +1,8 @@
 "RPM, boost and essential EMU engine telemetry at a glance." = "RPM, boost and essential EMU engine telemetry at a glance.";
 "Oil temperature %lld degrees Celsius" = "Oil temperature %lld degrees Celsius";
 "Oil pressure %.1f bar, boost %.2f bar, AFR %.1f, oil temperature %lld degrees Celsius, coolant temperature %lld degrees Celsius" = "Oil pressure %.1f bar, boost %.2f bar, AFR %.1f, oil temperature %lld degrees Celsius, coolant temperature %lld degrees Celsius";
+"Clip %d of %d" = "Clip %d of %d";
+"Background · clip %d of %d" = "Background · clip %d of %d";
+"Preparing video" = "Preparing video";
+"Import complete" = "Import complete";
+"Waiting to resume" = "Download interrupted";

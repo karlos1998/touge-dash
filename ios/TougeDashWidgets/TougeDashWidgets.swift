@@ -7,6 +7,7 @@ struct TougeDashWidgetBundle: WidgetBundle {
     var body: some Widget {
         TougeDashTelemetryWidget()
         TougeDashLiveActivity()
+        TougeDashDashcamImportLiveActivity()
     }
 }
 
@@ -236,6 +237,145 @@ struct TougeDashLiveActivity: Widget {
         }
         .supplementalActivityFamilies([.small])
     }
+}
+
+struct TougeDashDashcamImportLiveActivity: Widget {
+    var body: some WidgetConfiguration {
+        ActivityConfiguration(for: DashcamImportActivityAttributes.self) { context in
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Label(context.attributes.cameraName, systemImage: "video.fill")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(WidgetPalette.cyan)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer()
+                    dashcamPhaseLabel(context.state, isStale: context.isStale)
+                        .font(.caption2.monospacedDigit().weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+
+                ProgressView(value: dashcamDisplayedFraction(context.state))
+                    .tint(dashcamTint(context.state.phase))
+
+                HStack(spacing: 10) {
+                    Text(context.state.fileName)
+                        .font(.caption2.monospaced())
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .minimumScaleFactor(0.75)
+                        .layoutPriority(1)
+                    Spacer()
+                    Text(dashcamCompactByteProgress(context.state))
+                        .font(.caption2.monospacedDigit().weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .dynamicTypeSize(.small ... .large)
+            .activityBackgroundTint(Color(red: 0.02, green: 0.03, blue: 0.04))
+            .activitySystemActionForegroundColor(.white)
+        } dynamicIsland: { context in
+            DynamicIsland {
+                DynamicIslandExpandedRegion(.leading) {
+                    Label(context.attributes.cameraName, systemImage: "video.fill")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(WidgetPalette.cyan)
+                }
+                DynamicIslandExpandedRegion(.trailing) {
+                    Text("\(context.isStale ? "~" : "")\(context.state.percentCompleted)%")
+                        .font(.headline.monospacedDigit().weight(.black))
+                        .foregroundStyle(dashcamTint(context.state.phase))
+                }
+                DynamicIslandExpandedRegion(.bottom) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack {
+                            dashcamPhaseLabel(context.state, isStale: context.isStale)
+                            Spacer()
+                            Text(dashcamByteProgress(context.state))
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption.monospacedDigit().weight(.bold))
+                        ProgressView(value: dashcamDisplayedFraction(context.state))
+                            .tint(dashcamTint(context.state.phase))
+                    }
+                }
+            } compactLeading: {
+                Image(systemName: "video.fill")
+                    .foregroundStyle(WidgetPalette.cyan)
+            } compactTrailing: {
+                Text("\(context.isStale ? "~" : "")\(context.state.percentCompleted)%")
+                    .font(.caption2.monospacedDigit().weight(.black))
+                    .foregroundStyle(dashcamTint(context.state.phase))
+            } minimal: {
+                Image(systemName: "arrow.down.circle.fill")
+                    .foregroundStyle(dashcamTint(context.state.phase))
+            }
+            .keylineTint(WidgetPalette.cyan)
+        }
+    }
+}
+
+@ViewBuilder
+private func dashcamPhaseLabel(
+    _ state: DashcamImportActivityAttributes.ContentState,
+    isStale: Bool
+) -> some View {
+    switch state.phase {
+    case .downloading:
+        Text(String(
+            format: localized(isStale ? "Background · clip %d of %d" : "Clip %d of %d"),
+            state.currentClip,
+            state.totalClips
+        ))
+    case .processing:
+        Text(localized("Preparing video"))
+    case .completed:
+        Label(localized("Import complete"), systemImage: "checkmark.circle.fill")
+    case .failed:
+        Label(localized("Waiting to resume"), systemImage: "wifi.exclamationmark")
+    }
+}
+
+private func dashcamDisplayedFraction(_ state: DashcamImportActivityAttributes.ContentState) -> Double {
+    switch state.phase {
+    case .processing, .completed: 1
+    case .downloading, .failed: state.fractionCompleted
+    }
+}
+
+private func dashcamTint(_ phase: DashcamImportActivityPhase) -> Color {
+    switch phase {
+    case .downloading: WidgetPalette.cyan
+    case .processing: WidgetPalette.mint
+    case .completed: WidgetPalette.mint
+    case .failed: .orange
+    }
+}
+
+private func dashcamByteProgress(_ state: DashcamImportActivityAttributes.ContentState) -> String {
+    let formatter = ByteCountFormatter()
+    formatter.countStyle = .file
+    guard state.expectedBytes > 0 else {
+        return formatter.string(fromByteCount: state.receivedBytes)
+    }
+    return "\(formatter.string(fromByteCount: state.receivedBytes)) / \(formatter.string(fromByteCount: state.expectedBytes))"
+}
+
+private func dashcamCompactByteProgress(_ state: DashcamImportActivityAttributes.ContentState) -> String {
+    let megabyte = 1_000_000.0
+    guard state.expectedBytes > 0 else {
+        return String(format: "%.1f MB", Double(state.receivedBytes) / megabyte)
+    }
+    return String(
+        format: "%.1f / %.0f MB",
+        Double(state.receivedBytes) / megabyte,
+        Double(state.expectedBytes) / megabyte
+    )
 }
 
 private struct LiveActivityCard: View {

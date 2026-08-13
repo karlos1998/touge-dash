@@ -50,6 +50,8 @@
 	<string>Touge Dash uses the selected camera to record a drive locally on this device.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>When route recording is enabled, Touge Dash records location with engine telemetry, including while the phone is locked.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Touge Dash connects directly to your dash camera to find and download recordings selected by you.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Touge Dash can record sound with a local drive video when you enable audio.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

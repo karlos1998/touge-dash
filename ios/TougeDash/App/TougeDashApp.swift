@@ -1,9 +1,26 @@
 import SwiftData
 import SwiftUI
+import UIKit
+
+@MainActor
+final class TougeDashAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard identifier == SeventyMaiBackgroundDownloadCoordinator.sessionIdentifier else {
+            completionHandler()
+            return
+        }
+        SeventyMaiBackgroundDownloadCoordinator.shared.storeBackgroundCompletionHandler(completionHandler)
+    }
+}
 
 @main
 @MainActor
 struct TougeDashApp: App {
+    @UIApplicationDelegateAdaptor(TougeDashAppDelegate.self) private var appDelegate
     @AppStorage(AppAppearance.defaultsKey) private var appearanceValue = AppAppearance.system.rawValue
     private let modelContainer: ModelContainer
     @StateObject private var controller: TelemetryController

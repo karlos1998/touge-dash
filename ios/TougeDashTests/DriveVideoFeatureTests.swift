@@ -147,6 +147,181 @@ final class DriveVideoFeatureTests: XCTestCase {
         )
     }
 
+    func testM300ProtocolBuildsKnownPairingAndSignedRequests() throws {
+        let bindURL = try XCTUnwrap(SeventyMaiM300Protocol.bindURL(
+            host: "192.168.0.1",
+            userID: "123456789"
+        ))
+        XCTAssertEqual(bindURL.host(), "192.168.0.1")
+        XCTAssertTrue(bindURL.absoluteString.contains("BindByBanya.cgi?&-usr=123456789"))
+        XCTAssertTrue(bindURL.absoluteString.contains("-signkey=e8c46806a6317270f185fdf1903498d6"))
+
+        let confirmationURL = try XCTUnwrap(SeventyMaiM300Protocol.confirmationURL(
+            host: "192.168.0.1",
+            timestamp: "1700000000"
+        ))
+        XCTAssertTrue(confirmationURL.absoluteString.contains("-signkey=bbbf6a64712098c543a59a4aad97bb3f"))
+
+        let listURL = try XCTUnwrap(SeventyMaiM300Protocol.signedURL(
+            host: "192.168.0.1",
+            endpoint: "getfilelist.cgi",
+            parameters: [("start", "1"), ("end", "100"), ("type", SeventyMaiM300Protocol.normalRecordingType)],
+            timestamp: 1_700_000_000,
+            connectKey: "TOKEN"
+        ))
+        XCTAssertEqual(
+            listURL.absoluteString,
+            "http://192.168.0.1/cgi-bin/getfilelist.cgi?&-start=1&-end=100&-type=0&-timestamp=1700000000&-signkey=cb960cbc06237f1c58be011bb185d00c"
+        )
+    }
+
+    func testM300ClipParserCorrectsCameraClockAndMatchesDrive() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let sessionStart = try XCTUnwrap(SeventyMaiM300Protocol.parseCameraDate(
+            "20260813-080000",
+            calendar: calendar
+        ))
+        let dictionary: [String: Any] = [
+            "path": "/mnt/sd/Normal/Front",
+            "name": "NO20260813-080500-000001F.MP4",
+            "size": "104857600",
+            "duration": "60000",
+            "width": "2304",
+            "height": "1296",
+            "fps": "30",
+            "videoencode": "hevc"
+        ]
+        let clip = try XCTUnwrap(SeventyMaiM300Protocol.correctedClip(
+            dictionary: dictionary,
+            clockOffsetSeconds: 300,
+            calendar: calendar
+        ))
+        XCTAssertEqual(clip.correctedStartedAt, sessionStart)
+        XCTAssertEqual(clip.duration, 600, accuracy: 0.001)
+        XCTAssertEqual(clip.width, 2_304)
+        XCTAssertEqual(clip.height, 1_296)
+        XCTAssertEqual(clip.videoCodec, "hevc")
+
+        let matches = SeventyMaiM300Protocol.matchingClips(
+            [clip],
+            sessionStartedAt: sessionStart.addingTimeInterval(120),
+            sessionEndedAt: sessionStart.addingTimeInterval(300)
+        )
+        XCTAssertEqual(matches.map(\.id), [clip.id])
+    }
+
+    func testM300UsesNextTimestampWhenFirmwareReportsShortDuration() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let first = try XCTUnwrap(SeventyMaiM300Protocol.correctedClip(
+            dictionary: [
+                "path": "/mnt/sd/Normal",
+                "name": "NO20260813-222400-000001F.MP4",
+                "size": "377500000",
+                "duration": "6000"
+            ],
+            clockOffsetSeconds: 0,
+            calendar: calendar
+        ))
+        let second = try XCTUnwrap(SeventyMaiM300Protocol.correctedClip(
+            dictionary: [
+                "path": "/mnt/sd/Normal",
+                "name": "NO20260813-222700-000002F.MP4",
+                "size": "125800000",
+                "duration": "6000"
+            ],
+            clockOffsetSeconds: 0,
+            calendar: calendar
+        ))
+
+        let normalized = SeventyMaiM300Protocol.normalizedClipDurations([second, first])
+        XCTAssertEqual(normalized[0].duration, 180, accuracy: 0.001)
+        XCTAssertEqual(normalized[1].duration, 60, accuracy: 0.001)
+
+        let driveStart = first.correctedStartedAt.addingTimeInterval(120)
+        let matches = SeventyMaiM300Protocol.matchingClips(
+            [first, second],
+            sessionStartedAt: driveStart,
+            sessionEndedAt: driveStart.addingTimeInterval(30)
+        )
+        XCTAssertEqual(matches.map(\.id), [first.id])
+    }
+
+    @MainActor
+    func testM300JoinKeepsRealGapAsEmptyTimelineInsteadOfFailing() async throws {
+        let firstURL = try DriveVideoFileStore.newRecordingURL(fileExtension: "mov")
+        let secondURL = try DriveVideoFileStore.newRecordingURL(fileExtension: "mov")
+        let outputURL = try DriveVideoFileStore.newRecordingURL(fileExtension: "mp4")
+        defer {
+            try? FileManager.default.removeItem(at: firstURL)
+            try? FileManager.default.removeItem(at: secondURL)
+            try? FileManager.default.removeItem(at: outputURL)
+        }
+        try await makeTestVideo(at: firstURL)
+        try await makeTestVideo(at: secondURL)
+
+        let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        func clip(name: String, offset: TimeInterval) -> SeventyMaiM300Clip {
+            SeventyMaiM300Clip(
+                path: "/mnt/sd/Normal",
+                name: name,
+                sizeBytes: 1,
+                cameraStartedAt: startedAt.addingTimeInterval(offset),
+                correctedStartedAt: startedAt.addingTimeInterval(offset),
+                duration: 1,
+                width: 320,
+                height: 180,
+                framesPerSecond: 30,
+                videoCodec: "h264"
+            )
+        }
+
+        let client = SeventyMaiM300Client(userID: "123456789")
+        let outputStartedAt = try await client.join(
+            [
+                (clip(name: "first.mp4", offset: 0), firstURL),
+                (clip(name: "second.mp4", offset: 3), secondURL)
+            ],
+            sessionStartedAt: startedAt,
+            sessionEndedAt: startedAt.addingTimeInterval(4),
+            outputURL: outputURL
+        )
+
+        XCTAssertEqual(outputStartedAt, startedAt)
+        let metadata = try await DriveVideoAssetInspector.metadata(for: outputURL)
+        XCTAssertEqual(metadata.duration, 4, accuracy: 0.15)
+    }
+
+    func testM300DirectFileURLPreservesCameraPathAndEscapesName() throws {
+        let url = try XCTUnwrap(SeventyMaiM300Protocol.directFileURL(
+            host: "192.168.0.1",
+            path: "/mnt/sd/Normal/Front",
+            name: "NO20260813-080500 test.MP4"
+        ))
+        XCTAssertEqual(
+            url.absoluteString,
+            "http://192.168.0.1/mnt/sd/Normal/Front/NO20260813-080500%20test.MP4"
+        )
+    }
+
+    func testDashcamImportActivityClampsByteProgress() {
+        var state = DashcamImportActivityAttributes.ContentState(
+            phase: .downloading,
+            currentClip: 2,
+            totalClips: 3,
+            fileName: "NO20260813-180000-000001.MP4",
+            receivedBytes: 25,
+            expectedBytes: 100
+        )
+        XCTAssertEqual(state.fractionCompleted, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(state.percentCompleted, 25)
+
+        state.receivedBytes = 120
+        XCTAssertEqual(state.fractionCompleted, 1, accuracy: 0.0001)
+        XCTAssertEqual(state.percentCompleted, 100)
+    }
+
     func testLegacyOverlayMigratesToFreeformLayout() throws {
         let templateID = UUID()
         let firstID = UUID()

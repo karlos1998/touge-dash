@@ -31,6 +31,7 @@
 		4423D8E79B07BC7DC7227C27 /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		44EC962E52388A57767D2763 /* DriveVideoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BFB9F44D2E057B4F68D3983 /* DriveVideoModels.swift */; };
 		461565700F8C1458526589B9 /* DashboardModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8920142F4ACD5BE349220C77 /* DashboardModels.swift */; };
+		496188B2E321CB03E40EB9CE /* SeventyMaiM300ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7654A8E99E70C8CC4663DAB8 /* SeventyMaiM300ImportView.swift */; };
 		4E66D0765BC8FDBEB4BA1694 /* CloudSyncStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECDB1BC135BDFB5F1E764EBA /* CloudSyncStatusViews.swift */; };
 		571D08AD010FE11015D25FE5 /* WatchTelemetryPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0E9597493A5E8B4F4FE0524 /* WatchTelemetryPayload.swift */; };
 		60AAEF7A1ECA24D0B7DB69EF /* TelemetryActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D1F550E6FB4C529DD8B8D70 /* TelemetryActivityManager.swift */; };
@@ -58,6 +59,7 @@
 		AF4F369F54060C2522FCADD9 /* IncidentReportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E877436DFF1CF205296B9649 /* IncidentReportView.swift */; };
 		B34D767DA02419747471EA57 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC4213DDCC44AD5FCEDBC1F /* AppLocalization.swift */; };
 		B6F28CD522FC1A0CCF0C48AD /* VehicleAlertRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = F868F17AC0C6EE5418E63620 /* VehicleAlertRules.swift */; };
+		C09EC2F6343D5E10FCD79356 /* SeventyMaiM300Service.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51CF5E36020F583CD54B6762 /* SeventyMaiM300Service.swift */; };
 		C2FFF38884E04B9C3EAA6A67 /* BluetoothTelemetryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EB4599FA4D016749B9DEF63 /* BluetoothTelemetryService.swift */; };
 		C3A8602CE87BC00FAE6D1E32 /* TelemetryHistoryRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7A3F10F3D557D89DA9A256A /* TelemetryHistoryRecorder.swift */; };
 		C44CA2A2FC8E0EE3137230C0 /* TougeDashWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6DF9230FC2BD86F85A70343 /* TougeDashWidgets.swift */; };
@@ -154,12 +156,14 @@
 		4D8E154F0783092C9E408ED1 /* DashboardTelemetryBuffer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTelemetryBuffer.swift; sourceTree = "<group>"; };
 		4F897E7BACCFC82DCC47CFE8 /* WatchDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchDashboardView.swift; sourceTree = "<group>"; };
 		5040EC799703D53C4627A5F7 /* DashboardTemplateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardTemplateTests.swift; sourceTree = "<group>"; };
+		51CF5E36020F583CD54B6762 /* SeventyMaiM300Service.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeventyMaiM300Service.swift; sourceTree = "<group>"; };
 		540345614ECEE8151C103CAD /* CloudPasswordPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPasswordPolicyTests.swift; sourceTree = "<group>"; };
 		61373911C45310F82868CE77 /* WatchTelemetryBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTelemetryBridge.swift; sourceTree = "<group>"; };
 		62B812B8C9EA59F4149D7103 /* VideoOverlayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoOverlayViews.swift; sourceTree = "<group>"; };
 		68EE821538067F559C124118 /* DriveVideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoRecorder.swift; sourceTree = "<group>"; };
 		697C6502047A8B29FFEA91EF /* EngineAlertManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineAlertManager.swift; sourceTree = "<group>"; };
 		6D33CEAED617C652DE41B67A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		7654A8E99E70C8CC4663DAB8 /* SeventyMaiM300ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeventyMaiM300ImportView.swift; sourceTree = "<group>"; };
 		766C369A028C9554F6713EF4 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		767D9110B65429B111BC8471 /* CloudPasswordPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudPasswordPolicy.swift; sourceTree = "<group>"; };
 		7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TelemetrySnapshot.swift; sourceTree = "<group>"; };
@@ -361,6 +365,8 @@
 				4BFB9F44D2E057B4F68D3983 /* DriveVideoModels.swift */,
 				68EE821538067F559C124118 /* DriveVideoRecorder.swift */,
 				324ECA2B4DB8807A9925483F /* DriveVideoRecordingCard.swift */,
+				7654A8E99E70C8CC4663DAB8 /* SeventyMaiM300ImportView.swift */,
+				51CF5E36020F583CD54B6762 /* SeventyMaiM300Service.swift */,
 				48E627BEFBED68A854EEEF9A /* VideoOverlayModels.swift */,
 				62B812B8C9EA59F4149D7103 /* VideoOverlayViews.swift */,
 			);
@@ -665,6 +671,8 @@
 				2B49A361609CA52600C27390 /* IncidentCaptureEngine.swift in Sources */,
 				AF4F369F54060C2522FCADD9 /* IncidentReportView.swift in Sources */,
 				E2D3EA6F1A250823543FCE12 /* LocationTrackingService.swift in Sources */,
+				496188B2E321CB03E40EB9CE /* SeventyMaiM300ImportView.swift in Sources */,
+				C09EC2F6343D5E10FCD79356 /* SeventyMaiM300Service.swift in Sources */,
 				60AAEF7A1ECA24D0B7DB69EF /* TelemetryActivityManager.swift in Sources */,
 				D350C1D23C89BA0ACBD9A941 /* TelemetryController.swift in Sources */,
 				C3A8602CE87BC00FAE6D1E32 /* TelemetryHistoryRecorder.swift in Sources */,

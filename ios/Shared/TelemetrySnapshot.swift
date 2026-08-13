@@ -78,6 +78,35 @@ struct TelemetryActivityAttributes: ActivityAttributes {
     var vehicleName: String
 }
 
+enum DashcamImportActivityPhase: String, Codable, Hashable, Sendable {
+    case downloading
+    case processing
+    case completed
+    case failed
+}
+
+struct DashcamImportActivityAttributes: ActivityAttributes {
+    struct ContentState: Codable, Hashable, Sendable {
+        var phase: DashcamImportActivityPhase
+        var currentClip: Int
+        var totalClips: Int
+        var fileName: String
+        var receivedBytes: Int64
+        var expectedBytes: Int64
+
+        var fractionCompleted: Double {
+            guard expectedBytes > 0 else { return 0 }
+            return min(1, max(0, Double(receivedBytes) / Double(expectedBytes)))
+        }
+
+        var percentCompleted: Int {
+            Int((fractionCompleted * 100).rounded())
+        }
+    }
+
+    var cameraName: String
+}
+
 enum SharedTelemetryStore {
     static let appGroup = "group.it.letscode.touge-dash"
     static let snapshotKey = "latestTelemetrySnapshot"

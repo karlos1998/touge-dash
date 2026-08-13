@@ -7,11 +7,13 @@ import UniformTypeIdentifiers
 enum DriveVideoSourceKind: String, Codable, Sendable {
     case camera
     case photoLibrary
+    case dashCamera
 
     var title: String {
         switch self {
         case .camera: localized("Kamera telefonu")
         case .photoLibrary: localized("Film z biblioteki")
+        case .dashCamera: localized("Kamera samochodowa")
         }
     }
 }

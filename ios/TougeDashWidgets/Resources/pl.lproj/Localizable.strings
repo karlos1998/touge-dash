@@ -13,3 +13,8 @@
 "Oil temperature %lld degrees Celsius" = "Temperatura oleju: %lld stopni Celsjusza";
 "Oil pressure %.1f bar, boost %.2f bar, AFR %.1f, oil temperature %lld degrees Celsius, coolant temperature %lld degrees Celsius" = "Ciśnienie oleju %.1f bara, doładowanie %.2f bara, AFR %.1f, temperatura oleju %lld stopni Celsjusza, temperatura płynu %lld stopni Celsjusza";
 "OIL %@°" = "OLEJ %@°";
+"Clip %d of %d" = "Klip %d z %d";
+"Background · clip %d of %d" = "W tle · klip %d z %d";
+"Preparing video" = "Przygotowywanie filmu";
+"Import complete" = "Import zakończony";
+"Waiting to resume" = "Pobieranie przerwane";

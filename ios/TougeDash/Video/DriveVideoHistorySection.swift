@@ -78,6 +78,8 @@ struct DriveVideoHistorySection: View {
     @State private var isImportingVideo = false
     @State private var importStage: GalleryVideoImportStage = .retrieving(nil)
     @State private var importError: String?
+    @State private var showingM300Import = false
+    @State private var importedM300Recording: DriveVideoRecording?
 
     private var capturedRecordings: [DriveVideoRecording] {
         recordings
@@ -87,7 +89,7 @@ struct DriveVideoHistorySection: View {
 
     private var externalProjects: [DriveVideoRecording] {
         recordings
-            .filter { $0.sourceKind == .photoLibrary }
+            .filter { $0.sourceKind != .camera }
             .sorted { $0.createdAt > $1.createdAt }
     }
 
@@ -130,6 +132,11 @@ struct DriveVideoHistorySection: View {
                     sample: selectedSample,
                     overlayStore: overlayStore
                 )
+            }
+            .sheet(isPresented: $showingM300Import, onDismiss: openImportedM300Recording) {
+                SeventyMaiM300ImportView(session: session) { prepared in
+                    saveM300Import(prepared)
+                }
             }
             .alert(localized("Nie udało się dodać filmu"), isPresented: Binding(
                 get: { importError != nil },
@@ -295,8 +302,17 @@ struct DriveVideoHistorySection: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                PhotosPicker(selection: $selectedPhotoItem, matching: .videos, preferredItemEncoding: .current) {
-                    Label(localized("Nowy montaż"), systemImage: "plus")
+                Menu {
+                    Button {
+                        showingM300Import = true
+                    } label: {
+                        Label(localized("70mai M300"), systemImage: "car.side.front.open")
+                    }
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .videos, preferredItemEncoding: .current) {
+                        Label(localized("Film z biblioteki"), systemImage: "photo.on.rectangle")
+                    }
+                } label: {
+                    Label(localized("Dodaj film"), systemImage: "plus")
                         .font(.caption.weight(.black))
                 }
                 .buttonStyle(.borderedProminent)
@@ -379,14 +395,16 @@ struct DriveVideoHistorySection: View {
     private func externalProjectRow(_ project: DriveVideoRecording, index: Int) -> some View {
         let alignment = DriveVideoTimelineAlignment(recording: project, session: session)
         return HStack(spacing: 12) {
-            Image(systemName: "film.fill")
+            Image(systemName: project.sourceKind == .dashCamera ? "car.side.front.open" : "film.fill")
                 .font(.title3)
                 .foregroundStyle(Color.tougeMint)
                 .frame(width: 42, height: 42)
                 .background(Color.tougeMint.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(String(format: localized("Montaż %d"), index))
+                Text(project.sourceKind == .dashCamera
+                    ? (project.sourceDisplayName ?? localized("70mai M300"))
+                    : String(format: localized("Montaż %d"), index))
                     .font(.subheadline.weight(.black))
                 Text("\(project.duration.videoDurationText) · \(DriveVideoFileStore.formattedSize(project.fileSizeBytes))")
                     .font(.caption2.weight(.bold))
@@ -444,21 +462,62 @@ struct DriveVideoHistorySection: View {
     }
 
     private var deletionTitle: String {
-        recordingPendingDeletion?.sourceKind == .photoLibrary
+        recordingPendingDeletion?.sourceKind != .camera
             ? localized("Usunąć projekt montażowy?")
             : localized("Usunąć nagranie z urządzenia?")
     }
 
     private var deletionMessage: String {
-        recordingPendingDeletion?.sourceKind == .photoLibrary
-            ? localized("Lokalna kopia robocza zostanie usunięta. Oryginalny film w galerii i dane przejazdu pozostaną bez zmian.")
+        recordingPendingDeletion?.sourceKind != .camera
+            ? localized("Lokalna kopia robocza zostanie usunięta. Oryginał w galerii lub na kamerze i dane przejazdu pozostaną bez zmian.")
             : localized("Tej operacji nie można cofnąć. Dane i wykresy przejazdu pozostaną zapisane.")
     }
 
     private var deletionActionTitle: String {
-        recordingPendingDeletion?.sourceKind == .photoLibrary
+        recordingPendingDeletion?.sourceKind != .camera
             ? localized("Usuń projekt")
             : localized("Usuń film")
+    }
+
+    @MainActor
+    private func saveM300Import(_ prepared: PreparedSeventyMaiImport) {
+        let recording = DriveVideoRecording(
+            sessionID: session.id,
+            fileName: prepared.fileName,
+            startedAt: prepared.startedAt,
+            endedAt: prepared.startedAt.addingTimeInterval(prepared.metadata.duration),
+            duration: prepared.metadata.duration,
+            fileSizeBytes: prepared.fileSizeBytes,
+            pixelWidth: prepared.metadata.width,
+            pixelHeight: prepared.metadata.height,
+            framesPerSecond: prepared.metadata.framesPerSecond,
+            cameraName: localized("70mai M300"),
+            hasAudio: prepared.metadata.hasAudio,
+            preferredOverlayTemplateID: overlayStore.selectedTemplateID,
+            sourceKind: .dashCamera,
+            sourceDisplayName: prepared.displayName,
+            videoTrimStartSeconds: 0,
+            telemetryTrimStartSeconds: prepared.telemetryTrimStartSeconds,
+            exportDurationSeconds: prepared.exportDurationSeconds
+        )
+        modelContext.insert(recording)
+        do {
+            try modelContext.save()
+            importedM300Recording = recording
+        } catch {
+            modelContext.delete(recording)
+            if let directory = try? DriveVideoFileStore.directoryURL() {
+                try? FileManager.default.removeItem(at: directory.appending(path: prepared.fileName))
+            }
+            importError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func openImportedM300Recording() {
+        guard let recording = importedM300Recording else { return }
+        importedM300Recording = nil
+        exportRecording = recording
     }
 
     @MainActor
