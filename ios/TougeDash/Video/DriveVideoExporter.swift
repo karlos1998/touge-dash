@@ -280,7 +280,12 @@ final class DriveVideoExporter: ObservableObject {
         activeExport = exporter
         if let template {
             let routeMap: VideoRouteMapSnapshot? = if template.elements.contains(where: { $0.kind.isRouteMap }) {
-                await VideoRouteMapSnapshotter.make(samples: samples)
+                await VideoRouteMapSnapshotter.make(
+                    samples: samples,
+                    includesDetailedLayer: template.elements.contains {
+                        $0.kind.isRouteMap && $0.mapZoom > VideoOverlayElement.detailedMapZoomThreshold
+                    }
+                )
             } else {
                 nil
             }
@@ -545,46 +550,80 @@ struct VideoRouteMapSnapshot: @unchecked Sendable {
     let image: CGImage
     var lightImage: CGImage? = nil
     let points: [VideoRouteMapPoint]
+    var detailedImage: CGImage? = nil
+    var detailedLightImage: CGImage? = nil
+    var detailedPoints: [VideoRouteMapPoint] = []
 
-    init(image: CGImage, lightImage: CGImage? = nil, points: [VideoRouteMapPoint]) {
+    init(
+        image: CGImage,
+        lightImage: CGImage? = nil,
+        points: [VideoRouteMapPoint],
+        detailedImage: CGImage? = nil,
+        detailedLightImage: CGImage? = nil,
+        detailedPoints: [VideoRouteMapPoint] = []
+    ) {
         self.image = image
         self.lightImage = lightImage
         self.points = Self.compacted(points)
+        self.detailedImage = detailedImage
+        self.detailedLightImage = detailedLightImage
+        self.detailedPoints = Self.compacted(detailedPoints)
     }
 
-    func pose(at timestamp: Date) -> VideoRouteMapPose? {
-        guard !points.isEmpty else { return nil }
-        let motion = interpolatedMotion(at: timestamp)
+    func usesDetailedLayer(for mapZoom: Double) -> Bool {
+        mapZoom > VideoOverlayElement.detailedMapZoomThreshold
+            && detailedImage != nil
+            && !detailedPoints.isEmpty
+    }
+
+    func image(light: Bool, mapZoom: Double) -> CGImage {
+        if usesDetailedLayer(for: mapZoom), let detailedImage {
+            return light ? (detailedLightImage ?? detailedImage) : detailedImage
+        }
+        return light ? (lightImage ?? image) : image
+    }
+
+    func routePoints(for mapZoom: Double) -> [VideoRouteMapPoint] {
+        usesDetailedLayer(for: mapZoom) ? detailedPoints : points
+    }
+
+    func pose(at timestamp: Date, mapZoom: Double = 1) -> VideoRouteMapPose? {
+        let selectedPoints = routePoints(for: mapZoom)
+        guard !selectedPoints.isEmpty else { return nil }
+        let motion = interpolatedMotion(at: timestamp, points: selectedPoints)
         var direction = motion.velocity
         if hypot(direction.x, direction.y) < 0.000001 {
-            let before = interpolatedMotion(at: timestamp.addingTimeInterval(-1.5)).position
-            let after = interpolatedMotion(at: timestamp.addingTimeInterval(1.5)).position
+            let before = interpolatedMotion(at: timestamp.addingTimeInterval(-1.5), points: selectedPoints).position
+            let after = interpolatedMotion(at: timestamp.addingTimeInterval(1.5), points: selectedPoints).position
             direction = CGPoint(x: after.x - before.x, y: after.y - before.y)
         }
         let heading = hypot(direction.x, direction.y) >= 0.000001
             ? atan2(direction.y, direction.x)
             : -.pi / 2
-        let passed = points.partitioningIndex { $0.timestamp > timestamp }
+        let passed = selectedPoints.partitioningIndex { $0.timestamp > timestamp }
         return VideoRouteMapPose(
             position: motion.position,
             heading: heading,
-            passedPointCount: min(points.count, max(1, passed))
+            passedPointCount: min(selectedPoints.count, max(1, passed))
         )
     }
 
     /// A time-aware Hermite curve keeps both position and velocity continuous at GPS updates.
     /// This prevents stale copied coordinates from producing a hold-then-jump camera motion.
-    private func interpolatedMotion(at timestamp: Date) -> (position: CGPoint, velocity: CGPoint) {
+    private func interpolatedMotion(
+        at timestamp: Date,
+        points: [VideoRouteMapPoint]
+    ) -> (position: CGPoint, velocity: CGPoint) {
         guard points.count > 1 else { return (points[0].position, .zero) }
         let upper = points.partitioningIndex { $0.timestamp >= timestamp }
-        if upper == 0 { return (points[0].position, velocity(at: 0)) }
-        if upper == points.count { return (points[points.count - 1].position, velocity(at: points.count - 1)) }
+        if upper == 0 { return (points[0].position, velocity(at: 0, points: points)) }
+        if upper == points.count { return (points[points.count - 1].position, velocity(at: points.count - 1, points: points)) }
         let startIndex = upper - 1
         let endIndex = upper
         let start = points[startIndex]
         let end = points[endIndex]
         let duration = end.timestamp.timeIntervalSince(start.timestamp)
-        guard duration > 0 else { return (end.position, velocity(at: endIndex)) }
+        guard duration > 0 else { return (end.position, velocity(at: endIndex, points: points)) }
         let interval = CGFloat(duration)
 
         let fraction = CGFloat(min(1, max(0, timestamp.timeIntervalSince(start.timestamp) / duration)))
@@ -594,8 +633,8 @@ struct VideoRouteMapSnapshot: @unchecked Sendable {
             x: end.position.x - start.position.x,
             y: end.position.y - start.position.y
         )
-        let startTangent = limitedTangent(velocity(at: startIndex), segment: segment, duration: duration)
-        let endTangent = limitedTangent(velocity(at: endIndex), segment: segment, duration: duration)
+        let startTangent = limitedTangent(velocity(at: startIndex, points: points), segment: segment, duration: duration)
+        let endTangent = limitedTangent(velocity(at: endIndex, points: points), segment: segment, duration: duration)
         let m0 = CGPoint(x: startTangent.x * interval, y: startTangent.y * interval)
         let m1 = CGPoint(x: endTangent.x * interval, y: endTangent.y * interval)
 
@@ -619,7 +658,7 @@ struct VideoRouteMapSnapshot: @unchecked Sendable {
         return (position, velocity)
     }
 
-    private func velocity(at index: Int) -> CGPoint {
+    private func velocity(at index: Int, points: [VideoRouteMapPoint]) -> CGPoint {
         let before = points[max(0, index - 1)]
         let after = points[min(points.count - 1, index + 1)]
         let duration = after.timestamp.timeIntervalSince(before.timestamp)
@@ -676,7 +715,10 @@ enum VideoRouteMapSnapshotter {
     // Oversampled so changing the map camera zoom does not enlarge the HUD bitmap itself.
     static let snapshotSize = CGSize(width: 1_600, height: 1_017)
 
-    static func make(samples: [VideoTelemetryFrame]) async -> VideoRouteMapSnapshot? {
+    static func make(
+        samples: [VideoTelemetryFrame],
+        includesDetailedLayer: Bool = false
+    ) async -> VideoRouteMapSnapshot? {
         let located = samples.compactMap { sample -> (VideoTelemetryFrame, CLLocationCoordinate2D)? in
             guard let latitude = sample.latitude,
                   let longitude = sample.longitude,
@@ -692,47 +734,69 @@ enum VideoRouteMapSnapshotter {
               let minimumLongitude = longitudes.min(), let maximumLongitude = longitudes.max() else { return nil }
         // The exported HUD rotates a magnified crop around the current position.
         // Keep generous map coverage around both ends so rotation never exposes empty corners.
+        let center = CLLocationCoordinate2D(
+            latitude: (minimumLatitude + maximumLatitude) / 2,
+            longitude: (minimumLongitude + maximumLongitude) / 2
+        )
         let latitudeDelta = max(0.0032, (maximumLatitude - minimumLatitude) * 3)
         let longitudeDelta = max(0.0048, (maximumLongitude - minimumLongitude) * 3)
-
         let region = MKCoordinateRegion(
-            center: CLLocationCoordinate2D(
-                latitude: (minimumLatitude + maximumLatitude) / 2,
-                longitude: (minimumLongitude + maximumLongitude) / 2
-            ),
+            center: center,
             span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
         )
+        // Exactly twice the geographic detail of the overview while retaining enough
+        // padding for a rotated crop at both ends of the recorded route.
+        let detailedRegion = MKCoordinateRegion(
+            center: center,
+            span: MKCoordinateSpan(latitudeDelta: latitudeDelta / 2, longitudeDelta: longitudeDelta / 2)
+        )
 
-        func options(dark: Bool) -> MKMapSnapshotter.Options {
+        func options(region: MKCoordinateRegion, dark: Bool, detailed: Bool = false) -> MKMapSnapshotter.Options {
             let value = MKMapSnapshotter.Options()
             value.region = region
             value.size = snapshotSize
             value.scale = 1
             value.mapType = dark ? .mutedStandard : .standard
-            value.showsBuildings = !dark
-            value.pointOfInterestFilter = dark ? .excludingAll : .includingAll
+            value.showsBuildings = detailed || !dark
+            value.pointOfInterestFilter = dark && !detailed ? .excludingAll : .includingAll
             value.traitCollection = UITraitCollection(userInterfaceStyle: dark ? .dark : .light)
             return value
         }
 
-        let darkSnapshot = try? await MKMapSnapshotter(options: options(dark: true)).start()
-        let lightSnapshot = try? await MKMapSnapshotter(options: options(dark: false)).start()
+        let darkSnapshot = try? await MKMapSnapshotter(options: options(region: region, dark: true)).start()
+        let lightSnapshot = try? await MKMapSnapshotter(options: options(region: region, dark: false)).start()
+        let detailedDarkSnapshot: MKMapSnapshotter.Snapshot? = if includesDetailedLayer {
+            try? await MKMapSnapshotter(
+                options: options(region: detailedRegion, dark: true, detailed: true)
+            ).start()
+        } else { nil }
+        let detailedLightSnapshot: MKMapSnapshotter.Snapshot? = if includesDetailedLayer {
+            try? await MKMapSnapshotter(
+                options: options(region: detailedRegion, dark: false, detailed: true)
+            ).start()
+        } else { nil }
         if let projectionSnapshot = darkSnapshot ?? lightSnapshot,
            let image = (darkSnapshot ?? lightSnapshot)?.image.cgImage {
-            let routePoints = located.map { sample, coordinate in
-                let point = projectionSnapshot.point(for: coordinate)
-                return VideoRouteMapPoint(
-                    timestamp: sample.timestamp,
-                    position: CGPoint(
-                        x: min(1, max(0, point.x / snapshotSize.width)),
-                        y: min(1, max(0, point.y / snapshotSize.height))
+            func routePoints(using snapshot: MKMapSnapshotter.Snapshot) -> [VideoRouteMapPoint] {
+                located.map { sample, coordinate in
+                    let point = snapshot.point(for: coordinate)
+                    return VideoRouteMapPoint(
+                        timestamp: sample.timestamp,
+                        position: CGPoint(
+                            x: min(1, max(0, point.x / snapshotSize.width)),
+                            y: min(1, max(0, point.y / snapshotSize.height))
+                        )
                     )
-                )
+                }
             }
+            let detailedProjection = detailedDarkSnapshot ?? detailedLightSnapshot
             return VideoRouteMapSnapshot(
                 image: image,
                 lightImage: lightSnapshot?.image.cgImage,
-                points: routePoints
+                points: routePoints(using: projectionSnapshot),
+                detailedImage: (detailedDarkSnapshot ?? detailedLightSnapshot)?.image.cgImage,
+                detailedLightImage: detailedLightSnapshot?.image.cgImage,
+                detailedPoints: detailedProjection.map(routePoints(using:)) ?? []
             )
         }
 
@@ -970,7 +1034,7 @@ enum VideoOverlayCGRenderer {
         let clippingPath = isCircular
             ? UIBezierPath(ovalIn: mapRect)
             : UIBezierPath(roundedRect: mapRect, cornerRadius: radius)
-        let pose = routeMap?.pose(at: timestamp)
+        let pose = routeMap?.pose(at: timestamp, mapZoom: element.mapZoom)
         var mapRotation: CGFloat = 0
 
         func drawMarker(at point: CGPoint, angle: CGFloat) {
@@ -1002,9 +1066,13 @@ enum VideoOverlayCGRenderer {
         context.fill(mapRect)
         var mapContentRect = mapRect
         if let routeMap, let pose {
-            let selectedImage = element.kind.usesLightMap ? (routeMap.lightImage ?? routeMap.image) : routeMap.image
+            let usesDetailedLayer = routeMap.usesDetailedLayer(for: element.mapZoom)
+            let selectedImage = routeMap.image(light: element.kind.usesLightMap, mapZoom: element.mapZoom)
             let imageSize = CGSize(width: selectedImage.width, height: selectedImage.height)
-            let imageScale = max(mapRect.width / imageSize.width, mapRect.height / imageSize.height) * 2.35 * element.mapZoom
+            // The detailed source covers half the geographic span, so halve the bitmap
+            // scale at the switch point to keep the visual zoom continuous.
+            let sourceAdjustedZoom = usesDetailedLayer ? element.mapZoom / 2 : element.mapZoom
+            let imageScale = max(mapRect.width / imageSize.width, mapRect.height / imageSize.height) * 2.35 * sourceAdjustedZoom
             let scaledSize = CGSize(width: imageSize.width * imageScale, height: imageSize.height * imageScale)
             mapContentRect = CGRect(
                 x: mapRect.midX - pose.position.x * scaledSize.width,
@@ -1050,33 +1118,36 @@ enum VideoOverlayCGRenderer {
             context.setBlendMode(.normal)
         }
 
-        if let routeMap, !routeMap.points.isEmpty {
-            let mapped = routeMap.points.map { point in
-                CGPoint(
-                    x: mapContentRect.minX + point.position.x * mapContentRect.width,
-                    y: mapContentRect.minY + point.position.y * mapContentRect.height
-                )
-            }
-            if pose != nil {
-                context.saveGState()
-                context.translateBy(x: mapRect.midX, y: mapRect.midY)
-                context.rotate(by: mapRotation)
-                context.translateBy(x: -mapRect.midX, y: -mapRect.midY)
-            }
-            strokeRoute(mapped, color: UIColor.black.withAlphaComponent(0.78), width: rect.width * 0.026, context: context)
-            strokeRoute(mapped, color: UIColor.white.withAlphaComponent(0.36), width: rect.width * 0.011, context: context)
+        if let routeMap {
+            let selectedPoints = routeMap.routePoints(for: element.mapZoom)
+            if !selectedPoints.isEmpty {
+                let mapped = selectedPoints.map { point in
+                    CGPoint(
+                        x: mapContentRect.minX + point.position.x * mapContentRect.width,
+                        y: mapContentRect.minY + point.position.y * mapContentRect.height
+                    )
+                }
+                if pose != nil {
+                    context.saveGState()
+                    context.translateBy(x: mapRect.midX, y: mapRect.midY)
+                    context.rotate(by: mapRotation)
+                    context.translateBy(x: -mapRect.midX, y: -mapRect.midY)
+                }
+                strokeRoute(mapped, color: UIColor.black.withAlphaComponent(0.78), width: rect.width * 0.026, context: context)
+                strokeRoute(mapped, color: UIColor.white.withAlphaComponent(0.36), width: rect.width * 0.011, context: context)
 
-            if let pose {
-                var travelled = Array(mapped.prefix(pose.passedPointCount))
-                travelled.append(CGPoint(
-                    x: mapContentRect.minX + pose.position.x * mapContentRect.width,
-                    y: mapContentRect.minY + pose.position.y * mapContentRect.height
-                ))
-                strokeRoute(travelled, color: accent.withAlphaComponent(0.3), width: rect.width * 0.032, context: context)
-                strokeRoute(travelled, color: accent, width: rect.width * 0.013, context: context)
+                if let pose {
+                    var travelled = Array(mapped.prefix(pose.passedPointCount))
+                    travelled.append(CGPoint(
+                        x: mapContentRect.minX + pose.position.x * mapContentRect.width,
+                        y: mapContentRect.minY + pose.position.y * mapContentRect.height
+                    ))
+                    strokeRoute(travelled, color: accent.withAlphaComponent(0.3), width: rect.width * 0.032, context: context)
+                    strokeRoute(travelled, color: accent, width: rect.width * 0.013, context: context)
+                }
+                if pose != nil { context.restoreGState() }
+                if pose != nil { drawMarker(at: CGPoint(x: mapRect.midX, y: mapRect.midY), angle: 0) }
             }
-            if pose != nil { context.restoreGState() }
-            if pose != nil { drawMarker(at: CGPoint(x: mapRect.midX, y: mapRect.midY), angle: 0) }
         }
         context.restoreGState()
 

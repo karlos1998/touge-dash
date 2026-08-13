@@ -196,8 +196,13 @@ class VideoRepository(
                 .setEndPositionMs(((project.videoTrimStartSeconds + project.exportDurationSeconds) * 1000).toLong())
                 .build()
             val item = MediaItem.Builder().setUri(project.localUri).setClippingConfiguration(clipping).build()
-            val routeMap = if (definition.resolvedElements().any { it.kind.isRouteMap }) {
-                createRouteMapSnapshot(context, samples)
+            val resolvedElements = definition.resolvedElements()
+            val routeMap = if (resolvedElements.any { it.kind.isRouteMap }) {
+                createRouteMapSnapshot(
+                    context,
+                    samples,
+                    includesDetailedLayer = resolvedElements.any { it.kind.isRouteMap && it.mapZoom > 1.85f }
+                )
             } else null
             val overlay = TelemetryBitmapOverlay(
                 samples,

@@ -101,7 +101,17 @@ class OverlayTemplateModelsTest {
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR), VideoOverlayTemplateDefinition.iceOrbit().elements.map { it.kind })
         assertEquals(listOf(OverlayElementKind.ROUTE_MAP_AMBER), VideoOverlayTemplateDefinition.amberRun().elements.map { it.kind })
         val zoomed = VideoOverlayTemplateDefinition.streetAtlas().elements.single().withMapZoom(4f)
-        assertEquals(1.85f, zoomed.mapZoom)
+        assertEquals(3.5f, zoomed.mapZoom)
         assertEquals(zoomed, json.decodeFromString<VideoOverlayElement>(json.encodeToString(zoomed)))
+    }
+
+    @Test
+    fun `single widget can be removed without restoring the legacy layout`() {
+        val template = VideoOverlayTemplateDefinition.streetAtlas()
+        val removed = template.withoutElement(template.elements.single().id)
+        val restored = json.decodeFromString<VideoOverlayTemplateDefinition>(json.encodeToString(removed))
+
+        assertEquals(emptyList<VideoOverlayElement>(), removed.resolvedElements())
+        assertEquals(emptyList<VideoOverlayElement>(), restored.resolvedElements())
     }
 }

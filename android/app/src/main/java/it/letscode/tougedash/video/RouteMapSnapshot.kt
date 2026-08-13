@@ -31,41 +31,55 @@ data class RouteMapPose(
 
 class RouteMapSnapshot(
     val bitmap: Bitmap,
-    sourcePoints: List<RouteMapPoint>
+    sourcePoints: List<RouteMapPoint>,
+    val detailedBitmap: Bitmap? = null,
+    sourceDetailedPoints: List<RouteMapPoint> = emptyList()
 ) {
     val points: List<RouteMapPoint> = compacted(sourcePoints)
+    val detailedPoints: List<RouteMapPoint> = compacted(sourceDetailedPoints)
 
-    fun poseAt(recordedAt: Long): RouteMapPose? {
-        if (points.isEmpty()) return null
-        val motion = interpolatedMotion(recordedAt)
+    fun usesDetailedLayer(mapZoom: Float): Boolean =
+        mapZoom > 1.85f && detailedBitmap != null && detailedPoints.isNotEmpty()
+
+    fun bitmapFor(mapZoom: Float): Bitmap =
+        if (usesDetailedLayer(mapZoom)) detailedBitmap!! else bitmap
+
+    fun pointsFor(mapZoom: Float): List<RouteMapPoint> =
+        if (usesDetailedLayer(mapZoom)) detailedPoints else points
+
+    fun poseAt(recordedAt: Long, mapZoom: Float = 1f): RouteMapPose? {
+        val selectedPoints = pointsFor(mapZoom)
+        if (selectedPoints.isEmpty()) return null
+        val motion = interpolatedMotion(recordedAt, selectedPoints)
         var dx = motion.vx
         var dy = motion.vy
         if (kotlin.math.hypot(dx, dy) < .000001f) {
-            val before = interpolatedMotion(recordedAt - 1_500)
-            val after = interpolatedMotion(recordedAt + 1_500)
+            val before = interpolatedMotion(recordedAt - 1_500, selectedPoints)
+            val after = interpolatedMotion(recordedAt + 1_500, selectedPoints)
             dx = after.x - before.x
             dy = after.y - before.y
         }
         val heading = if (kotlin.math.hypot(dx, dy) >= .000001f) {
             Math.toDegrees(kotlin.math.atan2(dy.toDouble(), dx.toDouble())).toFloat()
         } else -90f
-        val passed = points.indexOfFirst { it.recordedAt > recordedAt }.let { if (it < 0) points.size else it }
-        return RouteMapPose(motion.x, motion.y, heading, passed.coerceIn(1, points.size))
+        val passed = selectedPoints.indexOfFirst { it.recordedAt > recordedAt }
+            .let { if (it < 0) selectedPoints.size else it }
+        return RouteMapPose(motion.x, motion.y, heading, passed.coerceIn(1, selectedPoints.size))
     }
 
     private data class Motion(val x: Float, val y: Float, val vx: Float, val vy: Float)
 
     /** Keeps camera position and velocity continuous between asynchronous GPS updates. */
-    private fun interpolatedMotion(recordedAt: Long): Motion {
+    private fun interpolatedMotion(recordedAt: Long, points: List<RouteMapPoint>): Motion {
         if (points.size == 1) return Motion(points[0].x, points[0].y, 0f, 0f)
         val found = points.binarySearchBy(recordedAt) { it.recordedAt }
         val upper = if (found >= 0) found else -found - 1
         if (upper <= 0) {
-            val velocity = velocityAt(0)
+            val velocity = velocityAt(0, points)
             return Motion(points.first().x, points.first().y, velocity.first, velocity.second)
         }
         if (upper >= points.size) {
-            val velocity = velocityAt(points.lastIndex)
+            val velocity = velocityAt(points.lastIndex, points)
             return Motion(points.last().x, points.last().y, velocity.first, velocity.second)
         }
         val startIndex = upper - 1
@@ -73,7 +87,7 @@ class RouteMapSnapshot(
         val end = points[upper]
         val durationSeconds = (end.recordedAt - start.recordedAt) / 1_000f
         if (durationSeconds <= 0f) {
-            val velocity = velocityAt(upper)
+            val velocity = velocityAt(upper, points)
             return Motion(end.x, end.y, velocity.first, velocity.second)
         }
         val fraction = ((recordedAt - start.recordedAt) / (durationSeconds * 1_000f)).coerceIn(0f, 1f)
@@ -81,8 +95,8 @@ class RouteMapSnapshot(
         val fraction3 = fraction2 * fraction
         val segmentX = end.x - start.x
         val segmentY = end.y - start.y
-        val startVelocity = limitedTangent(velocityAt(startIndex), segmentX, segmentY, durationSeconds)
-        val endVelocity = limitedTangent(velocityAt(upper), segmentX, segmentY, durationSeconds)
+        val startVelocity = limitedTangent(velocityAt(startIndex, points), segmentX, segmentY, durationSeconds)
+        val endVelocity = limitedTangent(velocityAt(upper, points), segmentX, segmentY, durationSeconds)
         val m0x = startVelocity.first * durationSeconds
         val m0y = startVelocity.second * durationSeconds
         val m1x = endVelocity.first * durationSeconds
@@ -102,7 +116,7 @@ class RouteMapSnapshot(
         return Motion(x, y, vx, vy)
     }
 
-    private fun velocityAt(index: Int): Pair<Float, Float> {
+    private fun velocityAt(index: Int, points: List<RouteMapPoint>): Pair<Float, Float> {
         val before = points[(index - 1).coerceAtLeast(0)]
         val after = points[(index + 1).coerceAtMost(points.lastIndex)]
         val durationSeconds = (after.recordedAt - before.recordedAt) / 1_000f
@@ -145,7 +159,8 @@ class RouteMapSnapshot(
 
 suspend fun createRouteMapSnapshot(
     context: Context,
-    samples: List<TelemetrySampleEntity>
+    samples: List<TelemetrySampleEntity>,
+    includesDetailedLayer: Boolean = false
 ): RouteMapSnapshot? = withContext(Dispatchers.Main) {
     val located = samples.mapNotNull { sample ->
         val latitude = sample.latitude
@@ -155,62 +170,79 @@ suspend fun createRouteMapSnapshot(
     }
     if (located.isEmpty()) return@withContext null
 
-    val snapshot = withTimeoutOrNull(8_000) {
-        suspendCancellableCoroutine { continuation ->
-            Configuration.getInstance().userAgentValue = context.packageName
-            // Oversampled so map-camera zoom does not scale up the HUD bitmap itself.
-            val width = 1600
-            val height = 1017
-            val map = MapView(context).apply {
-                setTileSource(TileSourceFactory.MAPNIK)
-                setMultiTouchControls(false)
-                measure(
-                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
-                )
-                layout(0, 0, width, height)
-            }
-            val geoPoints = located.map { it.second }
-            if (geoPoints.size > 1) {
-                map.zoomToBoundingBox(BoundingBox.fromGeoPointsSafe(geoPoints), false, 42)
-                map.controller.setZoom((map.zoomLevelDouble - 1.6).coerceAtLeast(map.minZoomLevel))
-            } else {
-                map.controller.setCenter(geoPoints.first())
-                map.controller.setZoom(17.0)
-            }
-            map.post {
-                val projected = located.map { (sample, geoPoint) ->
-                    val pixel = map.projection.toPixels(geoPoint, Point())
-                    RouteMapPoint(
-                        recordedAt = sample.recordedAt,
-                        x = (pixel.x / width.toFloat()).coerceIn(0f, 1f),
-                        y = (pixel.y / height.toFloat()).coerceIn(0f, 1f)
-                    )
-                }
-                var activeSnapshot: MapSnapshot? = null
-                var detached = false
-                fun detach() {
-                    if (detached) return
-                    detached = true
-                    activeSnapshot?.onDetach()
-                    map.onDetach()
-                }
-                val mapSnapshot = MapSnapshot({ result ->
-                    if (continuation.isActive) {
-                        val bitmap = result.bitmap?.copy(Bitmap.Config.ARGB_8888, false)
-                        continuation.resume(bitmap?.let { RouteMapSnapshot(it, projected) })
-                    }
-                    detach()
-                }, MapSnapshot.INCLUDE_FLAGS_ALL, map)
-                activeSnapshot = mapSnapshot
-                continuation.invokeOnCancellation {
-                    detach()
-                }
-                mapSnapshot.run()
-            }
-        }
+    val overview = withTimeoutOrNull(8_000) { captureRouteMapLayer(context, located, detailed = false) }
+        ?: return@withContext fallbackRouteMapSnapshot(located)
+    val detailed = if (includesDetailedLayer) {
+        withTimeoutOrNull(8_000) { captureRouteMapLayer(context, located, detailed = true) }
+    } else null
+    RouteMapSnapshot(
+        bitmap = overview.bitmap,
+        sourcePoints = overview.points,
+        detailedBitmap = detailed?.bitmap,
+        sourceDetailedPoints = detailed?.points.orEmpty()
+    )
+}
+
+private data class CapturedRouteMapLayer(
+    val bitmap: Bitmap,
+    val points: List<RouteMapPoint>
+)
+
+private suspend fun captureRouteMapLayer(
+    context: Context,
+    located: List<Pair<TelemetrySampleEntity, GeoPoint>>,
+    detailed: Boolean
+): CapturedRouteMapLayer? = suspendCancellableCoroutine { continuation ->
+    Configuration.getInstance().userAgentValue = context.packageName
+    // Both levels are oversampled. The detailed level uses one finer map-tile zoom.
+    val width = 1600
+    val height = 1017
+    val map = MapView(context).apply {
+        setTileSource(TileSourceFactory.MAPNIK)
+        setMultiTouchControls(false)
+        measure(
+            View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY)
+        )
+        layout(0, 0, width, height)
     }
-    snapshot ?: fallbackRouteMapSnapshot(located)
+    val geoPoints = located.map { it.second }
+    if (geoPoints.size > 1) {
+        map.zoomToBoundingBox(BoundingBox.fromGeoPointsSafe(geoPoints), false, 42)
+        val paddingZoom = if (detailed) .6 else 1.6
+        map.controller.setZoom((map.zoomLevelDouble - paddingZoom).coerceAtLeast(map.minZoomLevel))
+    } else {
+        map.controller.setCenter(geoPoints.first())
+        map.controller.setZoom(if (detailed) 18.0 else 17.0)
+    }
+    map.post {
+        val projected = located.map { (sample, geoPoint) ->
+            val pixel = map.projection.toPixels(geoPoint, Point())
+            RouteMapPoint(
+                recordedAt = sample.recordedAt,
+                x = (pixel.x / width.toFloat()).coerceIn(0f, 1f),
+                y = (pixel.y / height.toFloat()).coerceIn(0f, 1f)
+            )
+        }
+        var activeSnapshot: MapSnapshot? = null
+        var detached = false
+        fun detach() {
+            if (detached) return
+            detached = true
+            activeSnapshot?.onDetach()
+            map.onDetach()
+        }
+        val mapSnapshot = MapSnapshot({ result ->
+            if (continuation.isActive) {
+                val bitmap = result.bitmap?.copy(Bitmap.Config.ARGB_8888, false)
+                continuation.resume(bitmap?.let { CapturedRouteMapLayer(it, projected) })
+            }
+            detach()
+        }, MapSnapshot.INCLUDE_FLAGS_ALL, map)
+        activeSnapshot = mapSnapshot
+        continuation.invokeOnCancellation { detach() }
+        mapSnapshot.run()
+    }
 }
 
 private fun fallbackRouteMapSnapshot(

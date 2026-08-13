@@ -190,6 +190,10 @@ enum VideoOverlayScale: String, Codable, CaseIterable, Identifiable, Sendable {
 }
 
 struct VideoOverlayElement: Codable, Hashable, Identifiable, Sendable {
+    static let minimumMapZoom = 0.65
+    static let maximumMapZoom = 3.5
+    static let detailedMapZoomThreshold = 1.85
+
     var id: UUID
     var metric: DashboardMetric
     var slot: VideoOverlaySlot
@@ -254,7 +258,7 @@ struct VideoOverlayElement: Codable, Hashable, Identifiable, Sendable {
     }
 
     private static func clampedMapZoom(_ value: Double) -> Double {
-        min(1.85, max(0.65, value))
+        min(maximumMapZoom, max(minimumMapZoom, value))
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -320,6 +324,11 @@ struct VideoOverlayTemplate: Codable, Hashable, Identifiable, Sendable {
         gaugeConfiguration = try container.decodeIfPresent(VideoOverlayGaugeConfiguration.self, forKey: .gaugeConfiguration) ?? .init()
         modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
         layoutVersion = try container.decodeIfPresent(Int.self, forKey: .layoutVersion) ?? 1
+    }
+
+    mutating func removeElement(id: UUID) {
+        elements.removeAll { $0.id == id }
+        modifiedAt = .now
     }
 }
 

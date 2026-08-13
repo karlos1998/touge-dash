@@ -98,7 +98,7 @@ class TelemetryBitmapOverlay(
         val height = (if (circular) 385f else 340f) * scale
         val rect = RectF(cx - width / 2, cy - height / 2, cx + width / 2, cy + height / 2)
         val radius = if (circular) width / 2 else 28f * scale
-        val pose = routeMap?.poseAt(targetTime)
+        val pose = routeMap?.poseAt(targetTime, element.mapZoom)
         var mapRotation = 0f
         val clippingPath = Path().apply {
             if (circular) addOval(rect, Path.Direction.CW)
@@ -134,9 +134,11 @@ class TelemetryBitmapOverlay(
         var mapContentRect = RectF(rect)
         routeMap?.let { snapshot ->
             paint.alpha = 255
-            val imageScale = maxOf(rect.width() / snapshot.bitmap.width, rect.height() / snapshot.bitmap.height) * 2.35f * element.mapZoom.coerceIn(.65f, 1.85f)
-            val contentWidth = snapshot.bitmap.width * imageScale
-            val contentHeight = snapshot.bitmap.height * imageScale
+            val mapBitmap = snapshot.bitmapFor(element.mapZoom)
+            val adjustedZoom = if (snapshot.usesDetailedLayer(element.mapZoom)) element.mapZoom / 2f else element.mapZoom
+            val imageScale = maxOf(rect.width() / mapBitmap.width, rect.height() / mapBitmap.height) * 2.35f * adjustedZoom.coerceIn(.65f, 3.5f)
+            val contentWidth = mapBitmap.width * imageScale
+            val contentHeight = mapBitmap.height * imageScale
             if (pose != null) {
                 mapContentRect = RectF(
                     rect.centerX() - pose.x * contentWidth,
@@ -148,7 +150,7 @@ class TelemetryBitmapOverlay(
                 canvas.save()
                 canvas.rotate(mapRotation, rect.centerX(), rect.centerY())
             }
-            canvas.drawBitmap(snapshot.bitmap, null, mapContentRect, paint)
+            canvas.drawBitmap(mapBitmap, null, mapContentRect, paint)
             if (pose != null) canvas.restore()
         } ?: run {
             paint.style = Paint.Style.STROKE
@@ -169,12 +171,12 @@ class TelemetryBitmapOverlay(
         }
         canvas.drawRect(rect, paint)
 
-        routeMap?.takeIf { it.points.isNotEmpty() }?.let { snapshot ->
+        routeMap?.takeIf { it.pointsFor(element.mapZoom).isNotEmpty() }?.let { snapshot ->
             fun mapped(point: RouteMapPoint) = android.graphics.PointF(
                 mapContentRect.left + point.x * mapContentRect.width(),
                 mapContentRect.top + point.y * mapContentRect.height()
             )
-            val mappedPoints = snapshot.points.map(::mapped)
+            val mappedPoints = snapshot.pointsFor(element.mapZoom).map(::mapped)
             fun stroke(points: List<android.graphics.PointF>, color: Int, strokeWidth: Float) {
                 if (points.size < 2) return
                 paint.style = Paint.Style.STROKE

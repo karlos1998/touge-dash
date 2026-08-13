@@ -62,7 +62,7 @@ data class VideoOverlayElement(
     fun positioned(portrait: Boolean, position: OverlayPosition) =
         if (portrait) copy(portraitPosition = position.clamped()) else copy(landscapePosition = position.clamped())
     fun resized(zoom: Float) = copy(sizeMultiplier = (sizeMultiplier * zoom).coerceIn(.45f, 2.5f))
-    fun withMapZoom(zoom: Float) = copy(mapZoom = zoom.coerceIn(.65f, 1.85f))
+    fun withMapZoom(zoom: Float) = copy(mapZoom = zoom.coerceIn(.65f, 3.5f))
 }
 
 @Serializable
@@ -79,7 +79,8 @@ data class VideoOverlayTemplateDefinition(
     val maximumRpm: Float = 8_000f,
     val maximumBoostBar: Float = 2f,
     val elements: List<VideoOverlayElement> = emptyList(),
-    val layoutVersion: Int = 2
+    val layoutVersion: Int = 2,
+    val allowsEmptyLayout: Boolean = false
 ) {
     fun range(metric: TelemetryMetric): ClosedFloatingPointRange<Double> = when (metric) {
         TelemetryMetric.SPEED -> 0.0..maximumSpeedKph.coerceAtLeast(100f).toDouble()
@@ -94,7 +95,13 @@ data class VideoOverlayTemplateDefinition(
         if (portrait) copy(portraitX = x, portraitY = y, scale = scale)
         else copy(landscapeX = x, landscapeY = y, scale = scale)
 
-    fun resolvedElements(): List<VideoOverlayElement> = elements.ifEmpty { legacyElements(style) }
+    fun resolvedElements(): List<VideoOverlayElement> =
+        if (elements.isEmpty() && !allowsEmptyLayout) legacyElements(style) else elements
+
+    fun withoutElement(id: String) = copy(
+        elements = resolvedElements().filterNot { it.id == id },
+        allowsEmptyLayout = true
+    )
 
     companion object {
         fun tougePro() = VideoOverlayTemplateDefinition(

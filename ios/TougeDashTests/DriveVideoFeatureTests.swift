@@ -300,7 +300,7 @@ final class DriveVideoFeatureTests: XCTestCase {
     func testRouteMapCameraZoomClampsAndPersists() throws {
         var element = try XCTUnwrap(VideoOverlayTemplate.streetAtlas.elements.first)
         element.setMapZoom(4)
-        XCTAssertEqual(element.mapZoom, 1.85, accuracy: 0.0001)
+        XCTAssertEqual(element.mapZoom, 3.5, accuracy: 0.0001)
         element.setMapZoom(0.1)
         XCTAssertEqual(element.mapZoom, 0.65, accuracy: 0.0001)
 
@@ -312,6 +312,22 @@ final class DriveVideoFeatureTests: XCTestCase {
             from: JSONEncoder().encode(template)
         )
         XCTAssertEqual(decoded.elements[0].mapZoom, 1.45, accuracy: 0.0001)
+    }
+
+    func testOverlayWidgetCanBeRemovedAndAddedAgain() throws {
+        var template = VideoOverlayTemplate.routeRadar
+        let removed = try XCTUnwrap(template.elements.first)
+        let originalCount = template.elements.count
+
+        template.removeElement(id: removed.id)
+        XCTAssertEqual(template.elements.count, originalCount - 1)
+        XCTAssertFalse(template.elements.contains { $0.id == removed.id })
+
+        var restored = removed
+        restored.id = UUID()
+        template.elements.append(restored)
+        XCTAssertEqual(template.elements.count, originalCount)
+        XCTAssertNotEqual(restored.id, removed.id)
     }
 
     @MainActor
@@ -360,10 +376,13 @@ final class DriveVideoFeatureTests: XCTestCase {
             )
         }
         let frames = samples.map(VideoTelemetryFrame.init(sample:))
-        let generatedRouteMap = await VideoRouteMapSnapshotter.make(samples: frames)
+        let generatedRouteMap = await VideoRouteMapSnapshotter.make(samples: frames, includesDetailedLayer: true)
         let routeMap = try XCTUnwrap(generatedRouteMap)
         XCTAssertEqual(routeMap.points.count, samples.count)
         XCTAssertNotNil(routeMap.lightImage)
+        XCTAssertNotNil(routeMap.detailedImage)
+        XCTAssertNotNil(routeMap.detailedLightImage)
+        XCTAssertEqual(routeMap.detailedPoints.count, samples.count)
         for template in [VideoOverlayTemplate.routeRadar, .routeOrbit, .routeChase, .streetAtlas, .iceOrbit, .amberRun] {
             let image = try XCTUnwrap(VideoOverlayCGRenderer.render(
                 size: CGSize(width: 390, height: 220),
@@ -388,7 +407,7 @@ final class DriveVideoFeatureTests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
         }
-        for zoom in [0.65, 1.85] {
+        for zoom in [0.65, 1.85, 3.5] {
             var template = VideoOverlayTemplate.routeChase
             template.elements[0].setMapZoom(zoom)
             let image = try XCTUnwrap(VideoOverlayCGRenderer.render(

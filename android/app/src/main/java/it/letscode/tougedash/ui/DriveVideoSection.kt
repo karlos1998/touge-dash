@@ -13,6 +13,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
@@ -203,6 +204,7 @@ private fun VideoAlignmentEditor(
     var overlayDefinition by remember(initial.id) { mutableStateOf(VideoOverlayTemplateDefinition(runCatching { OverlayStyle.valueOf(initial.overlayTemplateId ?: "RACE") }.getOrDefault(OverlayStyle.RACE))) }
     var editingTemplate by remember { mutableStateOf<VideoOverlayTemplate?>(null) }
     var selectedElementId by remember { mutableStateOf<String?>(null) }
+    var deletingElementId by remember { mutableStateOf<String?>(null) }
     var widgetMenuOpen by remember { mutableStateOf(false) }
     val portraitVideo = initial.pixelHeight > initial.pixelWidth
     var previewSize by remember { mutableStateOf(IntSize.Zero) }
@@ -255,7 +257,8 @@ private fun VideoAlignmentEditor(
                         if (element.id == id) element.withMapZoom(element.mapZoom + delta) else element
                     })
                     selectedElementId = id
-                }
+                },
+                requestDelete = { deletingElementId = it }
             )
         }
         Box(
@@ -341,7 +344,7 @@ private fun VideoAlignmentEditor(
                     )
                 }
             }
-            Text(appText("Drag HUD elements with one finger and pinch with two fingers to resize. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD jednym palcem, a dwoma palcami zmieniaj ich rozmiar. Układ pionowy i poziomy zapisuje się osobno."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+            Text(appText("Drag HUD elements, pinch to resize, or hold one to remove it. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD, uszczypnij, aby zmienić rozmiar, albo przytrzymaj, aby usunąć. Układ pionowy i poziomy zapisuje się osobno."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
             OutlinedButton(
                 onClick = { templates.firstOrNull { it.entity.id == templateId }?.let { container.videoRepository.updateOverlayTemplate(it.copy(definition = overlayDefinition)) } },
                 modifier = Modifier.fillMaxWidth()
@@ -409,6 +412,24 @@ private fun VideoAlignmentEditor(
             }
         }
     }
+    deletingElementId?.let { id ->
+        AlertDialog(
+            onDismissRequest = { deletingElementId = null },
+            icon = { Icon(Icons.Default.Delete, null, tint = TougeRed) },
+            title = { Text(appText("Remove widget?", "Usunąć widget?")) },
+            text = { Text(appText("It will disappear from this video layout. You can add it again with +.", "Zniknie z układu tego filmu. Zawsze możesz dodać go ponownie przyciskiem +.")) },
+            confirmButton = {
+                TextButton(onClick = {
+                    overlayDefinition = overlayDefinition.withoutElement(id)
+                    if (selectedElementId == id) selectedElementId = null
+                    deletingElementId = null
+                }) { Text(appText("Remove", "Usuń"), color = TougeRed) }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingElementId = null }) { Text(appText("Cancel", "Anuluj")) }
+            }
+        )
+    }
     editingTemplate?.let { current ->
         HudTemplateEditor(
             initial = current,
@@ -469,7 +490,8 @@ private fun BoxScope.EditableHudPreview(
     selectedElementId: String?,
     select: (String) -> Unit,
     transform: (String, Float, Float, Float) -> Unit,
-    mapZoom: (String, Float) -> Unit
+    mapZoom: (String, Float) -> Unit,
+    requestDelete: (String) -> Unit
 ) {
     val density = LocalDensity.current
     val previewWidthDp = with(density) { canvasSize.width.toDp().value }
@@ -500,7 +522,12 @@ private fun BoxScope.EditableHudPreview(
                         select(element.id)
                         transform(element.id, pan.x, pan.y, zoom)
                     }
-                }.clickable { select(element.id) }
+                }.pointerInput(element.id) {
+                    detectTapGestures(
+                        onTap = { select(element.id) },
+                        onLongPress = { requestDelete(element.id) }
+                    )
+                }
             )
             if (element.kind.isRouteMap) {
                 Column(
@@ -674,7 +701,9 @@ private fun NfsRouteMapPreview(
                     map.overlays.add(currentRoute)
                     if (currentPosition != null) {
                         map.controller.setCenter(currentPosition)
-                        map.controller.setZoom(17.5 + kotlin.math.log2(mapZoom.coerceIn(.65f, 1.85f).toDouble()))
+                        // MapView requests a finer tile level, so this is a real map-camera
+                        // zoom rather than scaling the already drawn preview bitmap.
+                        map.controller.setZoom(17.5 + kotlin.math.log2(mapZoom.coerceIn(.65f, 3.5f).toDouble()))
                         map.mapOrientation = -(previousPosition?.bearingTo(nextPosition ?: currentPosition)?.toFloat() ?: 0f)
                     } else if (map.tag != routeKey) {
                         map.tag = routeKey

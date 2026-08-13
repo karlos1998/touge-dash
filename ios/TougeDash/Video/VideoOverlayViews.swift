@@ -68,6 +68,13 @@ struct EditableVideoTelemetryOverlayView: View {
                 }
                 .gesture(dragGesture(for: element.id, canvasSize: proxy.size, orientation: orientation))
                 .simultaneousGesture(magnifyGesture(for: element.id))
+                .contextMenu {
+                    Button(role: .destructive) {
+                        removeElement(id: element.id)
+                    } label: {
+                        Label(localized("Usuń widget"), systemImage: "trash")
+                    }
+                }
                 .overlay(alignment: position.x > 0.7 ? .leading : .trailing) {
                     if element.kind.isRouteMap {
                         VStack(spacing: 3) {
@@ -146,6 +153,11 @@ struct EditableVideoTelemetryOverlayView: View {
         selectedElementID = id
         template.elements[index].setMapZoom(template.elements[index].mapZoom + delta)
         template.modifiedAt = .now
+    }
+
+    private func removeElement(id: UUID) {
+        template.removeElement(id: id)
+        if selectedElementID == id { selectedElementID = nil }
     }
 
     private func mapZoomButton(systemName: String, action: @escaping () -> Void) -> some View {
@@ -576,6 +588,9 @@ private struct VideoRouteMapElementView: View {
         let last = samples.last?.timestamp.timeIntervalSince1970 ?? 0
         return "\(samples.count):\(first):\(last)"
     }
+    private var needsDetailedMap: Bool {
+        element.mapZoom > VideoOverlayElement.detailedMapZoomThreshold
+    }
 
     var body: some View {
         let size = element.kind.isCircularRouteMap
@@ -603,8 +618,11 @@ private struct VideoRouteMapElementView: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .task(id: routeSignature) {
-            snapshot = await VideoRouteMapSnapshotter.make(samples: frames)
+        .task(id: "\(routeSignature):\(needsDetailedMap)") {
+            snapshot = await VideoRouteMapSnapshotter.make(
+                samples: frames,
+                includesDetailedLayer: needsDetailedMap
+            )
         }
     }
 }
