@@ -846,7 +846,7 @@ private struct DriveVideoExportSheet: View {
         }
         .overlay(alignment: .topLeading) {
             if addsOverlay {
-                Label(localized("Przeciągnij, uszczypnij lub przytrzymaj element"), systemImage: "hand.draw.fill")
+                Label(localized("Przeciągnij lub uszczypnij; stuknij, aby edytować"), systemImage: "hand.draw.fill")
                     .font(.caption2.weight(.black))
                     .padding(.horizontal, 9)
                     .padding(.vertical, 6)

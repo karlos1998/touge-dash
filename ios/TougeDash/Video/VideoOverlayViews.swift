@@ -39,6 +39,7 @@ struct EditableVideoTelemetryOverlayView: View {
     var routeTimestamp: Date? = nil
     @State private var magnifyingElementID: UUID?
     @State private var magnificationBase = 1.0
+    @State private var elementPendingDeletion: UUID?
 
     var body: some View {
         GeometryReader { proxy in
@@ -68,11 +69,25 @@ struct EditableVideoTelemetryOverlayView: View {
                 }
                 .gesture(dragGesture(for: element.id, canvasSize: proxy.size, orientation: orientation))
                 .simultaneousGesture(magnifyGesture(for: element.id))
-                .contextMenu {
-                    Button(role: .destructive) {
-                        removeElement(id: element.id)
-                    } label: {
-                        Label(localized("Usuń widget"), systemImage: "trash")
+                .overlay(alignment: deletionControlAlignment(for: position)) {
+                    if selectedElementID == element.id {
+                        Button {
+                            elementPendingDeletion = element.id
+                        } label: {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 10, weight: .black))
+                                .foregroundStyle(.white)
+                                .frame(width: 26, height: 26)
+                                .background(Color.red.opacity(0.92), in: Circle())
+                                .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 1))
+                                .shadow(color: .black.opacity(0.45), radius: 3, y: 1)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Circle())
+                        .offset(
+                            x: position.x < 0.3 ? -8 : 8,
+                            y: position.y < 0.3 ? -8 : 8
+                        )
                     }
                 }
                 .overlay(alignment: position.x > 0.7 ? .leading : .trailing) {
@@ -104,6 +119,31 @@ struct EditableVideoTelemetryOverlayView: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .coordinateSpace(name: "video-overlay-canvas")
+        .alert(localized("Usunąć widget?"), isPresented: deletionConfirmationBinding) {
+            Button(localized("Anuluj"), role: .cancel) {
+                elementPendingDeletion = nil
+            }
+            Button(localized("Usuń widget"), role: .destructive) {
+                if let id = elementPendingDeletion { removeElement(id: id) }
+                elementPendingDeletion = nil
+            }
+        } message: {
+            Text(localized("Widget zniknie z układu filmu. Możesz dodać go ponownie przyciskiem plus."))
+        }
+    }
+
+    private var deletionConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { elementPendingDeletion != nil },
+            set: { if !$0 { elementPendingDeletion = nil } }
+        )
+    }
+
+    private func deletionControlAlignment(for position: VideoOverlayPosition) -> Alignment {
+        if position.y < 0.3 {
+            return position.x < 0.3 ? .bottomTrailing : .bottomLeading
+        }
+        return position.x < 0.3 ? .topTrailing : .topLeading
     }
 
     private func dragGesture(

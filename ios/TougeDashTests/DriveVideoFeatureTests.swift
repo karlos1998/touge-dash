@@ -335,11 +335,12 @@ final class DriveVideoFeatureTests: XCTestCase {
         var telemetry = TelemetrySnapshot.preview
         telemetry.speedKPH = 72
         let sample = TelemetryHistorySample(snapshot: telemetry, timestamp: .now)
+        let template = VideoOverlayTemplate.routeChase
         let preview = ZStack {
             Color.black
             EditableVideoTelemetryOverlayView(
-                template: .constant(.routeChase),
-                selectedElementID: .constant(nil),
+                template: .constant(template),
+                selectedElementID: .constant(template.elements[0].id),
                 sample: sample,
                 samples: [sample]
             )
@@ -350,7 +351,7 @@ final class DriveVideoFeatureTests: XCTestCase {
         let image = try XCTUnwrap(renderer.uiImage)
         XCTAssertEqual(image.size, CGSize(width: 390, height: 220))
         let attachment = XCTAttachment(image: image)
-        attachment.name = "Editable-Map-Zoom-Controls"
+        attachment.name = "Editable-Map-Zoom-And-Remove-Controls"
         attachment.lifetime = .keepAlways
         add(attachment)
     }

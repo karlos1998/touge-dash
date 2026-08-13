@@ -13,7 +13,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
@@ -344,7 +343,7 @@ private fun VideoAlignmentEditor(
                     )
                 }
             }
-            Text(appText("Drag HUD elements, pinch to resize, or hold one to remove it. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD, uszczypnij, aby zmienić rozmiar, albo przytrzymaj, aby usunąć. Układ pionowy i poziomy zapisuje się osobno."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
+            Text(appText("Drag HUD elements and pinch with two fingers to resize. Tap a widget to reveal its remove button. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD i uszczypnij dwoma palcami, aby zmienić rozmiar. Stuknij widget, aby pokazać przycisk usuwania. Układ pionowy i poziomy zapisuje się osobno."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
             OutlinedButton(
                 onClick = { templates.firstOrNull { it.entity.id == templateId }?.let { container.videoRepository.updateOverlayTemplate(it.copy(definition = overlayDefinition)) } },
                 modifier = Modifier.fillMaxWidth()
@@ -522,13 +521,30 @@ private fun BoxScope.EditableHudPreview(
                         select(element.id)
                         transform(element.id, pan.x, pan.y, zoom)
                     }
-                }.pointerInput(element.id) {
-                    detectTapGestures(
-                        onTap = { select(element.id) },
-                        onLongPress = { requestDelete(element.id) }
-                    )
-                }
+                }.clickable { select(element.id) }
             )
+            if (selectedElementId == element.id) {
+                IconButton(
+                    onClick = { requestDelete(element.id) },
+                    modifier = Modifier
+                        .align(
+                            if (position.y < .3f) {
+                                if (position.x < .3f) Alignment.BottomEnd else Alignment.BottomStart
+                            } else {
+                                if (position.x < .3f) Alignment.TopEnd else Alignment.TopStart
+                            }
+                        )
+                        .offset(
+                            x = if (position.x < .3f) (-8).dp else 8.dp,
+                            y = if (position.y < .3f) (-8).dp else 8.dp
+                        )
+                        .size(30.dp)
+                        .background(TougeRed.copy(alpha = .94f), androidx.compose.foundation.shape.CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = .9f), androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(Icons.Default.Delete, appText("Remove widget", "Usuń widget"), tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+            }
             if (element.kind.isRouteMap) {
                 Column(
                     Modifier

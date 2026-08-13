@@ -627,6 +627,9 @@
 "Przeciągnij lub uszczypnij element" = "Drag or pinch an element";
 "Przeciągnij, uszczypnij lub przytrzymaj element" = "Drag, pinch, or hold an element";
 "Usuń widget" = "Remove widget";
+"Przeciągnij lub uszczypnij; stuknij, aby edytować" = "Drag or pinch; tap to edit";
+"Usunąć widget?" = "Remove widget?";
+"Widget zniknie z układu filmu. Możesz dodać go ponownie przyciskiem plus." = "The widget will disappear from the video layout. You can add it again with the plus button.";
 "Edytuj nazwę i tagi" = "Edit name and tags";
 "Udostępnij link" = "Share link";
 "np. Próba boostu po strojeniu" = "e.g. Boost run after tuning";
