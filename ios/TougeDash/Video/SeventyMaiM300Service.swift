@@ -275,6 +275,27 @@ enum SeventyMaiM300Protocol {
         return parseCameraDate(String(name[matchRange]), calendar: calendar)
     }
 
+    static func cameraDate(from result: Any, calendar: Calendar = .current) -> Date? {
+        if let value = result as? String {
+            return parseCameraDate(value, calendar: calendar)
+        }
+        if let dictionary = result as? [String: Any] {
+            for key in ["systime", "time", "devts"] {
+                if let value = string(dictionary[key]),
+                   let date = parseCameraDate(value, calendar: calendar) {
+                    return date
+                }
+            }
+            for key in ["Result", "result", "data"] {
+                if let nested = dictionary[key],
+                   let date = cameraDate(from: nested, calendar: calendar) {
+                    return date
+                }
+            }
+        }
+        return nil
+    }
+
     static func correctedClip(
         dictionary: [String: Any],
         clockOffsetSeconds: TimeInterval?,
@@ -660,6 +681,31 @@ actor SeventyMaiM300Client {
         progress: ProgressHandler?
     ) async throws -> TimeInterval? {
         await progress?(.readingClock)
+        var bestReading: (roundTrip: TimeInterval, offset: TimeInterval)?
+
+        // `getsystime.cgi` is the dedicated live-clock endpoint used by the
+        // official client. A menu snapshot can contain a stale `systime`, which
+        // shifts every imported frame by the age of that snapshot.
+        for _ in 0..<3 {
+            let sentAt = Date()
+            guard let result = try? await signedResult(
+                host: host,
+                endpoint: "getsystime.cgi",
+                connectKey: connectKey
+            ) else { break }
+            let receivedAt = Date()
+            guard let cameraTime = SeventyMaiM300Protocol.cameraDate(from: result) else { break }
+            let roundTrip = receivedAt.timeIntervalSince(sentAt)
+            let midpoint = sentAt.addingTimeInterval(roundTrip / 2)
+            let reading = (roundTrip: roundTrip, offset: cameraTime.timeIntervalSince(midpoint))
+            if bestReading == nil || reading.roundTrip < bestReading!.roundTrip {
+                bestReading = reading
+            }
+        }
+        if let bestReading { return bestReading.offset }
+
+        // Older firmware may not expose the dedicated endpoint. Keep a
+        // compatibility fallback, but only when a real date is present.
         let sentAt = Date()
         let result = try await signedResult(
             host: host,
@@ -667,9 +713,7 @@ actor SeventyMaiM300Client {
             connectKey: connectKey
         )
         let receivedAt = Date()
-        guard let dictionary = result as? [String: Any],
-              let rawTime = valueString(dictionary["systime"]),
-              let cameraTime = SeventyMaiM300Protocol.parseCameraDate(rawTime) else { return nil }
+        guard let cameraTime = SeventyMaiM300Protocol.cameraDate(from: result) else { return nil }
         let midpoint = sentAt.addingTimeInterval(receivedAt.timeIntervalSince(sentAt) / 2)
         return cameraTime.timeIntervalSince(midpoint)
     }

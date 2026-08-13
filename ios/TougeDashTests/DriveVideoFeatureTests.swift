@@ -236,6 +236,27 @@ final class DriveVideoFeatureTests: XCTestCase {
         XCTAssertEqual(matches.map(\.id), [clip.id])
     }
 
+    func test70maiClockParserAcceptsDedicatedEndpointShapes() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let expected = try XCTUnwrap(SeventyMaiM300Protocol.parseCameraDate(
+            "20260813-080015",
+            calendar: calendar
+        ))
+
+        XCTAssertEqual(
+            SeventyMaiM300Protocol.cameraDate(from: "20260813-080015", calendar: calendar),
+            expected
+        )
+        XCTAssertEqual(
+            SeventyMaiM300Protocol.cameraDate(
+                from: ["Result": ["systime": "20260813080015"]],
+                calendar: calendar
+            ),
+            expected
+        )
+    }
+
     func testM300UsesNextTimestampWhenFirmwareReportsShortDuration() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
