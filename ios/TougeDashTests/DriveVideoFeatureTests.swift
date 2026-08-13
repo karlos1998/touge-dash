@@ -6,6 +6,24 @@ import XCTest
 @testable import TougeDash
 
 final class DriveVideoFeatureTests: XCTestCase {
+    func testTelemetryTimestampUsesExactWallClockSecond() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let timestamp = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026,
+            month: 8,
+            day: 13,
+            hour: 8,
+            minute: 5,
+            second: 19
+        )))
+
+        XCTAssertEqual(
+            VideoTelemetryTimestampFormatter.string(from: timestamp, calendar: calendar),
+            "2026-08-13 08:05:19"
+        )
+    }
+
     func testRecordingKeepsFullIncidentCadenceButThrottlesDashboard() {
         XCTAssertEqual(TelemetryUpdateCadence.processingInterval, 1.0 / 25.0, accuracy: 0.0001)
         XCTAssertEqual(TelemetryUpdateCadence.normalDisplayInterval, 1.0 / 20.0, accuracy: 0.0001)

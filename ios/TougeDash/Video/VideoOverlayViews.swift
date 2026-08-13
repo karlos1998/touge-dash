@@ -326,6 +326,7 @@ private struct VideoOverlayElementView: View {
         Group {
             switch element.kind {
             case .digital: digitalValue
+            case .telemetryTimestamp: telemetryTimestamp
             case .gauge: gaugeValue
             case .bar: barValue
             case .speedCluster: speedCluster
@@ -342,6 +343,36 @@ private struct VideoOverlayElementView: View {
             }
         }
         .shadow(color: shadowColor, radius: 5 * scale)
+    }
+
+    private var telemetryTimestamp: some View {
+        VStack(alignment: .leading, spacing: 2 * scale) {
+            Text(localized("CZAS TELEMETRII"))
+                .font(.system(size: 6.5 * scale, weight: .black))
+                .tracking(0.8 * scale)
+                .foregroundStyle(element.accent.color)
+            Text(telemetryTimestampText)
+                .font(.system(size: 14 * scale, weight: .black, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 10 * scale)
+        .padding(.vertical, 7 * scale)
+        .frame(width: 184 * scale, alignment: .leading)
+        .background(background)
+        .overlay(alignment: .topLeading) {
+            Rectangle()
+                .fill(element.accent.color)
+                .frame(width: 38 * scale, height: max(2, 2 * scale))
+                .padding(.leading, 10 * scale)
+        }
+    }
+
+    private var telemetryTimestampText: String {
+        guard let timestamp = routeTimestamp ?? sample?.timestamp else {
+            return "---- -- -- --:--:--"
+        }
+        return VideoTelemetryTimestampFormatter.string(from: timestamp)
     }
 
     private var digitalValue: some View {
@@ -1158,8 +1189,10 @@ private struct VideoOverlayElementEditor: View {
 
     var body: some View {
         DisclosureGroup {
-            Picker(localized("Parametr"), selection: $element.metric) {
-                ForEach(DashboardMetric.allCases) { metric in Text(metric.title).tag(metric) }
+            if element.kind != .telemetryTimestamp {
+                Picker(localized("Parametr"), selection: $element.metric) {
+                    ForEach(DashboardMetric.allCases) { metric in Text(metric.title).tag(metric) }
+                }
             }
             Picker(localized("Wygląd"), selection: $element.kind) {
                 ForEach(VideoOverlayElementKind.allCases) { kind in
@@ -1183,12 +1216,12 @@ private struct VideoOverlayElementEditor: View {
             }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: element.metric.icon)
+                Image(systemName: element.kind == .telemetryTimestamp ? element.kind.icon : element.metric.icon)
                     .frame(width: 34, height: 34)
                     .foregroundStyle(element.accent.color)
                     .background(element.accent.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(element.metric.title).font(.headline)
+                    Text(element.kind == .telemetryTimestamp ? element.kind.title : element.metric.title).font(.headline)
                     Text("\(element.kind.title) · \(element.scale.title)")
                         .font(.caption)
                         .foregroundStyle(.secondary)

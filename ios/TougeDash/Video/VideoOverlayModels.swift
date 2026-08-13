@@ -20,6 +20,7 @@ enum VideoOverlayStyle: String, Codable, CaseIterable, Identifiable, Sendable {
 
 enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Sendable {
     case digital
+    case telemetryTimestamp
     case gauge
     case bar
     case speedCluster
@@ -40,6 +41,7 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
     var title: String {
         switch self {
         case .digital: localized("Wartość cyfrowa")
+        case .telemetryTimestamp: localized("Data i czas telemetrii")
         case .gauge: localized("Zegar")
         case .bar: localized("Pasek")
         case .speedCluster: localized("Zegar prędkości + boost + RPM")
@@ -60,6 +62,7 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
     var icon: String {
         switch self {
         case .digital: "number"
+        case .telemetryTimestamp: "calendar.badge.clock"
         case .gauge: "gauge.with.dots.needle.67percent"
         case .bar: "chart.bar.fill"
         case .speedCluster: "speedometer"
@@ -90,6 +93,24 @@ enum VideoOverlayElementKind: String, Codable, CaseIterable, Identifiable, Senda
 
     var usesLightMap: Bool {
         self == .routeMapLight || self == .routeMapLightCircular || self == .routeMapAmber
+    }
+}
+
+enum VideoTelemetryTimestampFormatter {
+    static func string(from date: Date, calendar: Calendar = .current) -> String {
+        let components = calendar.dateComponents(
+            [.year, .month, .day, .hour, .minute, .second],
+            from: date
+        )
+        return String(
+            format: "%04d-%02d-%02d %02d:%02d:%02d",
+            components.year ?? 0,
+            components.month ?? 0,
+            components.day ?? 0,
+            components.hour ?? 0,
+            components.minute ?? 0,
+            components.second ?? 0
+        )
     }
 }
 

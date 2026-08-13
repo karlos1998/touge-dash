@@ -863,7 +863,15 @@ private final class VideoOverlayFrameCache: @unchecked Sendable {
         let timestamp = recordingStart.addingTimeInterval(max(0, seconds - sourceStartSeconds))
         let index = nearestIndex(to: timestamp)
         let containsMap = template.elements.contains { $0.kind.isRouteMap }
-        let timeBucket = containsMap ? Int((seconds * 30).rounded(.down)) : index
+        let containsTimestamp = template.elements.contains { $0.kind == .telemetryTimestamp }
+        let timeBucket: Int
+        if containsMap {
+            timeBucket = Int((seconds * 30).rounded(.down))
+        } else if containsTimestamp {
+            timeBucket = Int(timestamp.timeIntervalSince1970.rounded(.down))
+        } else {
+            timeBucket = index
+        }
 
         lock.lock()
         defer { lock.unlock() }
@@ -964,6 +972,7 @@ enum VideoOverlayCGRenderer {
         let scale = baseScale * CGFloat(element.effectiveScale)
         switch element.kind {
         case .digital: return CGSize(width: 94 * scale, height: 56 * scale)
+        case .telemetryTimestamp: return CGSize(width: 184 * scale, height: 50 * scale)
         case .gauge: return CGSize(width: 112 * scale, height: 112 * scale)
         case .bar: return CGSize(width: 190 * scale, height: 48 * scale)
         case .speedCluster: return CGSize(width: 126 * scale, height: 126 * scale)
@@ -1005,6 +1014,8 @@ enum VideoOverlayCGRenderer {
         switch element.kind {
         case .digital:
             drawDigital(element: element, style: style, configuration: configuration, sample: sample, rect: rect, context: context, baseScale: baseScale)
+        case .telemetryTimestamp:
+            drawTelemetryTimestamp(element: element, style: style, timestamp: routeTimestamp, rect: rect, context: context, baseScale: baseScale)
         case .gauge:
             drawGauge(element: element, style: style, configuration: configuration, sample: sample, rect: rect, context: context, baseScale: baseScale)
         case .bar:
@@ -1223,6 +1234,39 @@ enum VideoOverlayCGRenderer {
             let fill = CGRect(x: bar.minX, y: bar.minY, width: max(2, bar.width * progress), height: bar.height)
             fillRoundedRect(fill, context: context)
         }
+    }
+
+    private static func drawTelemetryTimestamp(
+        element: VideoOverlayElement,
+        style: VideoOverlayStyle,
+        timestamp: Date,
+        rect: CGRect,
+        context: CGContext,
+        baseScale: CGFloat
+    ) {
+        let accent = element.accent.uiColor
+        drawBackground(rect: rect, style: style, accent: accent, context: context, baseScale: baseScale)
+        let localScale = rect.width / 184
+        let padding = 10 * localScale
+        let labelFont = UIFont.systemFont(ofSize: 6.5 * localScale, weight: .black)
+        let timestampFont = UIFont.monospacedDigitSystemFont(ofSize: 14 * localScale, weight: .black)
+
+        (localized("CZAS TELEMETRII") as NSString).draw(
+            at: CGPoint(x: rect.minX + padding, y: rect.minY + 6 * localScale),
+            withAttributes: [.font: labelFont, .foregroundColor: accent]
+        )
+        (VideoTelemetryTimestampFormatter.string(from: timestamp) as NSString).draw(
+            at: CGPoint(x: rect.minX + padding, y: rect.minY + 19 * localScale),
+            withAttributes: [.font: timestampFont, .foregroundColor: UIColor.white]
+        )
+
+        context.setFillColor(accent.cgColor)
+        context.fill(CGRect(
+            x: rect.minX + padding,
+            y: rect.minY,
+            width: 38 * localScale,
+            height: max(2, 2 * localScale)
+        ))
     }
 
     private static func drawGauge(

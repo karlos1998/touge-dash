@@ -659,7 +659,12 @@ private struct DriveVideoSynchronizedPlayer: View {
             if let player {
                 VideoPlayer(player: player)
                 if let overlay {
-                    VideoTelemetryOverlayView(template: overlay, sample: selectedSample, samples: samples)
+                    VideoTelemetryOverlayView(
+                        template: overlay,
+                        sample: selectedSample,
+                        samples: samples,
+                        routeTimestamp: selectedTime
+                    )
                         .padding(5)
                 }
             } else if fileIsMissing {
@@ -905,6 +910,12 @@ private struct DriveVideoExportSheet: View {
         .overlay(alignment: .topTrailing) {
             if addsOverlay {
                 Menu {
+                    Button {
+                        addTelemetryTimestampWidget()
+                    } label: {
+                        Label(VideoOverlayElementKind.telemetryTimestamp.title, systemImage: VideoOverlayElementKind.telemetryTimestamp.icon)
+                    }
+                    Divider()
                     ForEach(overlayStore.templates) { template in
                         Menu(template.name) {
                             ForEach(template.elements) { element in
@@ -973,8 +984,24 @@ private struct DriveVideoExportSheet: View {
         selectedElementID = widget.id
     }
 
+    private func addTelemetryTimestampWidget() {
+        let widget = VideoOverlayElement(
+            metric: .speed,
+            slot: .topCenter,
+            scale: .medium,
+            accent: .cyan,
+            kind: .telemetryTimestamp,
+            landscapePosition: .init(x: 0.5, y: 0.11),
+            portraitPosition: .init(x: 0.5, y: 0.1)
+        )
+        overlayDraft.elements.append(widget)
+        selectedElementID = widget.id
+    }
+
     private func widgetTitle(_ element: VideoOverlayElement) -> String {
         switch element.kind {
+        case .telemetryTimestamp:
+            element.kind.title
         case .routeMap, .routeMapCircular, .routeMapFollow, .routeMapLight, .routeMapLightCircular, .routeMapAmber:
             element.kind.title
         default:
