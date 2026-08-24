@@ -9,6 +9,7 @@ struct TougeDashRootView: View {
     @ObservedObject var videoRecorder: DriveVideoRecorder
     @ObservedObject var videoOverlays: VideoOverlayTemplateStore
     @Binding var appearance: AppAppearance
+    @Binding var language: AppLanguage
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -22,7 +23,8 @@ struct TougeDashRootView: View {
         dashboardBuffer: DashboardTelemetryBuffer,
         videoRecorder: DriveVideoRecorder,
         videoOverlays: VideoOverlayTemplateStore,
-        appearance: Binding<AppAppearance>
+        appearance: Binding<AppAppearance>,
+        language: Binding<AppLanguage>
     ) {
         self.controller = controller
         self.cloudAccount = cloudAccount
@@ -32,6 +34,7 @@ struct TougeDashRootView: View {
         self.videoRecorder = videoRecorder
         self.videoOverlays = videoOverlays
         _appearance = appearance
+        _language = language
         #if DEBUG
         let historyPreview = ProcessInfo.processInfo.environment["TOUGE_DASH_HISTORY_PREVIEW"] == "1"
         let settingsPreview = ProcessInfo.processInfo.environment["TOUGE_DASH_SETTINGS_PREVIEW"] == "1"
@@ -86,7 +89,8 @@ struct TougeDashRootView: View {
                 cloudSync: cloudSync,
                 videoRecorder: videoRecorder,
                 segmentSettings: controller.historyRecorder.segmentSettings,
-                appearance: $appearance
+                appearance: $appearance,
+                language: $language
             )
                 .toolbarVisibility(compactLandscape ? .hidden : .automatic, for: .tabBar)
                 .tabItem {
@@ -122,6 +126,7 @@ private struct AppSettingsView: View {
     @ObservedObject var videoRecorder: DriveVideoRecorder
     @ObservedObject var segmentSettings: DriveSegmentSettingsStore
     @Binding var appearance: AppAppearance
+    @Binding var language: AppLanguage
 
     var body: some View {
         NavigationStack {
@@ -135,6 +140,12 @@ private struct AppSettingsView: View {
                             subtitle: localized("Motyw interfejsu aplikacji")
                         )
                         AppearanceSettingsCard(appearance: $appearance)
+
+                        settingsSection(
+                            title: localized("JĘZYK"),
+                            subtitle: localized("Język interfejsu aplikacji")
+                        )
+                        LanguageSettingsCard(language: $language)
 
                         settingsSection(
                             title: localized("KONTO I SYNCHRONIZACJA"),
@@ -210,5 +221,41 @@ private struct AppearanceSettingsCard: View {
         }
         .padding(16)
         .cardSurface(accent: .tougeBlue)
+    }
+}
+
+private struct LanguageSettingsCard: View {
+    @Binding var language: AppLanguage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(spacing: 12) {
+                ZStack {
+                    CutCornerPanel(cut: 9)
+                        .fill(Color.tougeCyan.opacity(0.13))
+                    Image(systemName: "globe")
+                        .foregroundStyle(Color.tougeCyan)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localized("JĘZYK APLIKACJI"))
+                        .font(.system(size: 12, weight: .black))
+                        .tracking(1)
+                    Text(localized("Domyślnie zgodny z językiem urządzenia"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Picker(localized("Język aplikacji"), selection: $language) {
+                ForEach(AppLanguage.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(16)
+        .cardSurface(accent: .tougeCyan)
     }
 }

@@ -17,6 +17,13 @@
 "Systemowy" = "System";
 "Jasny" = "Light";
 "Ciemny" = "Dark";
+"JĘZYK" = "LANGUAGE";
+"Język interfejsu aplikacji" = "Application interface language";
+"JĘZYK APLIKACJI" = "APPLICATION LANGUAGE";
+"Domyślnie zgodny z językiem urządzenia" = "Uses the device language by default";
+"Język aplikacji" = "Application language";
+"Polski" = "Polish";
+"Angielski" = "English";
 "Szybki podgląd aktywny · ekran iPhone’a nie wygasi się automatycznie" = "Quick view active · the iPhone screen will stay on";
 "Szukanie interfejsu ECUMaster…" = "Searching for an ECUMaster interface…";
 "Urządzenia ECUMaster" = "ECUMaster devices";

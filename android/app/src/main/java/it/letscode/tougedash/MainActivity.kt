@@ -19,6 +19,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.letscode.tougedash.telemetry.TelemetryService
 import it.letscode.tougedash.telemetry.TelemetryRuntime
 import it.letscode.tougedash.ui.TougeDashApp
+import it.letscode.tougedash.ui.AppLanguageEnvironment
+import it.letscode.tougedash.ui.AppLanguagePreference
 import it.letscode.tougedash.ui.theme.TougeDashTheme
 import it.letscode.tougedash.ui.theme.AppThemePreference
 
@@ -39,28 +41,36 @@ class MainActivity : ComponentActivity() {
         container.authRepository.handleUri(intent?.data)
         setContent {
             var appTheme by remember { mutableStateOf(AppThemePreference.read(this)) }
-            TougeDashTheme(appTheme) {
-                val snapshot by container.runtime.snapshot.collectAsStateWithLifecycle()
-                val connection by container.runtime.connection.collectAsStateWithLifecycle()
-                val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-                    startTelemetry()
+            var appLanguage by remember { mutableStateOf(AppLanguagePreference.read(this)) }
+            AppLanguageEnvironment(appLanguage) {
+                TougeDashTheme(appTheme) {
+                    val snapshot by container.runtime.snapshot.collectAsStateWithLifecycle()
+                    val connection by container.runtime.connection.collectAsStateWithLifecycle()
+                    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+                        startTelemetry()
+                    }
+                    LaunchedEffect(Unit) {
+                        if (hasBluetoothPermissions()) startTelemetry()
+                        else permissionLauncher.launch(requestedPermissions())
+                    }
+                    TougeDashApp(
+                        container = container,
+                        snapshot = snapshot,
+                        connection = connection,
+                        appTheme = appTheme,
+                        onAppThemeChanged = {
+                            appTheme = it
+                            AppThemePreference.write(this, it)
+                        },
+                        appLanguage = appLanguage,
+                        onAppLanguageChanged = {
+                            appLanguage = it
+                            AppLanguagePreference.write(this, it)
+                        },
+                        requestPermissions = { permissionLauncher.launch(requestedPermissions()) },
+                        rescan = { startTelemetry(TelemetryService.ACTION_RESCAN) }
+                    )
                 }
-                LaunchedEffect(Unit) {
-                    if (hasBluetoothPermissions()) startTelemetry()
-                    else permissionLauncher.launch(requestedPermissions())
-                }
-                TougeDashApp(
-                    container = container,
-                    snapshot = snapshot,
-                    connection = connection,
-                    appTheme = appTheme,
-                    onAppThemeChanged = {
-                        appTheme = it
-                        AppThemePreference.write(this, it)
-                    },
-                    requestPermissions = { permissionLauncher.launch(requestedPermissions()) },
-                    rescan = { startTelemetry(TelemetryService.ACTION_RESCAN) }
-                )
             }
         }
     }

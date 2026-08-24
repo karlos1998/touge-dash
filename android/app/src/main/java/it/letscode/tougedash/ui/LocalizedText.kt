@@ -1,7 +1,7 @@
 package it.letscode.tougedash.ui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.platform.LocalConfiguration
 import it.letscode.tougedash.model.ConnectionState
 import it.letscode.tougedash.model.DashboardTemplate
 import it.letscode.tougedash.model.DashboardWidgetKind
@@ -9,7 +9,7 @@ import it.letscode.tougedash.model.TelemetryMetric
 
 @Composable
 internal fun appText(english: String, polish: String): String =
-    if (Locale.current.language == "pl") polish else english
+    if (LocalConfiguration.current.locales[0].language == "pl") polish else english
 
 @Composable
 internal fun DashboardTemplate.localizedName(): String =
@@ -28,7 +28,7 @@ internal fun ConnectionState.localizedLabel(): String = when (this) {
 }
 
 @Composable
-internal fun TelemetryMetric.localizedName(): String = localizedName(Locale.current.language)
+internal fun TelemetryMetric.localizedName(): String = localizedName(LocalConfiguration.current.locales[0].language)
 
 internal fun TelemetryMetric.localizedName(language: String): String = when (this) {
     TelemetryMetric.BOOST -> if (language == "pl") "DOŁADOWANIE" else "BOOST"

@@ -22,6 +22,7 @@ final class TougeDashAppDelegate: NSObject, UIApplicationDelegate {
 struct TougeDashApp: App {
     @UIApplicationDelegateAdaptor(TougeDashAppDelegate.self) private var appDelegate
     @AppStorage(AppAppearance.defaultsKey) private var appearanceValue = AppAppearance.system.rawValue
+    @AppStorage(AppLanguage.defaultsKey) private var languageValue = AppLanguage.system.rawValue
     private let modelContainer: ModelContainer
     @StateObject private var controller: TelemetryController
     @StateObject private var cloudAccount: CloudAccountService
@@ -103,9 +104,11 @@ struct TougeDashApp: App {
                 dashboardBuffer: dashboardBuffer,
                 videoRecorder: videoRecorder,
                 videoOverlays: videoOverlays,
-                appearance: appearanceBinding
+                appearance: appearanceBinding,
+                language: languageBinding
             )
                 .preferredColorScheme(appearance.colorScheme)
+                .environment(\.locale, language.locale)
         }
         .modelContainer(modelContainer)
     }
@@ -118,6 +121,17 @@ struct TougeDashApp: App {
         Binding(
             get: { appearance },
             set: { appearanceValue = $0.rawValue }
+        )
+    }
+
+    private var language: AppLanguage {
+        AppLanguage(rawValue: languageValue) ?? .system
+    }
+
+    private var languageBinding: Binding<AppLanguage> {
+        Binding(
+            get: { language },
+            set: { languageValue = $0.rawValue }
         )
     }
 }

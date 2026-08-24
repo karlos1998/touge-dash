@@ -123,6 +123,8 @@ fun TougeDashApp(
     connection: TelemetryConnection,
     appTheme: AppTheme,
     onAppThemeChanged: (AppTheme) -> Unit,
+    appLanguage: AppLanguage,
+    onAppLanguageChanged: (AppLanguage) -> Unit,
     requestPermissions: () -> Unit,
     rescan: () -> Unit
 ) {
@@ -212,7 +214,13 @@ fun TougeDashApp(
                     0 -> ConfigurableDashboardScreen(container, snapshot, connection.hardwareId, dashboardEditing)
                     1 -> HistoryScreen(container, selectedSessionId, { selectedSessionId = it }, { selectedSessionId = null })
                     2 -> AlertsScreen(container, connection.hardwareId)
-                    else -> MoreScreen(container, appTheme, onAppThemeChanged)
+                    else -> MoreScreen(
+                        container,
+                        appTheme,
+                        onAppThemeChanged,
+                        appLanguage,
+                        onAppLanguageChanged
+                    )
                 }
             }
             if (tab == 0 && !dashboardEditing) DashboardNavigationOverlay(
@@ -753,7 +761,13 @@ private fun PlaceholderScreen(title: String, body: String, icon: androidx.compos
 }
 
 @Composable
-private fun MoreScreen(container: AppContainer, appTheme: AppTheme, onAppThemeChanged: (AppTheme) -> Unit) {
+private fun MoreScreen(
+    container: AppContainer,
+    appTheme: AppTheme,
+    onAppThemeChanged: (AppTheme) -> Unit,
+    appLanguage: AppLanguage,
+    onAppLanguageChanged: (AppLanguage) -> Unit
+) {
     val context = LocalContext.current
     val vehicles by container.dao.vehicles().collectAsState(initial = emptyList())
     var rename by remember { mutableStateOf<VehicleEntity?>(null) }
@@ -826,6 +840,37 @@ private fun MoreScreen(container: AppContainer, appTheme: AppTheme, onAppThemeCh
                                             AppTheme.SYSTEM -> appText("System", "Systemowy")
                                             AppTheme.LIGHT -> appText("Light", "Jasny")
                                             AppTheme.DARK -> appText("Dark", "Ciemny")
+                                        },
+                                        maxLines = 1
+                                    )
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+            TougePanelSurface(MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column {
+                        Text(appText("Application language", "Język aplikacji"), fontWeight = FontWeight.Bold)
+                        Text(
+                            appText("Uses the device language by default", "Domyślnie zgodny z językiem urządzenia"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        AppLanguage.entries.forEach { option ->
+                            FilterChip(
+                                selected = appLanguage == option,
+                                onClick = { onAppLanguageChanged(option) },
+                                label = {
+                                    Text(
+                                        when (option) {
+                                            AppLanguage.SYSTEM -> appText("System", "Systemowy")
+                                            AppLanguage.POLISH -> appText("Polish", "Polski")
+                                            AppLanguage.ENGLISH -> appText("English", "Angielski")
                                         },
                                         maxLines = 1
                                     )
@@ -1060,7 +1105,7 @@ internal fun DashboardAccent.color(): Color = when (this) {
 
 @Composable
 internal fun TelemetryMetric.format(value: Double): String {
-    val locale = if (androidx.compose.ui.text.intl.Locale.current.language == "pl") Locale.forLanguageTag("pl-PL") else Locale.US
+    val locale = if (LocalConfiguration.current.locales[0].language == "pl") Locale.forLanguageTag("pl-PL") else Locale.US
     return when (precision) {
         0 -> value.roundToInt().toString()
         1 -> String.format(locale, "%.1f", value)

@@ -75,7 +75,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -461,7 +461,7 @@ private fun TelemetryChart(
     series: List<Pair<TelemetryMetric, Color>>,
     selectTimestamp: (Long) -> Unit
 ) {
-    val language = Locale.current.language
+    val language = LocalConfiguration.current.locales[0].language
     val sessionDuration = (endedAt - startedAt).coerceAtLeast(1)
     val sharedScale = series.map { it.first.unit }.distinct().size == 1
     val domains = remember(samples, series) {
