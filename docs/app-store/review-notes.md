@@ -30,14 +30,22 @@ The account uses the same production environment as the submitted build and cont
 ## Suggested review flow
 
 1. Launch the app and allow Bluetooth access. Without the required interface, the dashboard correctly shows a disconnected state.
-2. Open `Historia` to inspect the local history and optional GPS controls.
+2. Open `Ustawienia` → `Rejestrowanie przejazdów` to inspect the optional `Zapis trasy` control.
+   Route recording starts only after the user enables it and the app connects to a compatible
+   EMULOGGER. It continues while the iPhone is locked so that GPS positions remain synchronized
+   with the background Bluetooth telemetry session. It stops when the interface disconnects or the
+   user disables route recording.
 3. Select `Włącz synchronizację online`, then sign in with the review credentials supplied in App Store Connect.
 4. Open the account menu to inspect the privacy policy, sign out and account deletion entry point.
 5. The matching web dashboard is available at `https://touge-dash.letscode.it/`.
 
-Account deletion is available in the app under `Historia` → `Touge Dash Cloud` → account menu → `Usuń konto`. The operation permanently removes server-side account data. Local, offline history remains on the user's device until the user removes it or uninstalls the app.
+Account deletion is available in the app under `Ustawienia` → `Touge Dash Cloud` → `Konto` → `Usuń konto`. The operation permanently removes server-side account data. Local, offline history remains on the user's device until the user removes it or uninstalls the app.
 
 GPS recording is off by default. Location is requested only after the user explicitly enables route recording. Notifications are used for high oil-temperature and coolant-temperature alerts.
+
+Optional drive videos, their audio and recordings imported directly from a supported 70mai camera
+remain on the device and are never uploaded to Touge Dash Cloud. Local-network access is requested
+only when the user opens the 70mai import flow and connects directly to the camera's Wi-Fi network.
 
 Touge Dash is not a certified gauge. The app tells users to compare readings with the ECU manufacturer's software and not to interact with the app in a way that distracts them while driving.
 

@@ -8,7 +8,7 @@
 - Kategoria dodatkowa: `Sport`
 - Copyright: `2026 TrueCode Sp. z o.o.`
 - SKU: `touge-dash-ios-2026`
-- Wersja: `1.0`
+- Wersja: `1.4.2`
 - Cena: bezpłatna
 - Sposób wydania: ręczne opublikowanie po akceptacji
 
@@ -20,7 +20,7 @@
 
 ## Tekst promocyjny
 
-Dashboard, historia przejazdów, alerty temperatur i opcjonalna synchronizacja danych z EMULOGGERA — na iPhonie, iPadzie i Apple Watch.
+Dashboard ECUMaster, historia GPS, pomiary osiągów, alerty i zsynchronizowane narzędzia wideo — na iPhonie, iPadzie i Apple Watch.
 
 ## Opis
 
@@ -31,6 +31,14 @@ Najważniejsze parametry silnika są czytelne od razu po uruchomieniu aplikacji.
 HISTORIA PRZEJAZDÓW
 
 Każdy przejazd może zostać zapisany lokalnie na urządzeniu. Interaktywne wykresy pozwalają porównać parametry na wspólnej osi czasu, a opcjonalny zapis GPS pokazuje przebieg trasy i miejsce wybranej próbki.
+
+WIDEO I OSIĄGI
+
+Opcjonalnie nagraj przejazd kamerą iPhone'a, wybierz film ze Zdjęć albo zaimportuj pasujące klipy bezpośrednio z obsługiwanej kamery 70mai. Film pozostaje na urządzeniu i może zostać zsynchronizowany z telemetrią, przycięty oraz wyeksportowany do Zdjęć z konfigurowalną nakładką HUD. Automatyczny pomiar zapisuje próby 0–100, 100–200 i 200–250 km/h.
+
+RAPORTY INCYDENTÓW I ALERTY
+
+Konfigurowalne reguły wykrywają między innymi niskie ciśnienie oleju, ubogą mieszankę pod doładowaniem, overboost, wysoką temperaturę płynu lub oleju, niskie ciśnienie paliwa i napięcie. Raport incydentu zachowuje telemetrię sprzed zdarzenia i po nim, dostępną trasę GPS oraz notatki na osi czasu.
 
 TOUGE DASH CLOUD
 
@@ -43,12 +51,15 @@ Live Activity pokazuje najważniejsze wartości na ekranie blokady i w obsługiw
 FUNKCJE
 
 • automatyczne wykrywanie zgodnego interfejsu BLE,
-• adaptacyjny dashboard na iPhonie i iPadzie,
+• konfigurowalne dashboardy na iPhonie i iPadzie,
 • lokalna historia i interaktywne wykresy,
 • opcjonalny zapis trasy GPS,
+• pomiary 0–100, 100–200 i 200–250 km/h,
+• lokalne nagrywanie, import i eksport filmu z nakładką HUD,
+• bezpośredni import z obsługiwanych kamer 70mai,
+• konfigurowalne alerty i automatyczne raporty incydentów,
 • opcjonalna synchronizacja i panel WWW,
 • Live Activity, widgety i aplikacja Apple Watch,
-• alerty temperatury oleju i płynu chłodniczego,
 • diagnostyka połączenia Bluetooth.
 
 Touge Dash nie jest homologowanym przyrządem pomiarowym. Przed użyciem podczas jazdy porównaj wskazania z oprogramowaniem producenta sterownika i nie obsługuj aplikacji w sposób odwracający uwagę od drogi.

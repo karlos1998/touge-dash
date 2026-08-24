@@ -7,7 +7,7 @@
 - Primary category: `Utilities`
 - Secondary category: `Sports`
 - Copyright: `2026 TrueCode Sp. z o.o.`
-- Version: `1.0`
+- Version: `1.4.2`
 
 ## URLs
 
@@ -17,7 +17,7 @@
 
 ## Promotional text
 
-Live ECUMaster dashboard, drive history, temperature alerts and optional EMULOGGER sync on iPhone, iPad and Apple Watch.
+Live ECUMaster dashboard, GPS drive history, performance timing, alerts and synchronized video tools on iPhone, iPad and Apple Watch.
 
 ## Description
 
@@ -28,6 +28,14 @@ Key engine data is clear from the moment the app launches. Touge Dash automatica
 DRIVE HISTORY
 
 Every drive can be recorded locally on the device. Interactive charts place all parameters on one timeline, while optional GPS recording shows the route and the location of the selected sample.
+
+VIDEO AND PERFORMANCE
+
+Optionally record a drive with the iPhone camera, select a video from Photos or import matching clips directly from a supported 70mai dash camera. Video stays on the device and can be synchronized with telemetry, trimmed and exported to Photos with a configurable HUD. Automatic timing records 0–100, 100–200 and 200–250 km/h attempts.
+
+INCIDENT REPORTS AND ALERTS
+
+Configurable rules detect conditions such as low oil pressure, lean AFR under boost, overboost, high coolant or oil temperature, low fuel pressure and low voltage. Incident reports retain telemetry from before and after the event, together with any available GPS route and timeline notes.
 
 TOUGE DASH CLOUD
 
@@ -40,12 +48,15 @@ Live Activity keeps essential values available on the Lock Screen and in support
 FEATURES
 
 • automatic discovery of a compatible BLE interface,
-• adaptive dashboard for iPhone and iPad,
+• configurable dashboards for iPhone and iPad,
 • local drive history and interactive charts,
 • optional GPS route recording,
+• 0–100, 100–200 and 200–250 km/h timing,
+• local drive video recording, import and synchronized HUD export,
+• direct import from supported 70mai dash cameras,
+• configurable alert center and automatic incident reports,
 • optional cloud sync and web dashboard,
 • Live Activity, widgets and Apple Watch app,
-• oil and coolant temperature alerts,
 • Bluetooth connection diagnostics.
 
 Touge Dash is not a certified measuring instrument. Before using it while driving, compare its readings with the ECU manufacturer's software and do not interact with the app in a way that distracts you from the road.

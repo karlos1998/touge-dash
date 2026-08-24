@@ -10,9 +10,9 @@
 - [x] iOS tests pass.
 - [x] Release archive validates without errors.
 - [x] App Store Connect record is created for Apple ID `6797608558`.
-- [x] Version and build number are confirmed as `1.0 (5)`.
-- [x] App Store Connect IPA export succeeds with distribution signing.
-- [x] Uploaded build `1.0 (5)` finishes processing and is selected for version `1.0`.
+- [x] Version and build number are confirmed as `1.4.2 (21)`.
+- [x] App Store Connect archive and IPA export succeed with distribution signing.
+- [ ] Uploaded build `1.4.2 (21)` finishes processing and is selected for version `1.4.2`.
 
 ## Production services
 
@@ -24,14 +24,14 @@
 
 ## Product page
 
-- [x] Polish and English name, subtitle, description, promotional text and keywords are prepared.
+- [x] Polish and English name, subtitle, description, promotional text and keywords are updated for `1.4.2`.
 - [x] Support, marketing and privacy URLs are selected.
 - [x] App Privacy answers are documented.
 - [x] App Privacy answers and privacy policy URL are published in App Store Connect.
 - [x] iPhone 6.9-inch screenshots are prepared without an alpha channel.
 - [x] iPad 13-inch screenshots are prepared without an alpha channel.
 - [x] Apple Watch screenshots are prepared without an alpha channel.
-- [x] iPhone, iPad and Apple Watch screenshots are uploaded to version `1.0`.
+- [ ] Existing iPhone, iPad and Apple Watch screenshots are checked against the current `1.4.2` UI.
 - [x] Age rating questionnaire is completed with a `4+` result.
 - [x] Availability in 175 countries or regions, free price and manual release are configured.
 
@@ -41,5 +41,7 @@
 - [x] Physical ECU/EMULOGGER demonstration video is recorded and attached privately.
 - [x] Review account credentials are entered only in App Store Connect.
 - [x] Review contact is available by phone and email.
-- [x] Final build and all metadata are checked once more before `Submit for Review`.
-- [x] Version `1.0 (5)` is submitted with status `Waiting for Review`.
+- [x] Review notes explain the optional persistent background GPS flow and current Settings path.
+- [ ] Physical-device background-location recording is attached to App Review Information.
+- [ ] Final build and all metadata are checked once more before `Submit for Review`.
+- [ ] Build `1.4.2 (21)` is submitted for review.

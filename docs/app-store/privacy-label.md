@@ -26,13 +26,17 @@ Bez konta historia i ustawienia pozostają wyłącznie na urządzeniu. Dane prze
 ## Uprawnienia systemowe
 
 - Bluetooth: odbieranie telemetrii z kompatybilnego interfejsu ECUMaster.
-- Lokalizacja podczas używania: opcjonalny zapis trasy razem z telemetrią.
+- Lokalizacja podczas używania i w tle: opcjonalny, ciągły zapis trasy razem z telemetrią podczas
+  aktywnego połączenia z autem, również po zablokowaniu iPhone'a.
 - Powiadomienia: alerty przekroczenia temperatury oleju lub płynu chłodniczego.
 - Live Activities: bieżące parametry na ekranie blokady i obsługiwanych widokach CarPlay.
+- Aparat i mikrofon: opcjonalne, lokalne nagranie obrazu i dźwięku z przejazdu.
+- Zdjęcia: wybór filmu do lokalnego powiązania z telemetrią i zapis wyeksportowanej kopii.
+- Sieć lokalna: bezpośrednie połączenie z wybraną kamerą 70mai i pobranie wskazanego nagrania;
+  pliki wideo nie są wysyłane do Touge Dash Cloud.
 
 ## Usuwanie konta
 
-Ścieżka w aplikacji: `Historia` → sekcja `Touge Dash Cloud` → menu konta → `Usuń konto`.
+Ścieżka w aplikacji: `Ustawienia` → sekcja `Touge Dash Cloud` → menu `Konto` → `Usuń konto`.
 
 Operacja usuwa konto, zewnętrzne tożsamości logowania, pojazdy należące do użytkownika, zsynchronizowane przejazdy i próbki, zaproszenia, powiadomienia oraz aktywne tokeny udostępniania. Lokalna historia na urządzeniu pozostaje dostępna do chwili usunięcia jej przez użytkownika lub odinstalowania aplikacji.
-
