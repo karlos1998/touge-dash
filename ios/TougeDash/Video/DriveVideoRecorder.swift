@@ -52,8 +52,11 @@ final class DriveVideoRecorder: NSObject, ObservableObject {
                 await self?.finishRecording(url: url, error: error)
             }
         }
-        refreshCameras()
-        refreshDiskCapacity()
+        Task { [weak self] in
+            await Task.yield()
+            self?.refreshCameras()
+            self?.refreshDiskCapacity()
+        }
     }
 
     var isRecording: Bool {

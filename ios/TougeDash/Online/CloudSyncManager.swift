@@ -132,8 +132,6 @@ final class CloudSyncManager: ObservableObject {
             _ = restoreActiveVehicle()
         }
         state = account.isAuthenticated ? .ready : .signedOut
-        repairPendingChildVehicleAssignments()
-        updatePendingCount()
 
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor [weak self] in
@@ -147,10 +145,13 @@ final class CloudSyncManager: ObservableObject {
             }
         }
         monitor.start(queue: monitorQueue)
-        if account.isAuthenticated {
-            Task { [weak self] in
-                await Task.yield()
-                await self?.syncNow()
+        Task { [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            repairPendingChildVehicleAssignments()
+            updatePendingCount()
+            if account.isAuthenticated {
+                await syncNow()
             }
         }
         periodicTask = Task { [weak self] in

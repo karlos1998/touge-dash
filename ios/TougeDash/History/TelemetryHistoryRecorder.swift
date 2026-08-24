@@ -33,7 +33,14 @@ final class TelemetryHistoryRecorder: ObservableObject {
         vehicleID = LocalVehicleIdentity.resolve()
         self.locationTracker = locationTracker
         restoreRecentSession()
-        try? HistoryLocalStore.enforceRetention(in: context, keepingActiveSessionID: activeSession?.id)
+        Task { [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            try? HistoryLocalStore.enforceRetention(
+                in: context,
+                keepingActiveSessionID: activeSession?.id
+            )
+        }
     }
 
     struct RecordingChange: Equatable, Sendable {
