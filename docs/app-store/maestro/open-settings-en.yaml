@@ -1,7 +1,6 @@
 appId: it.letscode.touge-dash
 ---
 - tapOn: "Settings"
-- tapOn: "Enable online sync"
 - extendedWaitUntil:
-    visible: "TOUGE DASH"
+    visible: "ROUTE RECORDING"
     timeout: 5000

@@ -1,7 +1,6 @@
 appId: it.letscode.touge-dash
 ---
 - tapOn: "Ustawienia"
-- tapOn: "Włącz synchronizację online"
 - extendedWaitUntil:
-    visible: "TOUGE DASH"
+    visible: "ZAPIS TRASY"
     timeout: 5000

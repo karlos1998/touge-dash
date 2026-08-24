@@ -1,0 +1,6 @@
+appId: it.letscode.touge-dash
+---
+- tapOn: "Alerty"
+- extendedWaitUntil:
+    visible: "CENTRUM ALERTÓW"
+    timeout: 5000

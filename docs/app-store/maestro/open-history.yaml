@@ -1,8 +1,6 @@
 appId: it.letscode.touge-dash
 ---
 - tapOn: "Historia"
-- tapOn:
-    text: ".*próbek.*"
 - extendedWaitUntil:
-    visible: "PRZEJAZD"
+    visible: "PRZEJAZDY"
     timeout: 5000

@@ -25,6 +25,8 @@
 "Polski" = "Polish";
 "Angielski" = "English";
 "Szybki podgląd aktywny · ekran iPhone’a nie wygasi się automatycznie" = "Quick view active · the iPhone screen will stay on";
+"CarPlay LIVE używa Live Activity · zwykły widget odświeża iOS we własnym tempie" = "CarPlay LIVE uses Live Activity · the standard widget refreshes on iOS timing";
+"Temperatura spalin" = "Exhaust gas temperature";
 "Szukanie interfejsu ECUMaster…" = "Searching for an ECUMaster interface…";
 "Urządzenia ECUMaster" = "ECUMaster devices";
 "Lista pokazuje wyłącznie interfejsy ECUMaster. Pierwsze wykryte urządzenie jest łączone automatycznie, a aplikacja zapamiętuje je na kolejne uruchomienia." = "Only ECUMaster interfaces are shown. The first matching device is connected automatically and remembered for future launches.";

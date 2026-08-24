@@ -1,8 +1,6 @@
 appId: it.letscode.touge-dash
 ---
 - tapOn: "History"
-- tapOn:
-    text: ".*samples.*"
 - extendedWaitUntil:
-    visible: "DRIVE SESSION"
+    visible: "DRIVES"
     timeout: 5000

@@ -1,0 +1,11 @@
+appId: it.letscode.touge-dash
+---
+- tapOn: "Ustawienia"
+- extendedWaitUntil:
+    visible: "ZAPIS TRASY"
+    timeout: 5000
+- tapOn:
+    point: "85%,80%"
+- extendedWaitUntil:
+    visible: ".*GPS ruszy po połączeniu z autem.*"
+    timeout: 5000

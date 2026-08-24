@@ -31,7 +31,7 @@
 - [x] iPhone 6.9-inch screenshots are prepared without an alpha channel.
 - [x] iPad 13-inch screenshots are prepared without an alpha channel.
 - [x] Apple Watch screenshots are prepared without an alpha channel.
-- [ ] Existing iPhone, iPad and Apple Watch screenshots are checked against the current `1.4.2` UI.
+- [x] iPhone and iPad screenshots are regenerated for the current four-tab `1.4.2 (21)` UI; Apple Watch screenshots are checked against the current Watch UI.
 - [x] Age rating questionnaire is completed with a `4+` result.
 - [x] Availability in 175 countries or regions, free price and manual release are configured.
 

@@ -10,7 +10,7 @@ struct HistoryView: View {
     @Query private var sessions: [DriveSession]
     @Query private var incidents: [DriveIncident]
     @Query private var videos: [DriveVideoRecording]
-    let cloudAccount: CloudAccountService
+    @ObservedObject var cloudAccount: CloudAccountService
     let cloudSync: CloudSyncManager
     let videoOverlays: VideoOverlayTemplateStore
     let activeSessionID: UUID?
@@ -103,7 +103,11 @@ struct HistoryView: View {
                                             cloudSync: cloudSync
                                         )
                                     } label: {
-                                        IncidentListRow(incident: incident, cloudSync: cloudSync)
+                                        IncidentListRow(
+                                            incident: incident,
+                                            cloudSync: cloudSync,
+                                            showsCloudStatus: cloudAccount.isAuthenticated
+                                        )
                                     }
                                     .buttonStyle(.plain)
                                     .disabled(isDeleting)
@@ -157,7 +161,8 @@ struct HistoryView: View {
                                         DriveSessionRow(
                                             session: session,
                                             recordings: videos.filter { $0.sessionID == session.id },
-                                            cloudSync: cloudSync
+                                            cloudSync: cloudSync,
+                                            showsCloudStatus: cloudAccount.isAuthenticated
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -729,6 +734,7 @@ private struct DriveSessionRow: View {
     let session: DriveSession
     let recordings: [DriveVideoRecording]
     @ObservedObject var cloudSync: CloudSyncManager
+    let showsCloudStatus: Bool
 
     private var videoBytes: Int64 { recordings.reduce(0) { $0 + $1.fileSizeBytes } }
 
@@ -763,7 +769,9 @@ private struct DriveSessionRow: View {
                         .padding(.vertical, 5)
                         .background(Color.tougeBlue.opacity(0.12), in: Capsule())
                 }
-                CloudSyncItemBadge(status: cloudSync.sessionStatus(for: session))
+                if showsCloudStatus {
+                    CloudSyncItemBadge(status: cloudSync.sessionStatus(for: session))
+                }
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
                     .foregroundStyle(.tertiary)
@@ -924,12 +932,14 @@ private struct DriveSessionDetailView: View {
                         }
                     }
 
-                    CloudSyncItemCard(
-                        itemName: "PRZEJAZD",
-                        sampleCount: session.sampleCount,
-                        status: cloudSync.sessionStatus(for: session),
-                        onRetry: { Task { await cloudSync.retrySynchronization() } }
-                    )
+                    if cloudAccount.isAuthenticated {
+                        CloudSyncItemCard(
+                            itemName: "PRZEJAZD",
+                            sampleCount: session.sampleCount,
+                            status: cloudSync.sessionStatus(for: session),
+                            onRetry: { Task { await cloudSync.retrySynchronization() } }
+                        )
+                    }
 
                     DriveVideoHistorySection(
                         session: session,
@@ -968,7 +978,11 @@ private struct DriveSessionDetailView: View {
                                         cloudSync: cloudSync
                                     )
                                 } label: {
-                                    IncidentListRow(incident: incident, cloudSync: cloudSync)
+                                    IncidentListRow(
+                                        incident: incident,
+                                        cloudSync: cloudSync,
+                                        showsCloudStatus: cloudAccount.isAuthenticated
+                                    )
                                 }
                                 .buttonStyle(.plain)
                             }

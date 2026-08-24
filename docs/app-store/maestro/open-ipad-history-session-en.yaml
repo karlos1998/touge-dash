@@ -5,6 +5,4 @@ appId: it.letscode.touge-dash
     text: "History"
 - tapOn:
     text: ".*samples.*"
-- extendedWaitUntil:
-    visible: "DRIVE SESSION"
-    timeout: 5000
+- waitForAnimationToEnd

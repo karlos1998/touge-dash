@@ -1,4 +1,4 @@
 appId: it.letscode.touge-dash
 ---
-- tapOn: "Dashboard"
+- setOrientation: LANDSCAPE_LEFT
 - waitForAnimationToEnd

@@ -56,12 +56,14 @@ struct IncidentReportView: View {
                 LazyVStack(spacing: 14) {
                     IncidentHeroCard(incident: incident)
 
-                    CloudSyncItemCard(
-                        itemName: "RAPORT INCYDENTU",
-                        sampleCount: incident.sampleCount,
-                        status: cloudSync.incidentStatus(for: incident),
-                        onRetry: { Task { await cloudSync.retrySynchronization() } }
-                    )
+                    if cloudAccount.isAuthenticated {
+                        CloudSyncItemCard(
+                            itemName: "RAPORT INCYDENTU",
+                            sampleCount: incident.sampleCount,
+                            status: cloudSync.incidentStatus(for: incident),
+                            onRetry: { Task { await cloudSync.retrySynchronization() } }
+                        )
+                    }
 
                     if let selectedSample {
                         IncidentMomentCard(
@@ -168,6 +170,7 @@ struct IncidentReportView: View {
 struct IncidentListRow: View {
     let incident: DriveIncident
     @ObservedObject var cloudSync: CloudSyncManager
+    let showsCloudStatus: Bool
 
     var body: some View {
         HStack(spacing: 13) {
@@ -199,7 +202,9 @@ struct IncidentListRow: View {
             }
 
             Spacer()
-            CloudSyncItemBadge(status: cloudSync.incidentStatus(for: incident))
+            if showsCloudStatus {
+                CloudSyncItemBadge(status: cloudSync.incidentStatus(for: incident))
+            }
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.black))
                 .foregroundStyle(.tertiary)

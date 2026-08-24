@@ -1,0 +1,11 @@
+appId: it.letscode.touge-dash
+---
+- tapOn: "Settings"
+- extendedWaitUntil:
+    visible: "ROUTE RECORDING"
+    timeout: 5000
+- tapOn:
+    point: "85%,80%"
+- extendedWaitUntil:
+    visible: ".*GPS starts after connecting to the vehicle.*"
+    timeout: 5000
