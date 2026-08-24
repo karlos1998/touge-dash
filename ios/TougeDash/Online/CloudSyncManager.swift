@@ -192,6 +192,8 @@ final class CloudSyncManager: ObservableObject {
         }
     }
 
+    var isCloudAuthenticated: Bool { account.isAuthenticated }
+
     func accountDidChange() async {
         guard account.isAuthenticated else {
             activeVehicle = nil
@@ -210,7 +212,10 @@ final class CloudSyncManager: ObservableObject {
 
     func prepareVehicle(hardwareIdentifier: UUID) async {
         pendingHardwareIdentifier = hardwareIdentifier
-        alertRules.activateVehicle(hardwareIdentifier)
+        alertRules.activateVehicle(
+            hardwareIdentifier,
+            migratingPendingRulesFrom: LocalVehicleIdentity.resolve()
+        )
         if let linked = vehicleLinks[vehicleLinkKey(hardwareIdentifier)] {
             activeVehicle = linked
             rememberActiveVehicle(hardwareIdentifier)
@@ -399,7 +404,7 @@ final class CloudSyncManager: ObservableObject {
     func saveAlertRules(_ rules: VehicleAlertRules) {
         let vehicleID = alertRules.activeVehicleID
         alertRules.saveLocally(rules, for: vehicleID)
-        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
+        if account.isAuthenticated, isNetworkAvailable {
             Task { await syncNow() }
         }
     }
@@ -410,7 +415,7 @@ final class CloudSyncManager: ObservableObject {
 
     func keepLocalAlertRules() {
         alertRules.keepLocalAfterConflict(for: alertRules.activeVehicleID)
-        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
+        if account.isAuthenticated, isNetworkAvailable {
             Task { await syncNow() }
         }
     }
@@ -1095,6 +1100,10 @@ final class CloudSyncManager: ObservableObject {
         let selected = associations.first(where: { $0.hardwareIdentifier == remembered }) ?? associations.last!
         pendingHardwareIdentifier = selected.hardwareIdentifier
         activeVehicle = selected.vehicle
+        alertRules.activateVehicle(
+            selected.hardwareIdentifier,
+            migratingPendingRulesFrom: LocalVehicleIdentity.resolve()
+        )
         rememberActiveVehicle(selected.hardwareIdentifier)
         return true
     }

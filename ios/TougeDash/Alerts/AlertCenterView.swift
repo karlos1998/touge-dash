@@ -264,7 +264,13 @@ struct AlertCenterView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(cloudSync.activeVehicle?.displayName ?? localized("Konfiguracja lokalna"))
                     .font(.headline.weight(.black))
-                if record.dirty {
+                if record.dirty, !cloudSync.isCloudAuthenticated {
+                    Label("Zapisano lokalnie · zaloguj się, aby zsynchronizować", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(Color.tougeMint)
+                } else if record.dirty, cloudSync.activeVehicle == nil {
+                    Label("Zapisano lokalnie · połącz auto, aby zsynchronizować", systemImage: "car.side")
+                        .foregroundStyle(.secondary)
+                } else if record.dirty {
                     Label("Zmiany czekają na synchronizację", systemImage: "icloud.and.arrow.up")
                         .foregroundStyle(Color.orange)
                 } else if let date = record.updatedAt {

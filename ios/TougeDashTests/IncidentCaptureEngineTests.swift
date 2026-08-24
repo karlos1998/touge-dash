@@ -306,6 +306,33 @@ final class VehicleAlertRuleStoreTests: XCTestCase {
         XCTAssertEqual(restored.rules.maximumBoostBar, 1.9)
     }
 
+    func testPendingLocalRulesMoveToRestoredCloudVehicle() {
+        let suiteName = "VehicleAlertRuleStoreTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let localID = UUID()
+        let vehicleID = UUID()
+        let store = VehicleAlertRuleStore(defaults: defaults)
+        var localRules = VehicleAlertRules.standard
+        localRules.maximumBoostBar = 1.9
+
+        store.saveLocally(localRules, for: localID)
+        store.markUploaded(remote(vehicleID: vehicleID, revision: 4, maximumBoostBar: 1.7), for: vehicleID)
+        store.activateVehicle(vehicleID, migratingPendingRulesFrom: localID)
+
+        let migrated = store.record(for: vehicleID)
+        XCTAssertEqual(store.activeVehicleID, vehicleID)
+        XCTAssertEqual(migrated.rules.maximumBoostBar, 1.9)
+        XCTAssertEqual(migrated.revision, 4)
+        XCTAssertTrue(migrated.dirty)
+        XCTAssertFalse(store.record(for: localID).dirty)
+
+        let restored = VehicleAlertRuleStore(defaults: defaults).record(for: vehicleID)
+        XCTAssertEqual(restored.rules.maximumBoostBar, 1.9)
+        XCTAssertEqual(restored.revision, 4)
+        XCTAssertTrue(restored.dirty)
+    }
+
     private func remote(
         vehicleID: UUID,
         revision: Int,

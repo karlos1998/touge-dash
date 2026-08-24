@@ -252,7 +252,21 @@ final class VehicleAlertRuleStore: ObservableObject {
     var activeRecord: Record { record(for: activeVehicleID) }
     var activeRules: VehicleAlertRules { activeRecord.rules }
 
-    func activateVehicle(_ id: UUID) {
+    func activateVehicle(_ id: UUID, migratingPendingRulesFrom sourceID: UUID? = nil) {
+        if let sourceID,
+           sourceID != id,
+           let source = records[sourceID.uuidString],
+           source.dirty {
+            var destination = record(for: id)
+            if !destination.dirty {
+                destination.rules = source.rules
+                destination.dirty = true
+                destination.conflict = nil
+                records[id.uuidString] = destination
+                records.removeValue(forKey: sourceID.uuidString)
+                persist()
+            }
+        }
         activeVehicleID = id
     }
 
