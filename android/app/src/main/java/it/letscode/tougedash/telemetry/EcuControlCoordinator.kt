@@ -27,9 +27,17 @@ data class EcuControlState(
     val synchronizedLoopback: Boolean = false,
     val missingLoopbackChannels: List<Int> = listOf(252, 253, 254),
     val applicationActive: Boolean = true,
-    val error: EcuControlError? = null
+    val error: EcuControlError? = null,
+    val observedSwitches: List<Boolean?> = List(8) { null },
+    val observedRotaryValues: List<Int?> = List(8) { null }
 ) {
     val ready: Boolean get() = connected && transportAvailable && synchronizedLoopback && applicationActive && pending == null
+
+    fun switchValue(channel: Int): Boolean? =
+        pending?.target?.switchValue(channel) ?: observedSwitches.getOrNull(channel - 1)
+
+    fun rotaryValue(channel: Int): Int? =
+        pending?.target?.rotaryValue(channel) ?: observedRotaryValues.getOrNull(channel - 1)
 }
 
 class EcuControlCoordinator(private val scope: CoroutineScope) {
@@ -137,10 +145,14 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
     private fun refresh() {
         val snapshot = loopback.synchronizedSnapshot()
         val current = mutableState.value
+        val observedSwitches = EcuControlSnapshot.CHANNEL_RANGE.map(loopback::switchValue)
+        val observedRotaryValues = EcuControlSnapshot.CHANNEL_RANGE.map(loopback::rotaryValue)
         if (snapshot == null) {
             mutableState.value = current.copy(
                 synchronizedLoopback = false,
-                missingLoopbackChannels = loopback.missingChannels
+                missingLoopbackChannels = loopback.missingChannels,
+                observedSwitches = observedSwitches,
+                observedRotaryValues = observedRotaryValues
             )
             return
         }
@@ -161,7 +173,9 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
             pending = if (confirmed != null) null else current.pending,
             synchronizedLoopback = true,
             missingLoopbackChannels = emptyList(),
-            error = if (confirmed != null) null else current.error
+            error = if (confirmed != null) null else current.error,
+            observedSwitches = observedSwitches,
+            observedRotaryValues = observedRotaryValues
         )
     }
 }

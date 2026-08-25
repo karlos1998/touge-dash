@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlinx.coroutines.test.runTest
+import java.util.UUID
 
 class EmuProtocolTest {
     @Test fun fragmentedAndConcatenatedFramesAreDecoded() {
@@ -81,6 +82,35 @@ class EmuProtocolTest {
         assertEquals(listOf(1, 2, 3, 4, 10, 11, 12, 13), state.rotaryValues)
     }
 
+    @Test fun statusFrameParserHandlesSplitAndCoalescedPackets() {
+        val parser = EcuControlStatusFrameParser()
+        val status = byteArrayOf(0x08, 0x55, 0xA0.toByte(), 0x12, 0x34, 0xAB.toByte(), 0xCD.toByte(), 0xBB.toByte())
+        val telemetry = EmuFrameParser.encode(1, 3_500)
+
+        assertTrue(parser.feed(status.copyOfRange(0, 3)).isEmpty())
+        val frames = parser.feed(status.copyOfRange(3, status.size) + telemetry)
+        assertEquals(1, frames.size)
+        assertTrue(status.contentEquals(frames.single()))
+    }
+
+    @Test fun controlTransportAllowsOnlyKnownProfilesAndPrefersPhysicalEmuWriteEndpoint() {
+        val unknown = UUID.fromString("00001234-0000-1000-8000-00805f9b34fb")
+
+        assertEquals(1, EcuControlTransportPolicy.priority(
+            EcuControlTransportPolicy.emuService,
+            EcuControlTransportPolicy.emuTelemetryCharacteristic
+        ))
+        assertEquals(2, EcuControlTransportPolicy.priority(
+            EcuControlTransportPolicy.emuService,
+            EcuControlTransportPolicy.emuControlCharacteristic
+        ))
+        assertEquals(3, EcuControlTransportPolicy.priority(
+            EcuControlTransportPolicy.nordicUartService,
+            EcuControlTransportPolicy.nordicUartRx
+        ))
+        assertEquals(null, EcuControlTransportPolicy.priority(EcuControlTransportPolicy.emuService, unknown))
+    }
+
     @Test fun ecuControlLoopbackDecodesAndRetainsSynchronizedState() {
         val accumulator = EcuControlLoopbackAccumulator()
         accumulator.apply(EmuFrame(254, 0xA0), 1_000)
@@ -128,6 +158,19 @@ class EmuProtocolTest {
 
         assertTrue(coordinator.state.value.ready)
         assertTrue(coordinator.state.value.missingLoopbackChannels.isEmpty())
+    }
+
+    @Test fun coordinatorPublishesSwitchBeforeUnrelatedRotaryChannelsArrive() = runTest {
+        val coordinator = EcuControlCoordinator(backgroundScope)
+        coordinator.connectionChanged(true)
+        coordinator.transportChanged(true) { true }
+
+        coordinator.ingest(EmuFrame(254, 0x80))
+
+        assertEquals(true, coordinator.state.value.switchValue(1))
+        assertEquals(false, coordinator.state.value.switchValue(2))
+        assertEquals(null, coordinator.state.value.rotaryValue(1))
+        assertFalse(coordinator.state.value.ready)
     }
 
     @Test fun rotaryConfirmationWaitsOnlyForItsLoopbackGroup() = runTest {

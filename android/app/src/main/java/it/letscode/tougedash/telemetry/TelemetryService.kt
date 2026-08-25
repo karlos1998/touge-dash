@@ -60,6 +60,7 @@ class TelemetryService : Service() {
     inner class LocalBinder : Binder() { val service get() = this@TelemetryService }
     private val binder = LocalBinder()
     private val parser = EmuFrameParser()
+    private val controlStatusParser = EcuControlStatusFrameParser()
     private val accumulator = EmuTelemetryAccumulator()
     private val connectionSlot = BleConnectionSlot<BluetoothGatt>()
     private val bluetoothManager by lazy { getSystemService(BluetoothManager::class.java) }
@@ -306,6 +307,7 @@ class TelemetryService : Service() {
                     lastAddress = null
                     updateConnection(ConnectionState.Connected, device.name ?: "EMULOGGER", device.address,
                         message = local("Serial Bluetooth", "Bluetooth szeregowy"))
+                    controlStatusParser.reset()
                     container.ecuControls.connectionChanged(true)
                     container.ecuControls.transportChanged(true) { data -> writeSppControl(socket, data) }
                     startSampling(device.address, device.name ?: "EMULOGGER")
@@ -436,6 +438,7 @@ class TelemetryService : Service() {
                 }
                 lastAddress = gatt.device.address
                 updateConnection(ConnectionState.Connected, gatt.device.name ?: "EMULOGGER", gatt.device.address)
+                controlStatusParser.reset()
                 container.ecuControls.connectionChanged(true)
                 val priorityAccepted = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                 TelemetryRuntime.diagnostic("BLE high connection priority requested: $priorityAccepted")
@@ -486,11 +489,15 @@ class TelemetryService : Service() {
             notificationQueue.addAll(candidates)
             telemetryCharacteristics.clear()
             telemetryCharacteristics.addAll(candidates.map(::characteristicKey))
-            val nusControl = gatt.getService(NUS_SERVICE_UUID)?.getCharacteristic(NUS_RX_UUID)
-                ?.takeIf(::supportsWrite)
-            val emuControl = gatt.getService(EMU_SERVICE_UUID)?.getCharacteristic(EMU_CHARACTERISTIC_UUID)
-                ?.takeIf(::supportsWrite)
-            controlCharacteristic = nusControl ?: emuControl
+            controlCharacteristic = discoveredCharacteristics
+                .asSequence()
+                .filter(::supportsWrite)
+                .mapNotNull { characteristic ->
+                    EcuControlTransportPolicy.priority(characteristic.service.uuid, characteristic.uuid)
+                        ?.let { priority -> priority to characteristic }
+                }
+                .maxByOrNull { it.first }
+                ?.second
             val approvedControl = controlCharacteristic
             container.ecuControls.transportChanged(approvedControl != null) { data ->
                 approvedControl != null && writeControlFrame(gatt, approvedControl, data)
@@ -607,9 +614,9 @@ class TelemetryService : Service() {
         if (receivedPacketCount <= 10 || receivedPacketCount % 100L == 0L) {
             TelemetryRuntime.diagnostic("RX #$receivedPacketCount [$deviceName] $lastPacketHex")
         }
-        if (EcuControlSnapshot.isValidStatusFrame(value)) {
-            container.ecuControls.ingestStatusFrame(value)
-        } else {
+        val controlFrames = controlStatusParser.feed(value)
+        controlFrames.forEach(container.ecuControls::ingestStatusFrame)
+        if (controlFrames.size != 1 || !value.contentEquals(controlFrames.single())) {
             parser.feed(value).forEach {
                 container.ecuControls.ingest(it)
                 TelemetryRuntime.updateSnapshot(accumulator.apply(it))
@@ -906,10 +913,8 @@ class TelemetryService : Service() {
         private const val NOTIFICATION_ID = 42
         private const val CONNECTION_TIMEOUT_MILLIS = 45_000L
         private const val EDASH_MTU = 185
-        val EMU_SERVICE_UUID: UUID = UUID.fromString("0000ffe0-0000-1000-8000-00805f9b34fb")
-        val EMU_CHARACTERISTIC_UUID: UUID = UUID.fromString("0000ffe1-0000-1000-8000-00805f9b34fb")
-        val NUS_SERVICE_UUID: UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
-        val NUS_RX_UUID: UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+        val EMU_SERVICE_UUID: UUID = EcuControlTransportPolicy.emuService
+        val EMU_CHARACTERISTIC_UUID: UUID = EcuControlTransportPolicy.emuTelemetryCharacteristic
         val NUS_TX_UUID: UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
         val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb")
         val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")

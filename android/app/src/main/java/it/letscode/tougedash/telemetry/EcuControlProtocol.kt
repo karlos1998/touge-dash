@@ -67,6 +67,21 @@ internal class EcuControlLoopbackAccumulator {
     private var rotary5678Revision = 0L
 
     val currentRevision: Long get() = revision
+    fun switchValue(channel: Int): Boolean? {
+        if (channel !in EcuControlSnapshot.CHANNEL_RANGE) return null
+        val value = switchByte ?: return null
+        return value and (1 shl (8 - channel)) != 0
+    }
+
+    fun rotaryValue(channel: Int): Int? {
+        if (channel !in EcuControlSnapshot.CHANNEL_RANGE) return null
+        return if (channel <= 4) {
+            rotary1234?.let(::unpack)?.get(channel - 1)
+        } else {
+            rotary5678?.let(::unpack)?.get(channel - 5)
+        }
+    }
+
     val missingChannels: List<Int> get() = buildList {
         if (rotary5678 == null) add(252)
         if (rotary1234 == null) add(253)
@@ -130,4 +145,34 @@ internal class EcuControlLoopbackAccumulator {
 
     private fun unpack(value: Int) = listOf(12, 8, 4, 0).map { shift -> (value shr shift) and 0x0f }
     private fun pack(values: List<Int>) = values.fold(0) { result, value -> (result shl 4) or (value and 0x0f) }
+}
+
+/**
+ * Finds eDash-compatible eight-byte status frames even when Bluetooth splits
+ * one frame across callbacks or coalesces it with ordinary telemetry frames.
+ */
+internal class EcuControlStatusFrameParser {
+    private val buffer = ArrayDeque<Byte>()
+
+    fun feed(data: ByteArray): List<ByteArray> {
+        data.forEach(buffer::addLast)
+        val frames = mutableListOf<ByteArray>()
+        while (buffer.size >= 2) {
+            if (buffer[0].toUByte().toInt() != 0x08 || buffer[1].toUByte().toInt() != 0x55) {
+                buffer.removeFirst()
+                continue
+            }
+            if (buffer.size < 8) break
+            val candidate = buffer.take(8).toByteArray()
+            if (!EcuControlSnapshot.isValidStatusFrame(candidate)) {
+                buffer.removeFirst()
+                continue
+            }
+            frames += candidate
+            repeat(8) { buffer.removeFirst() }
+        }
+        return frames
+    }
+
+    fun reset() = buffer.clear()
 }

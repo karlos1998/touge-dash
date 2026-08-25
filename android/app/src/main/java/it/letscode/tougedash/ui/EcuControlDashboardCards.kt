@@ -43,7 +43,7 @@ internal fun EcuSwitchCard(
     toggle: (Int) -> Boolean
 ) {
     val channel = (widget.controlChannel ?: 1).coerceIn(EcuControlSnapshot.CHANNEL_RANGE)
-    val value = state.displayed?.switchValue(channel)
+    val value = state.switchValue(channel)
     val pending = state.pending?.kind == EcuControlKind.SWITCH && state.pending.channel == channel
     val accent = widget.accent.color()
     TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 126.dp else 145.dp)) {
@@ -84,7 +84,7 @@ internal fun EcuRotaryCard(
     select: (Int, Int) -> Boolean
 ) {
     val channel = (widget.controlChannel ?: 1).coerceIn(EcuControlSnapshot.CHANNEL_RANGE)
-    val value = state.displayed?.rotaryValue(channel)
+    val value = state.rotaryValue(channel)
     val pending = state.pending?.kind == EcuControlKind.ROTARY && state.pending.channel == channel
     val accent = widget.accent.color()
     var menu by remember(widget.id) { mutableStateOf(false) }
