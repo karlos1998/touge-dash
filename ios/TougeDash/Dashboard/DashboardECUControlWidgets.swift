@@ -14,36 +14,25 @@ struct DashboardECUSwitchWidget: View {
         Button {
             _ = controls.toggleSwitch(channel: channel)
         } label: {
-            HStack(spacing: compact ? 9 : 14) {
-                VStack(alignment: .leading, spacing: compact ? 4 : 7) {
-                    Label(widget.displayTitle.uppercased(), systemImage: widget.displayIcon)
-                        .font(.system(size: compact ? 8 : 10, weight: .black))
-                        .tracking(1)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Text(stateTitle)
-                        .font(.system(size: compact ? 24 : 35, weight: .black, design: .rounded))
-                        .fontWidth(.expanded)
-                        .monospacedDigit()
-                        .foregroundStyle(value == true ? widget.accent.color : Color.primary)
-                    Text(isPending ? localized("WYSYŁANIE PEŁNEGO STANU") : controls.availabilityLabel)
-                        .font(.system(size: compact ? 6 : 8, weight: .black))
-                        .tracking(0.55)
-                        .foregroundStyle(statusTint)
-                        .lineLimit(1)
+            GeometryReader { geometry in
+                if geometry.size.width < 190 {
+                    VStack(alignment: .leading, spacing: compact ? 4 : 7) {
+                        header
+                        Spacer(minLength: 0)
+                        stateSelector(expands: true)
+                        Spacer(minLength: 0)
+                        statusLabel
+                    }
+                } else {
+                    HStack(spacing: compact ? 9 : 14) {
+                        VStack(alignment: .leading, spacing: compact ? 4 : 7) {
+                            header
+                            statusLabel
+                        }
+                        Spacer(minLength: 4)
+                        stateSelector(expands: false)
+                    }
                 }
-                Spacer(minLength: 4)
-                ZStack(alignment: value == true ? .trailing : .leading) {
-                    Capsule()
-                        .fill(value == true ? widget.accent.color.opacity(0.32) : Color.primary.opacity(0.08))
-                        .frame(width: compact ? 48 : 64, height: compact ? 27 : 36)
-                    Circle()
-                        .fill(value == true ? widget.accent.color : Color.secondary.opacity(0.7))
-                        .frame(width: compact ? 21 : 28, height: compact ? 21 : 28)
-                        .padding(4)
-                        .shadow(color: value == true ? widget.accent.color.opacity(0.55) : .clear, radius: 7)
-                }
-                .opacity(value == nil ? 0.38 : 1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
             .padding(compact ? 11 : 15)
@@ -66,6 +55,68 @@ struct DashboardECUSwitchWidget: View {
         if controls.errorMessage != nil { return .tougeRed }
         if isPending { return .tougeOrange }
         return controls.isReady ? .tougeMint : .secondary
+    }
+
+    private var header: some View {
+        Label(widget.displayTitle.uppercased(), systemImage: widget.displayIcon)
+            .font(.system(size: compact ? 8 : 10, weight: .black))
+            .tracking(1)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+    }
+
+    private var statusLabel: some View {
+        Text(isPending ? localized("WYSYŁANIE PEŁNEGO STANU") : controls.availabilityLabel)
+            .font(.system(size: compact ? 6 : 8, weight: .black))
+            .tracking(0.55)
+            .foregroundStyle(statusTint)
+            .lineLimit(2)
+            .minimumScaleFactor(0.72)
+            .allowsTightening(true)
+    }
+
+    private func stateSelector(expands: Bool) -> some View {
+        HStack(spacing: compact ? 4 : 6) {
+            stateBadge(
+                systemImage: "circle",
+                title: localized("WYŁĄCZONY"),
+                isSelected: value == false,
+                selectedColor: .secondary
+            )
+            stateBadge(
+                systemImage: "power",
+                title: localized("WŁĄCZONY"),
+                isSelected: value == true,
+                selectedColor: widget.accent.color
+            )
+        }
+        .frame(width: expands ? nil : (compact ? 66 : 88))
+        .frame(maxWidth: expands ? .infinity : nil)
+        .opacity(value == nil ? 0.5 : 1)
+    }
+
+    private func stateBadge(
+        systemImage: String,
+        title: String,
+        isSelected: Bool,
+        selectedColor: Color
+    ) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: compact ? 12 : 16, weight: .black))
+            .foregroundStyle(isSelected ? selectedColor : Color.secondary.opacity(value == nil ? 0.28 : 0.42))
+            .frame(maxWidth: .infinity)
+            .frame(height: compact ? 24 : 31)
+            .background(
+                isSelected ? selectedColor.opacity(0.16) : Color.primary.opacity(0.035),
+                in: RoundedRectangle(cornerRadius: compact ? 7 : 9, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: compact ? 7 : 9, style: .continuous)
+                    .stroke(isSelected ? selectedColor.opacity(0.72) : Color.primary.opacity(0.08), lineWidth: 1)
+            }
+            .shadow(color: isSelected ? selectedColor.opacity(0.3) : .clear, radius: 5)
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

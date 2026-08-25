@@ -92,13 +92,17 @@ final class ECUControlCoordinator: ObservableObject {
     }
 
     func switchValue(channel: Int) -> Bool? {
-        guard observedSnapshot != nil || pending != nil else { return nil }
-        return displaySnapshot.switchValue(channel: channel)
+        if let pending {
+            return pending.targetSnapshot.switchValue(channel: channel)
+        }
+        return loopback.switchValue(channel: channel)
     }
 
     func rotaryValue(channel: Int) -> Int? {
-        guard observedSnapshot != nil || pending != nil else { return nil }
-        return displaySnapshot.rotaryValue(channel: channel).map(Int.init)
+        if let pending {
+            return pending.targetSnapshot.rotaryValue(channel: channel).map(Int.init)
+        }
+        return loopback.rotaryValue(channel: channel).map(Int.init)
     }
 
     func isPending(kind: ECUControlKind, channel: Int) -> Bool {
@@ -135,11 +139,7 @@ final class ECUControlCoordinator: ObservableObject {
         }
         if pending != nil { return localized("OCZEKIWANIE NA EMU") }
         if errorMessage != nil { return localized("BŁĄD STEROWANIA") }
-        return localized("POTWIERDZONE PRZEZ EMU")
-    }
-
-    private var displaySnapshot: ECUControlSnapshot {
-        pending?.targetSnapshot ?? observedSnapshot ?? ECUControlSnapshot()
+        return localized("POTWIERDZONO")
     }
 
     private func send(kind: ECUControlKind, channel: Int, target: ECUControlSnapshot) -> Bool {

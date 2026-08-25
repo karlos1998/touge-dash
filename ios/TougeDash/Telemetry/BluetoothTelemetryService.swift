@@ -36,11 +36,16 @@ enum ECUControlTransportPolicy {
     static let nordicUARTService = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
     static let nordicUARTRX = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
     static let emuService = CBUUID(string: "FFE0")
-    static let emuCharacteristic = CBUUID(string: "FFE1")
+    static let emuTelemetryCharacteristic = CBUUID(string: "FFE1")
+    static let emuControlCharacteristic = CBUUID(string: "FFE2")
 
     static func priority(service: CBUUID, characteristic: CBUUID) -> Int? {
-        if service == nordicUARTService, characteristic == nordicUARTRX { return 2 }
-        if service == emuService, characteristic == emuCharacteristic { return 1 }
+        if service == nordicUARTService, characteristic == nordicUARTRX { return 3 }
+        if service == emuService, characteristic == emuControlCharacteristic { return 2 }
+        // The desktop simulator and some older adapters combine notify and
+        // write on FFE1. Real BT 4.0 EMULOGGER hardware exposes FFE1 as notify
+        // and the write endpoint separately as FFE2.
+        if service == emuService, characteristic == emuTelemetryCharacteristic { return 1 }
         return nil
     }
 }
@@ -621,7 +626,7 @@ extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
             ))
         } else {
             appendDiagnostic(String(format: localized("Subscribed to %@"), characteristic.uuid.uuidString))
-            if characteristic.uuid == ECUControlTransportPolicy.emuCharacteristic,
+            if characteristic.uuid == ECUControlTransportPolicy.emuTelemetryCharacteristic,
                characteristic.properties.contains(.read) {
                 // Some EDL firmware exposes the current switch/rotary state as
                 // the initial FFE1 value rather than as telemetry channels.

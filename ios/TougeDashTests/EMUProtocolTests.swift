@@ -612,6 +612,29 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(state.rotaryValues, [1, 2, 3, 4, 10, 11, 12, 13])
     }
 
+    func testECUControlStatusFrameParserHandlesSplitAndCoalescedPackets() {
+        var parser = ECUControlStatusFrameParser()
+        let status = Data([0x08, 0x55, 0xA0, 0x12, 0x34, 0xAB, 0xCD, 0xBB])
+        let telemetry = EMUFrameParser.encode(channel: 1, rawValue: 3_500)
+
+        XCTAssertTrue(parser.feed(status.prefix(3)).isEmpty)
+        XCTAssertEqual(parser.feed(status.dropFirst(3) + telemetry), [status])
+    }
+
+    @MainActor
+    func testECUControlPublishesSwitchBeforeUnrelatedRotaryChannelsArrive() {
+        let coordinator = ECUControlCoordinator(notificationCenter: NotificationCenter(), applicationIsActive: true)
+        coordinator.connectionChanged(isConnected: true)
+        coordinator.transportAvailabilityChanged(true)
+
+        coordinator.ingest(EMUFrame(channel: 254, rawValue: 0x80))
+
+        XCTAssertEqual(coordinator.switchValue(channel: 1), true)
+        XCTAssertEqual(coordinator.switchValue(channel: 2), false)
+        XCTAssertNil(coordinator.rotaryValue(channel: 1))
+        XCTAssertFalse(coordinator.isReady)
+    }
+
     @MainActor
     func testECUControlCoordinatorAcceptsFullStatusFrame() {
         let coordinator = ECUControlCoordinator(notificationCenter: NotificationCenter(), applicationIsActive: true)
@@ -643,11 +666,11 @@ final class EMUProtocolTests: XCTestCase {
         XCTAssertEqual(ECUControlTransportPolicy.priority(
             service: CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"),
             characteristic: CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
-        ), 2)
-        XCTAssertNil(ECUControlTransportPolicy.priority(
+        ), 3)
+        XCTAssertEqual(ECUControlTransportPolicy.priority(
             service: CBUUID(string: "FFE0"),
             characteristic: CBUUID(string: "FFE2")
-        ))
+        ), 2)
     }
 
     @MainActor
@@ -691,7 +714,7 @@ final class EMUProtocolTests: XCTestCase {
         coordinator.ingest(EMUFrame(channel: 252, rawValue: 0), receivedAt: start.addingTimeInterval(6))
 
         XCTAssertTrue(coordinator.isReady)
-        XCTAssertEqual(coordinator.availabilityLabel, localized("POTWIERDZONE PRZEZ EMU"))
+        XCTAssertEqual(coordinator.availabilityLabel, localized("POTWIERDZONO"))
     }
 
     @MainActor

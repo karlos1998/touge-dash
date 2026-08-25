@@ -57,6 +57,7 @@ final class TelemetryController: ObservableObject {
     private let engineAlertManager = EngineAlertManager()
 
     private var parser = EMUFrameParser()
+    private var controlStatusParser = ECUControlStatusFrameParser()
     private var accumulator = EMUTelemetryAccumulator()
     private var cancellables: Set<AnyCancellable> = []
     private var lastSharedWrite = Date.distantPast
@@ -249,6 +250,7 @@ final class TelemetryController: ObservableObject {
     func useBluetooth() {
         if !isConnected {
             parser = EMUFrameParser()
+            controlStatusParser = ECUControlStatusFrameParser()
             accumulator = EMUTelemetryAccumulator()
             telemetryDrainTask?.cancel()
             telemetryDrainTask = nil
@@ -304,9 +306,14 @@ final class TelemetryController: ObservableObject {
 
     private func ingest(_ data: Data) {
         totalReceivedBytes += data.count
-        if ECUControlSnapshot.isValidStatusFrame(data) {
-            ecuControls.ingestStatusFrame(data)
+        let controlFrames = controlStatusParser.feed(data)
+        for frame in controlFrames {
+            ecuControls.ingestStatusFrame(frame)
+        }
+        if !controlFrames.isEmpty {
             noteTelemetryCommunication(at: .now)
+        }
+        if controlFrames.count == 1, controlFrames[0] == data {
             return
         }
         let frames = parser.feed(data)

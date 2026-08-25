@@ -88,6 +88,22 @@ struct ECUControlLoopbackAccumulator: Sendable {
     private var rotary5678Revision: UInt64 = 0
 
     var currentRevision: UInt64 { revision }
+
+    func switchValue(channel: Int) -> Bool? {
+        guard ECUControlSnapshot.channelRange.contains(channel), let switchByte else { return nil }
+        return (switchByte & UInt8(1 << (8 - channel))) != 0
+    }
+
+    func rotaryValue(channel: Int) -> UInt8? {
+        guard ECUControlSnapshot.channelRange.contains(channel) else { return nil }
+        if channel <= 4 {
+            guard let rotary1234 else { return nil }
+            return unpack(rotary1234)[channel - 1]
+        }
+        guard let rotary5678 else { return nil }
+        return unpack(rotary5678)[channel - 5]
+    }
+
     var missingChannels: [UInt8] {
         var channels: [UInt8] = []
         if rotary5678 == nil { channels.append(252) }
@@ -174,5 +190,34 @@ struct ECUControlLoopbackAccumulator: Sendable {
 
     private func pack<S: Sequence>(_ values: S) -> UInt16 where S.Element == UInt8 {
         values.reduce(0) { result, value in (result << 4) | UInt16(value & 0x0F) }
+    }
+}
+
+/// Finds eDash-compatible eight-byte status frames even when CoreBluetooth
+/// splits one frame across callbacks or coalesces it with telemetry frames.
+struct ECUControlStatusFrameParser: Sendable {
+    private var buffer: [UInt8] = []
+
+    mutating func feed(_ data: Data) -> [Data] {
+        buffer.append(contentsOf: data)
+        var frames: [Data] = []
+
+        while buffer.count >= 2 {
+            guard buffer[0] == 0x08, buffer[1] == 0x55 else {
+                buffer.removeFirst()
+                continue
+            }
+            guard buffer.count >= 8 else { break }
+
+            let candidate = Data(buffer.prefix(8))
+            guard ECUControlSnapshot.isValidStatusFrame(candidate) else {
+                buffer.removeFirst()
+                continue
+            }
+            frames.append(candidate)
+            buffer.removeFirst(8)
+        }
+
+        return frames
     }
 }
