@@ -372,8 +372,11 @@ final class AccelerationEngine: ObservableObject {
     }
 
     private func publish(_ point: Point) {
-        active = running.map {
+        let nextActive = running.map {
             ActiveAcceleration(type: $0.type, startedAt: $0.startedAt, elapsed: max(0, point.at.timeIntervalSince($0.startedAt)), currentSpeedKPH: point.speed, progress: min(1, max(0, (point.speed - $0.type.startKPH) / ($0.type.endKPH - $0.type.startKPH))))
+        }
+        if active != nextActive {
+            active = nextActive
         }
     }
 

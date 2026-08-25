@@ -82,8 +82,10 @@ final class ECUControlCoordinator: ObservableObject {
     }
 
     func ingest(_ frame: EMUFrame, receivedAt: Date = .now) {
-        guard isConnected, loopback.apply(frame, receivedAt: receivedAt) else { return }
-        refreshLoopbackState()
+        guard isConnected else { return }
+        let previousValue = loopback.rawValue(for: frame.channel)
+        guard loopback.apply(frame, receivedAt: receivedAt) else { return }
+        refreshLoopbackState(partialValueChanged: previousValue != loopback.rawValue(for: frame.channel))
     }
 
     func ingestStatusFrame(_ data: Data) {
@@ -173,13 +175,19 @@ final class ECUControlCoordinator: ObservableObject {
         return true
     }
 
-    private func refreshLoopbackState() {
+    private func refreshLoopbackState(partialValueChanged: Bool = false) {
         guard let snapshot = loopback.synchronizedSnapshot() else {
-            hasSynchronizedLoopback = false
+            if partialValueChanged {
+                objectWillChange.send()
+            }
             return
         }
-        observedSnapshot = snapshot
-        hasSynchronizedLoopback = true
+        if observedSnapshot != snapshot {
+            observedSnapshot = snapshot
+        }
+        if !hasSynchronizedLoopback {
+            hasSynchronizedLoopback = true
+        }
 
         let confirmedSnapshot = pending.flatMap {
             loopback.snapshotConfirming(

@@ -119,6 +119,8 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
     private var totalPacketCount = 0
     private var totalByteCount = 0
     private var lastCounterPublishAt = Date.distantPast
+    private var pendingTelemetryBytes = Data()
+    private var telemetryDeliveryTask: Task<Void, Never>?
     private var controlCharacteristic: CBCharacteristic?
     private var controlCharacteristicPriority = 0
     private var pendingControlWrite: (characteristicID: CBUUID, completion: (Result<Void, Error>) -> Void)?
@@ -180,6 +182,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         receivedPacketCount = 0
         receivedByteCount = 0
         lastPacketHex = ""
+        resetTelemetryDelivery()
 
         if tryRememberedPeripheral,
            let storedIdentifier = UserDefaults.standard.string(forKey: lastPeripheralKey),
@@ -252,6 +255,7 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
         connectionTimeoutTask = nil
         reconnectTask?.cancel()
         reconnectTask = nil
+        resetTelemetryDelivery()
         if let connectedPeripheral {
             central.cancelPeripheralConnection(connectedPeripheral)
         }
@@ -368,6 +372,30 @@ final class BluetoothTelemetryService: NSObject, ObservableObject {
             try? handle.write(contentsOf: Data((line + "\n").utf8))
         }
         #endif
+    }
+
+    private func enqueueTelemetryBytes(_ data: Data) {
+        pendingTelemetryBytes.append(data)
+        guard telemetryDeliveryTask == nil else { return }
+        telemetryDeliveryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(TelemetryUpdateCadence.bluetoothDeliveryInterval))
+            guard !Task.isCancelled, let self else { return }
+            self.deliverPendingTelemetryBytes()
+        }
+    }
+
+    private func deliverPendingTelemetryBytes() {
+        telemetryDeliveryTask = nil
+        guard !pendingTelemetryBytes.isEmpty else { return }
+        let batch = pendingTelemetryBytes
+        pendingTelemetryBytes = Data()
+        onBytes?(batch)
+    }
+
+    private func resetTelemetryDelivery() {
+        telemetryDeliveryTask?.cancel()
+        telemetryDeliveryTask = nil
+        pendingTelemetryBytes.removeAll(keepingCapacity: true)
     }
 
     private static func likelyEMUName(_ name: String) -> Bool {
@@ -529,6 +557,7 @@ extension BluetoothTelemetryService: @preconcurrency CBCentralManagerDelegate {
         connectedPeripheral = nil
         connectedIdentifier = nil
         connectedIsSimulator = false
+        resetTelemetryDelivery()
         resetControlTransport(error: error ?? ECUControlTransportError.disconnected)
         let requestedRetryDelay = retryDelayAfterRequestedDisconnect
         retryDelayAfterRequestedDisconnect = nil
@@ -643,21 +672,23 @@ extension BluetoothTelemetryService: @preconcurrency CBPeripheralDelegate {
         guard let value = characteristic.value, !value.isEmpty else { return }
         totalPacketCount += 1
         totalByteCount += value.count
-        let packetHex = value.prefix(40).map { String(format: "%02X", $0) }.joined(separator: " ")
-        if totalPacketCount <= 10 || totalPacketCount.isMultiple(of: 100) {
+        let now = Date.now
+        let shouldLogPacket = totalPacketCount <= 10 || totalPacketCount.isMultiple(of: 100)
+        let shouldPublishCounters = totalPacketCount == 1 || now.timeIntervalSince(lastCounterPublishAt) >= 0.2
+        let packetHex = shouldLogPacket || shouldPublishCounters
+            ? value.prefix(40).map { String(format: "%02X", $0) }.joined(separator: " ")
+            : ""
+        if shouldLogPacket {
             bluetoothDebugLog("RX #\(totalPacketCount) [\(characteristic.uuid.uuidString)] \(packetHex)")
-        }
-        if totalPacketCount <= 10 || totalPacketCount.isMultiple(of: 100) {
             appendDiagnostic("RX #\(totalPacketCount) [\(characteristic.uuid.uuidString)] \(packetHex)")
         }
-        let now = Date.now
-        if totalPacketCount == 1 || now.timeIntervalSince(lastCounterPublishAt) >= 0.2 {
+        if shouldPublishCounters {
             receivedPacketCount = totalPacketCount
             receivedByteCount = totalByteCount
             lastPacketHex = packetHex
             lastCounterPublishAt = now
         }
-        onBytes?(value)
+        enqueueTelemetryBytes(value)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {

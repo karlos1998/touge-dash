@@ -98,7 +98,11 @@ final class CloudSyncManager: ObservableObject {
     private var vehicleLinks: [String: CloudVehicle]
     private var lastLiveUpload = Date.distantPast
     private var periodicTask: Task<Void, Never>?
+    private var automaticSyncTask: Task<Void, Never>?
     private var isSynchronizing = false
+    private var telemetryIsActive = false
+    private var startupMaintenanceCompleted = false
+    private var automaticSyncNotBefore = Date.now.addingTimeInterval(3)
     private var samplePublicationBuffer = CloudPendingSamplePublicationBuffer()
     private static let vehicleLinksKey = "TougeDash.cloud.vehicleLinks"
     private static let lastVehicleIdentifierKey = "TougeDash.cloud.lastVehicleIdentifier"
@@ -138,28 +142,20 @@ final class CloudSyncManager: ObservableObject {
                 guard let self else { return }
                 isNetworkAvailable = path.status == .satisfied
                 if isNetworkAvailable {
-                    if account.isAuthenticated { await syncNow() }
+                    if account.isAuthenticated { requestAutomaticSync() }
                 } else {
                     state = .offline
                 }
             }
         }
         monitor.start(queue: monitorQueue)
-        Task { [weak self] in
-            await Task.yield()
-            guard let self else { return }
-            repairPendingChildVehicleAssignments()
-            updatePendingCount()
-            if account.isAuthenticated {
-                await syncNow()
-            }
-        }
+        requestAutomaticSync()
         periodicTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(30))
                 guard let self else { return }
-                if self.account.isAuthenticated, self.isNetworkAvailable {
-                    await self.syncNow()
+                if self.account.isAuthenticated, self.isNetworkAvailable, !self.telemetryIsActive {
+                    self.requestAutomaticSync()
                 }
             }
         }
@@ -168,6 +164,7 @@ final class CloudSyncManager: ObservableObject {
     deinit {
         monitor.cancel()
         periodicTask?.cancel()
+        automaticSyncTask?.cancel()
     }
 
     var statusLabel: String {
@@ -193,6 +190,42 @@ final class CloudSyncManager: ObservableObject {
     }
 
     var isCloudAuthenticated: Bool { account.isAuthenticated }
+
+    /// Full history synchronization performs SwiftData fetches and saves. Keep
+    /// that maintenance away from an active dashboard; live telemetry uploads
+    /// continue independently through `publishLive`.
+    func setTelemetryActive(_ active: Bool) {
+        guard telemetryIsActive != active else { return }
+        telemetryIsActive = active
+        if active {
+            automaticSyncTask?.cancel()
+            automaticSyncTask = nil
+        } else {
+            requestAutomaticSync(after: 0.75)
+        }
+    }
+
+    private func requestAutomaticSync(after requestedDelay: TimeInterval = 0) {
+        guard automaticSyncTask == nil else { return }
+        let launchDelay = max(0, automaticSyncNotBefore.timeIntervalSinceNow)
+        let delay = max(requestedDelay, launchDelay)
+        automaticSyncTask = Task { [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(for: .seconds(delay))
+            }
+            guard !Task.isCancelled, let self else { return }
+            self.automaticSyncTask = nil
+            guard !self.telemetryIsActive else { return }
+
+            if !self.startupMaintenanceCompleted {
+                self.repairPendingChildVehicleAssignments()
+                self.updatePendingCount()
+                self.startupMaintenanceCompleted = true
+            }
+            guard self.account.isAuthenticated, self.isNetworkAvailable else { return }
+            await self.syncNow(allowDuringActiveTelemetry: false)
+        }
+    }
 
     func accountDidChange() async {
         guard account.isAuthenticated else {
@@ -220,7 +253,7 @@ final class CloudSyncManager: ObservableObject {
             activeVehicle = linked
             rememberActiveVehicle(hardwareIdentifier)
             state = account.isAuthenticated ? .ready : .signedOut
-            if account.isAuthenticated { await syncNow() }
+            if account.isAuthenticated, !telemetryIsActive { await syncNow() }
         } else {
             activeVehicle = nil
             state = account.isAuthenticated ? .waitingForVehicleName : .signedOut
@@ -248,7 +281,8 @@ final class CloudSyncManager: ObservableObject {
         }
     }
 
-    func syncNow() async {
+    func syncNow(allowDuringActiveTelemetry: Bool = true) async {
+        guard allowDuringActiveTelemetry || !telemetryIsActive else { return }
         guard account.isAuthenticated else {
             state = .signedOut
             dashboardTemplates.markSignedOut()
@@ -266,6 +300,11 @@ final class CloudSyncManager: ObservableObject {
             // Dashboard layouts are independent from telemetry. A template error
             // must never strand drives or incident reports behind it.
             synchronizationErrors.append(error)
+        }
+
+        guard allowDuringActiveTelemetry || !telemetryIsActive else {
+            state = .ready
+            return
         }
 
         let associations = currentAccountAssociations()
@@ -296,6 +335,10 @@ final class CloudSyncManager: ObservableObject {
             )
 
             for entry in queued {
+                guard allowDuringActiveTelemetry || !telemetryIsActive else {
+                    state = .ready
+                    return
+                }
                 sessionStatuses[entry.session.id] = .queued
                 do {
                     try await upload(session: entry.session, vehicleID: entry.remoteVehicleID)
@@ -305,6 +348,10 @@ final class CloudSyncManager: ObservableObject {
                 }
             }
             for entry in queuedIncidents {
+                guard allowDuringActiveTelemetry || !telemetryIsActive else {
+                    state = .ready
+                    return
+                }
                 incidentStatuses[entry.incident.id] = .queued
                 do {
                     try await upload(incident: entry.incident, vehicleID: entry.remoteVehicleID)
@@ -314,6 +361,10 @@ final class CloudSyncManager: ObservableObject {
                 }
             }
             for entry in queuedAnnotations {
+                guard allowDuringActiveTelemetry || !telemetryIsActive else {
+                    state = .ready
+                    return
+                }
                 do {
                     try await upload(annotation: entry.annotation, vehicleID: entry.remoteVehicleID)
                 } catch {
@@ -377,8 +428,8 @@ final class CloudSyncManager: ObservableObject {
         pendingIncidents += 1
         pendingSamples += sampleCount
         estimatedPendingBytes += Int64(sampleCount) * Self.estimatedBytesPerSample
-        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
-            Task { await syncNow() }
+        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable, !telemetryIsActive {
+            requestAutomaticSync()
         }
     }
 
@@ -388,24 +439,24 @@ final class CloudSyncManager: ObservableObject {
         }
         pendingSessions = max(1, pendingSessions)
         estimatedPendingBytes += 256
-        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
-            Task { await syncNow() }
+        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable, !telemetryIsActive {
+            requestAutomaticSync()
         }
     }
 
     func noteLocalAnnotationRecorded() {
         pendingAnnotations += 1
         estimatedPendingBytes += 512
-        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable {
-            Task { await syncNow() }
+        if account.isAuthenticated, activeVehicle != nil, isNetworkAvailable, !telemetryIsActive {
+            requestAutomaticSync()
         }
     }
 
     func saveAlertRules(_ rules: VehicleAlertRules) {
         let vehicleID = alertRules.activeVehicleID
         alertRules.saveLocally(rules, for: vehicleID)
-        if account.isAuthenticated, isNetworkAvailable {
-            Task { await syncNow() }
+        if account.isAuthenticated, isNetworkAvailable, !telemetryIsActive {
+            requestAutomaticSync()
         }
     }
 

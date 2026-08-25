@@ -70,7 +70,8 @@ final class DriveVideoFeatureTests: XCTestCase {
 
     func testRecordingKeepsFullIncidentCadenceButThrottlesDashboard() {
         XCTAssertEqual(TelemetryUpdateCadence.processingInterval, 1.0 / 25.0, accuracy: 0.0001)
-        XCTAssertEqual(TelemetryUpdateCadence.normalDisplayInterval, 1.0 / 20.0, accuracy: 0.0001)
+        XCTAssertEqual(TelemetryUpdateCadence.bluetoothDeliveryInterval, 1.0 / 40.0, accuracy: 0.0001)
+        XCTAssertEqual(TelemetryUpdateCadence.normalDisplayInterval, 1.0 / 12.0, accuracy: 0.0001)
         XCTAssertEqual(TelemetryUpdateCadence.recordingDisplayInterval, 1.0 / 8.0, accuracy: 0.0001)
         XCTAssertGreaterThan(
             TelemetryUpdateCadence.recordingDisplayInterval,

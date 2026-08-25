@@ -718,6 +718,25 @@ final class EMUProtocolTests: XCTestCase {
     }
 
     @MainActor
+    func testECUControlDoesNotRepublishUnchangedLoopbackCycle() {
+        let coordinator = ECUControlCoordinator(notificationCenter: NotificationCenter(), applicationIsActive: true)
+        coordinator.connectionChanged(isConnected: true)
+        coordinator.ingestStatusFrame(ECUControlSnapshot(
+            switches: [true, false, false, false, false, false, false, false],
+            rotaryValues: [1, 2, 3, 4, 5, 6, 7, 8]
+        ).encodedStatusFrame())
+
+        var publications = 0
+        let subscription = coordinator.objectWillChange.sink { publications += 1 }
+        coordinator.ingest(EMUFrame(channel: 254, rawValue: 0x80))
+        coordinator.ingest(EMUFrame(channel: 253, rawValue: 0x1234))
+        coordinator.ingest(EMUFrame(channel: 252, rawValue: 0x5678))
+
+        XCTAssertEqual(publications, 0)
+        withExtendedLifetime(subscription) {}
+    }
+
+    @MainActor
     func testECURotaryConfirmationWaitsOnlyForItsLoopbackGroup() {
         let coordinator = ECUControlCoordinator(notificationCenter: NotificationCenter(), applicationIsActive: true)
         coordinator.writer = { _, completion in completion(.success(())) }

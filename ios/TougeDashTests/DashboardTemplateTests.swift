@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import TougeDash
 
 final class DashboardTemplateTests: XCTestCase {
@@ -34,15 +35,16 @@ final class DashboardTemplateTests: XCTestCase {
     @MainActor
     func testDashboardSessionMaximumsOnlyMoveUpwardAndResetInMemory() {
         let buffer = DashboardTelemetryBuffer()
+        let start = Date(timeIntervalSince1970: 1_000)
         var first = TelemetrySnapshot()
         first.boostBar = -0.4
         first.rpm = 3_200
-        buffer.record(first)
+        buffer.record(first, now: start)
 
         var lower = first
         lower.boostBar = -0.7
         lower.rpm = 2_800
-        buffer.record(lower)
+        buffer.record(lower, now: start.addingTimeInterval(0.05))
 
         XCTAssertEqual(buffer.sessionMaximums[.boost], -0.4)
         XCTAssertEqual(buffer.sessionMaximums[.rpm], 3_200)
@@ -50,13 +52,25 @@ final class DashboardTemplateTests: XCTestCase {
         var higher = lower
         higher.boostBar = 1.2
         higher.rpm = 6_400
-        buffer.record(higher)
+        buffer.record(higher, now: start.addingTimeInterval(0.21))
 
         XCTAssertEqual(buffer.sessionMaximums[.boost], 1.2)
         XCTAssertEqual(buffer.sessionMaximums[.rpm], 6_400)
 
         buffer.reset()
         XCTAssertTrue(buffer.sessionMaximums.isEmpty)
+    }
+
+    @MainActor
+    func testDashboardBufferBatchesPublishedChangesPerDisplaySample() {
+        let buffer = DashboardTelemetryBuffer()
+        var publications = 0
+        let subscription = buffer.objectWillChange.sink { publications += 1 }
+
+        buffer.record(.preview, now: Date(timeIntervalSince1970: 1_000))
+
+        XCTAssertLessThanOrEqual(publications, 2)
+        withExtendedLifetime(subscription) {}
     }
 
     func testControlCardUsesCloudCompatibleDashboardSchema() throws {

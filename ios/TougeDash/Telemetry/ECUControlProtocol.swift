@@ -89,6 +89,15 @@ struct ECUControlLoopbackAccumulator: Sendable {
 
     var currentRevision: UInt64 { revision }
 
+    func rawValue(for channel: UInt8) -> UInt16? {
+        switch channel {
+        case 254: switchByte.map(UInt16.init)
+        case 253: rotary1234
+        case 252: rotary5678
+        default: nil
+        }
+    }
+
     func switchValue(channel: Int) -> Bool? {
         guard ECUControlSnapshot.channelRange.contains(channel), let switchByte else { return nil }
         return (switchByte & UInt8(1 << (8 - channel))) != 0

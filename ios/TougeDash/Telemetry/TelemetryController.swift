@@ -4,8 +4,9 @@ import UIKit
 import WidgetKit
 
 enum TelemetryUpdateCadence {
+    static let bluetoothDeliveryInterval: TimeInterval = 1.0 / 40.0
     static let processingInterval: TimeInterval = 1.0 / 25.0
-    static let normalDisplayInterval: TimeInterval = 1.0 / 20.0
+    static let normalDisplayInterval: TimeInterval = 1.0 / 12.0
     static let recordingDisplayInterval: TimeInterval = 1.0 / 8.0
     static let diagnosticsInterval: TimeInterval = 0.2
 }
@@ -127,6 +128,7 @@ final class TelemetryController: ObservableObject {
         bluetooth.onConnectionChanged = { [weak self] state in
             guard let self else { return }
             self.ecuControls.connectionChanged(isConnected: state.isConnected)
+            self.cloudSync.setTelemetryActive(state.isConnected)
             if state.isConnected {
                 let wasManuallySuppressed = self.activityManuallySuppressed
                 self.activityManuallySuppressed = false

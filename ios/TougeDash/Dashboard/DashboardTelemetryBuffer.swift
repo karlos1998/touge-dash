@@ -21,6 +21,8 @@ final class DashboardTelemetryBuffer: ObservableObject {
     private let retention: TimeInterval
     private let minimumInterval: TimeInterval
     private var lastRecordedAt = Date.distantPast
+    private var lastPrunedAt = Date.distantPast
+    private var accumulatedSessionMaximums: [DashboardMetric: Double] = [:]
 
     init(retention: TimeInterval = 600, samplesPerSecond: Double = 5) {
         self.retention = retention
@@ -36,19 +38,27 @@ final class DashboardTelemetryBuffer: ObservableObject {
             for metric in DashboardMetric.allCases {
                 let sample = metric.value(in: snapshot)
                 guard sample.isFinite else { continue }
-                sessionMaximums[metric] = max(sessionMaximums[metric] ?? sample, sample)
+                accumulatedSessionMaximums[metric] = max(accumulatedSessionMaximums[metric] ?? sample, sample)
             }
         }
 
         guard now.timeIntervalSince(lastRecordedAt) >= minimumInterval else { return }
         lastRecordedAt = now
+        if sessionMaximums != accumulatedSessionMaximums {
+            sessionMaximums = accumulatedSessionMaximums
+        }
+
         points.append(DashboardTelemetryPoint(recordedAt: now, snapshot: snapshot))
 
-        let cutoff = now.addingTimeInterval(-retention)
-        if let firstValid = points.firstIndex(where: { $0.recordedAt >= cutoff }), firstValid > 0 {
-            points.removeFirst(firstValid)
-        } else if points.count > Int(retention / minimumInterval) + 10 {
-            points.removeFirst(points.count - Int(retention / minimumInterval))
+        let maximumPointCount = Int(retention / minimumInterval)
+        if now.timeIntervalSince(lastPrunedAt) >= 5 || points.count > maximumPointCount + 10 {
+            lastPrunedAt = now
+            let cutoff = now.addingTimeInterval(-retention)
+            if let firstValid = points.firstIndex(where: { $0.recordedAt >= cutoff }), firstValid > 0 {
+                points.removeFirst(firstValid)
+            } else if points.count > maximumPointCount + 10 {
+                points.removeFirst(points.count - maximumPointCount)
+            }
         }
     }
 
@@ -60,6 +70,8 @@ final class DashboardTelemetryBuffer: ObservableObject {
     func reset() {
         points.removeAll(keepingCapacity: true)
         sessionMaximums.removeAll(keepingCapacity: true)
+        accumulatedSessionMaximums.removeAll(keepingCapacity: true)
         lastRecordedAt = .distantPast
+        lastPrunedAt = .distantPast
     }
 }
