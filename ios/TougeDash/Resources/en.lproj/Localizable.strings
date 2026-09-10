@@ -750,3 +750,25 @@
 "Udostępnij przejazd" = "Share drive";
 "Tworzenie linku…" = "Creating link…";
 "Utwórz link" = "Create link";
+
+"Gaz" = "Throttle";
+
+"Gaz LUB boost" = "Throttle OR boost";
+
+"Gaz I boost" = "Throttle AND boost";
+
+"Warunek obciążenia" = "Load condition";
+
+"GAZ CO NAJMNIEJ" = "THROTTLE AT LEAST";
+
+"BOOST POWYŻEJ" = "BOOST ABOVE";
+
+"Przejazdy" = "Drives";
+
+"Raporty incydentów" = "Incident reports";
+
+"Brak raportów incydentów" = "No incident reports";
+
+"Boost, ciśnienie oleju i paliwa" = "Boost, oil and fuel pressure";
+
+"Paliwo" = "Fuel";

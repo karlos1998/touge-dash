@@ -16,7 +16,7 @@ final class IncidentCaptureEngineTests: XCTestCase {
             (.highOilTemperature, Self.isolatedRules { $0.highOilTemperatureEnabled = true },
              Self.telemetry(oilTemperature: 125), 2),
             (.lowFuelPressure, Self.isolatedRules { $0.lowFuelPressureEnabled = true },
-             Self.telemetry(rpm: 3_000, fuelPressure: 2.0), 1),
+             Self.telemetry(rpm: 3_000, boost: 0.1, fuelPressure: 2.0), 1),
             (.lowBatteryVoltage, Self.isolatedRules { $0.lowBatteryVoltageEnabled = true },
              Self.telemetry(rpm: 1_500, battery: 10.8), 3),
         ]
@@ -32,6 +32,49 @@ final class IncidentCaptureEngineTests: XCTestCase {
             XCTAssertEqual(result.triggered.map(\.kind), [kind], "Missing notification for \(kind)")
             XCTAssertEqual(result.active.map(\.kind), [kind])
         }
+    }
+
+    func testFuelLoadModesAndStrictBoostBoundary() {
+        var load = FuelPressureLoadCondition()
+        for mode in FuelPressureLoadCondition.Mode.allCases {
+            load.mode = mode
+            XCTAssertFalse(load.matches(throttle: 39.9, boost: 0))
+            XCTAssertTrue(load.matches(throttle: 40, boost: 0.01))
+            XCTAssertEqual(load.matches(throttle: 40, boost: 0), mode == .throttle || mode == .either)
+            XCTAssertEqual(load.matches(throttle: 0, boost: 0.01), mode == .boost || mode == .either)
+        }
+        load.mode = .both
+        load.minimumThrottlePercent = 65
+        load.minimumBoostBar = 0.5
+        XCTAssertFalse(load.matches(throttle: 65, boost: 0.5))
+        XCTAssertTrue(load.matches(throttle: 65, boost: 0.51))
+    }
+
+    func testFuelLoadLossResetsNotificationDebounceAndDashboardWarning() {
+        let rules = Self.isolatedRules { $0.lowFuelPressureEnabled = true }
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        var snapshot = Self.telemetry(rpm: 3_000, boost: 0.1, fuelPressure: 2)
+        var evaluator = EngineAlertEvaluator()
+        _ = evaluator.evaluate(snapshot, rules: rules, now: start)
+        snapshot.boostBar = 0
+        XCTAssertFalse(rules.applyingWarningState(to: snapshot).hasCriticalWarning)
+        XCTAssertTrue(evaluator.evaluate(snapshot, rules: rules, now: start.addingTimeInterval(0.8)).active.isEmpty)
+        snapshot.throttlePercent = 40
+        XCTAssertTrue(rules.applyingWarningState(to: snapshot).hasCriticalWarning)
+        XCTAssertTrue(evaluator.evaluate(snapshot, rules: rules, now: start.addingTimeInterval(1)).triggered.isEmpty)
+        XCTAssertTrue(evaluator.evaluate(snapshot, rules: rules, now: start.addingTimeInterval(1.9)).triggered.isEmpty)
+        XCTAssertEqual(evaluator.evaluate(snapshot, rules: rules, now: start.addingTimeInterval(2.01)).triggered.map(\.kind), [.lowFuelPressure])
+    }
+
+    func testOldRulesDecodeWithoutLosingCustomThresholds() throws {
+        var original = VehicleAlertRules.standard
+        original.minimumFuelPressureBar = 3.2
+        let data = try JSONEncoder().encode(original)
+        let restored = try JSONDecoder().decode(VehicleAlertRules.self, from: data)
+        XCTAssertEqual(restored.minimumFuelPressureBar, 3.2)
+        XCTAssertEqual(restored.fuelPressureLoad, FuelPressureLoadCondition())
+        original.fuelPressureLoad.mode = .both
+        XCTAssertEqual(try JSONDecoder().decode(VehicleAlertRules.self, from: JSONEncoder().encode(original)), original)
     }
 
     func testNotificationEvaluatorRespectsCooldownWithoutLosingActiveState() {
@@ -187,6 +230,7 @@ final class IncidentCaptureEngineTests: XCTestCase {
         }, .lowBatteryVoltage)
         XCTAssertEqual(trigger(configure: { $0.lowFuelPressureEnabled = true }) { snapshot in
             snapshot.rpm = 3_000
+            snapshot.boostBar = 0.1
             snapshot.fuelPressureBar = 2.0
         }, .lowFuelPressure)
     }

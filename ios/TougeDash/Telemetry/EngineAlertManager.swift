@@ -112,6 +112,7 @@ struct EngineAlertEvaluator: Sendable {
             ))
         }
         if rules.lowFuelPressureEnabled,
+           rules.fuelPressureLoad.matches(throttle: snapshot.throttlePercent, boost: snapshot.boostBar),
            snapshot.rpm >= rules.lowFuelPressureMinimumRPM,
            snapshot.fuelPressureBar > 0,
            snapshot.fuelPressureBar < rules.minimumFuelPressureBar {

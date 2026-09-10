@@ -224,6 +224,21 @@ struct AlertCenterView: View {
                             range: 0.1...30,
                             decimals: 1
                         )
+                        Picker(localized("Warunek obciążenia"), selection: $draft.fuelPressureLoad.mode) {
+                            ForEach(FuelPressureLoadCondition.Mode.allCases, id: \.self) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        if draft.fuelPressureLoad.mode != .boost {
+                            RuleValueField(label: "GAZ CO NAJMNIEJ", unit: "%",
+                                           value: $draft.fuelPressureLoad.minimumThrottlePercent,
+                                           range: 0...100, decimals: 0)
+                        }
+                        if draft.fuelPressureLoad.mode != .throttle {
+                            RuleValueField(label: "BOOST POWYŻEJ", unit: "bar",
+                                           value: $draft.fuelPressureLoad.minimumBoostBar,
+                                           range: -1...5, decimals: 1)
+                        }
                     }
 
                     cooldownCard

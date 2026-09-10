@@ -1,5 +1,33 @@
 import Foundation
 
+struct FuelPressureLoadCondition: Codable, Equatable, Sendable {
+    enum Mode: String, Codable, CaseIterable, Sendable {
+        case throttle, boost, either, both
+        var title: String {
+            switch self {
+            case .throttle: localized("Gaz")
+            case .boost: localized("Boost")
+            case .either: localized("Gaz LUB boost")
+            case .both: localized("Gaz I boost")
+            }
+        }
+    }
+    var mode: Mode = .either
+    var minimumThrottlePercent = 40.0
+    var minimumBoostBar = 0.0
+
+    func matches(throttle: Double, boost: Double) -> Bool {
+        let throttleMatches = throttle >= minimumThrottlePercent
+        let boostMatches = boost > minimumBoostBar
+        switch mode {
+        case .throttle: return throttleMatches
+        case .boost: return boostMatches
+        case .either: return throttleMatches || boostMatches
+        case .both: return throttleMatches && boostMatches
+        }
+    }
+}
+
 struct VehicleAlertRules: Codable, Equatable, Sendable {
     var cooldownSeconds = 300
 
@@ -35,6 +63,13 @@ struct VehicleAlertRules: Codable, Equatable, Sendable {
     var lowFuelPressureMinimumRPM = 1_500.0
     var lowFuelPressureDurationSeconds = 1.0
 
+    // Optional storage keeps existing per-vehicle configurations decodable.
+    var fuelPressureLoadCondition: FuelPressureLoadCondition?
+    var fuelPressureLoad: FuelPressureLoadCondition {
+        get { fuelPressureLoadCondition ?? FuelPressureLoadCondition() }
+        set { fuelPressureLoadCondition = newValue }
+    }
+
     static let standard = VehicleAlertRules()
 
     func validated() -> VehicleAlertRules {
@@ -58,6 +93,11 @@ struct VehicleAlertRules: Codable, Equatable, Sendable {
         value.minimumFuelPressureBar = value.minimumFuelPressureBar.clamped(to: 0.1...20)
         value.lowFuelPressureMinimumRPM = value.lowFuelPressureMinimumRPM.clamped(to: 0...12_000)
         value.lowFuelPressureDurationSeconds = value.lowFuelPressureDurationSeconds.clamped(to: 0.1...30)
+        if var load = value.fuelPressureLoadCondition {
+            load.minimumThrottlePercent = load.minimumThrottlePercent.clamped(to: 0...100)
+            load.minimumBoostBar = load.minimumBoostBar.clamped(to: -1...5)
+            value.fuelPressureLoadCondition = load
+        }
         return value
     }
 
@@ -81,6 +121,7 @@ struct VehicleAlertRules: Codable, Equatable, Sendable {
             snapshot.afr > rules.maximumAFR
         let overboostWarning = rules.overboostEnabled && snapshot.boostBar > rules.maximumBoostBar
         let fuelPressureWarning = rules.lowFuelPressureEnabled &&
+            rules.fuelPressureLoad.matches(throttle: snapshot.throttlePercent, boost: snapshot.boostBar) &&
             snapshot.rpm >= rules.lowFuelPressureMinimumRPM &&
             snapshot.fuelPressureBar > 0 &&
             snapshot.fuelPressureBar < rules.minimumFuelPressureBar
@@ -123,6 +164,7 @@ struct CloudVehicleAlertConfiguration: Codable, Equatable, Sendable {
     let minimumFuelPressureBar: Double
     let lowFuelPressureMinimumRpm: Double
     let lowFuelPressureDurationSeconds: Double
+    var fuelPressureLoadCondition: FuelPressureLoadCondition?
     let updatedByAccountId: UUID?
     let updatedByDisplayName: String?
     let updatedAt: Date
@@ -154,7 +196,8 @@ struct CloudVehicleAlertConfiguration: Codable, Equatable, Sendable {
             lowFuelPressureEnabled: lowFuelPressureEnabled,
             minimumFuelPressureBar: minimumFuelPressureBar,
             lowFuelPressureMinimumRPM: lowFuelPressureMinimumRpm,
-            lowFuelPressureDurationSeconds: lowFuelPressureDurationSeconds
+            lowFuelPressureDurationSeconds: lowFuelPressureDurationSeconds,
+            fuelPressureLoadCondition: fuelPressureLoadCondition
         ).validated()
     }
 }
@@ -187,6 +230,7 @@ struct CloudVehicleAlertConfigurationUpdate: Encodable, Sendable {
     let minimumFuelPressureBar: Double
     let lowFuelPressureMinimumRpm: Double
     let lowFuelPressureDurationSeconds: Double
+    var fuelPressureLoadCondition: FuelPressureLoadCondition?
 
     init(rules: VehicleAlertRules, revision: Int) {
         let rules = rules.validated()
@@ -217,6 +261,7 @@ struct CloudVehicleAlertConfigurationUpdate: Encodable, Sendable {
         minimumFuelPressureBar = rules.minimumFuelPressureBar
         lowFuelPressureMinimumRpm = rules.lowFuelPressureMinimumRPM
         lowFuelPressureDurationSeconds = rules.lowFuelPressureDurationSeconds
+        fuelPressureLoadCondition = rules.fuelPressureLoad
     }
 }
 
@@ -328,8 +373,13 @@ final class VehicleAlertRuleStore: ObservableObject {
     }
 
     private func store(_ remote: CloudVehicleAlertConfiguration, for vehicleID: UUID) {
+        var rules = remote.rules
+        // Older servers do not return load conditions; preserve the local selection.
+        if remote.fuelPressureLoadCondition == nil {
+            rules.fuelPressureLoadCondition = record(for: vehicleID).rules.fuelPressureLoadCondition
+        }
         records[vehicleID.uuidString] = Record(
-            rules: remote.rules,
+            rules: rules,
             revision: remote.revision,
             dirty: false,
             updatedAt: remote.updatedAt,

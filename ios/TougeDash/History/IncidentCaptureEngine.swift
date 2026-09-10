@@ -28,6 +28,7 @@ struct IncidentCaptureEngine: Sendable {
         var lowBatteryVoltage = 11.5
         var lowBatteryMinimumRPM = 800.0
         var lowBatteryDuration: TimeInterval = 3
+        var fuelPressureLoad = FuelPressureLoadCondition()
         var lowFuelPressureEnabled = false
         var lowFuelPressureBar = 2.5
         var lowFuelPressureMinimumRPM = 1_500.0
@@ -242,6 +243,7 @@ struct IncidentCaptureEngine: Sendable {
             ))
         }
         if configuration.lowFuelPressureEnabled,
+           configuration.fuelPressureLoad.matches(throttle: point.throttlePercent, boost: point.boostBar),
            point.rpm >= configuration.lowFuelPressureMinimumRPM,
            point.fuelPressureBar > 0,
            point.fuelPressureBar < configuration.lowFuelPressureBar {
@@ -370,6 +372,7 @@ private extension VehicleAlertRules {
         configuration.lowBatteryVoltage = minimumBatteryVoltage
         configuration.lowBatteryMinimumRPM = lowBatteryMinimumRPM
         configuration.lowBatteryDuration = lowBatteryDurationSeconds
+        configuration.fuelPressureLoad = fuelPressureLoad
         configuration.lowFuelPressureEnabled = lowFuelPressureEnabled
         configuration.lowFuelPressureBar = minimumFuelPressureBar
         configuration.lowFuelPressureMinimumRPM = lowFuelPressureMinimumRPM
