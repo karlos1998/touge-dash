@@ -1,0 +1,17 @@
+appId: it.letscode.touge-dash
+---
+- tapOn: "Historia"
+- assertVisible: "Lokalne archiwum telemetrii"
+- tapOn: "Raporty incydentów"
+- assertVisible: "Brak raportów incydentów"
+- assertNotVisible: "Lokalne archiwum telemetrii"
+- tapOn: "Przejazdy"
+- tapOn:
+    text: ".*próbek.*"
+- scrollUntilVisible:
+    element:
+      text: "Boost, ciśnienie oleju i paliwa"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Boost, ciśnienie oleju i paliwa"
+- takeScreenshot: /tmp/touge-history-fuel-pressure

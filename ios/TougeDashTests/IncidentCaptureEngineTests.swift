@@ -377,6 +377,22 @@ final class VehicleAlertRuleStoreTests: XCTestCase {
         XCTAssertTrue(restored.dirty)
     }
 
+    @MainActor
+    func testLegacyCloudResponsePreservesLocalFuelLoadCondition() {
+        let suite = "TougeDashTests.fuelLoad.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = VehicleAlertRuleStore(defaults: defaults)
+        let id = UUID()
+        var rules = VehicleAlertRules.standard
+        rules.fuelPressureLoad.mode = .both
+        rules.fuelPressureLoad.minimumThrottlePercent = 60
+        store.saveLocally(rules, for: id)
+        store.markUploaded(remote(vehicleID: id, revision: 2, maximumBoostBar: 1.8), for: id)
+        XCTAssertEqual(store.rules(for: id).fuelPressureLoad, rules.fuelPressureLoad)
+        XCTAssertEqual(store.rules(for: id).maximumBoostBar, 1.8)
+    }
+
     private func remote(
         vehicleID: UUID,
         revision: Int,

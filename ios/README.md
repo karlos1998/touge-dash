@@ -217,3 +217,21 @@ Testy obejmują fragmentację notyfikacji BLE, szum, złą sumę kontrolną,
 resynchronizację, skalowanie kanałów, wartości ze znakiem, podział sesji,
 częstotliwość zapisu, pasywną politykę telemetrii, kodowanie i loopback kart
 sterujących oraz wszystkie reguły incydentów z buforem przed i po zdarzeniu.
+
+## Warunki obciążenia dla ciśnienia paliwa
+
+Alert niskiego ciśnienia paliwa wymaga także wybranego warunku obciążenia:
+`Gaz`, `Boost`, `Gaz LUB boost` lub `Gaz I boost`. Domyślnie jest to gaz co
+najmniej 40% LUB boost większy od 0 bar. Oba progi są edytowalne; gaz korzysta
+z kanału TPS dostępnego w telemetrii EMU. Warunek musi utrzymywać się razem
+z niskim ciśnieniem przez cały czas potwierdzenia. Puszczenie gazu/spadek boostu
+niespełniający wybranej reguły resetuje odliczanie.
+
+Ustawienia obciążenia są zachowywane lokalnie per auto. Klient obsługuje opcjonalne
+pole `fuelPressureLoadCondition` API; odpowiedź starszego serwera bez tego pola
+nie kasuje lokalnych ustawień. Synchronizacja tych nowych warunków między
+urządzeniami wymaga obsługi pola na serwerze.
+
+Historia ma osobne zakładki przejazdów i incydentów. Wykres ciśnień przejazdu
+pokazuje boost, olej i paliwo. Szczegóły analizy zapisu oraz pomiary przed i po
+zmianie są w [raporcie wydajności](../docs/ios-recording-performance.md).

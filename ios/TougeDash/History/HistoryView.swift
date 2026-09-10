@@ -83,123 +83,123 @@ struct HistoryView: View {
                             }
                         }
                         if selectedArchive == 1 {
-                        if incidents.isEmpty {
-                            ContentUnavailableView(localized("Brak raportów incydentów"),
-                                                   systemImage: "checkmark.shield")
-                        }
-                        if !incidents.isEmpty {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("RAPORTY INCYDENTÓW")
-                                        .font(.system(size: 13, weight: .black))
-                                        .tracking(1.4)
-                                    Text("30 sekund przed · 60 sekund po zdarzeniu")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Text(incidents.count.formatted())
-                                    .font(.headline.monospacedDigit().weight(.black))
-                                    .foregroundStyle(Color.tougeRed)
+                            if incidents.isEmpty {
+                                ContentUnavailableView(localized("Brak raportów incydentów"),
+                                                       systemImage: "checkmark.shield")
                             }
-                            .padding(.top, 4)
+                            if !incidents.isEmpty {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("RAPORTY INCYDENTÓW")
+                                            .font(.system(size: 13, weight: .black))
+                                            .tracking(1.4)
+                                        Text("30 sekund przed · 60 sekund po zdarzeniu")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text(incidents.count.formatted())
+                                        .font(.headline.monospacedDigit().weight(.black))
+                                        .foregroundStyle(Color.tougeRed)
+                                }
+                                .padding(.top, 4)
 
-                            ForEach(incidents.filter { !deletedItems.contains(.incident($0.id)) }) { incident in
-                                let isDeleting = deletingItems.contains(.incident(incident.id))
-                                SwipeToDeleteRow(isEnabled: !isDeleting) {
-                                    pendingDeletion = .incident(incident)
-                                } content: {
-                                    NavigationLink {
-                                        IncidentReportView(
-                                            incident: incident,
-                                            cloudAccount: cloudAccount,
-                                            cloudSync: cloudSync
-                                        )
-                                    } label: {
-                                        IncidentListRow(
-                                            incident: incident,
-                                            cloudSync: cloudSync,
-                                            showsCloudStatus: cloudAccount.isAuthenticated
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(isDeleting)
-                                    .opacity(isDeleting ? 0.42 : 1)
-                                    .overlay {
-                                        if isDeleting { HistoryDeletingOverlay() }
-                                    }
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            pendingDeletion = .incident(incident)
+                                ForEach(incidents.filter { !deletedItems.contains(.incident($0.id)) }) { incident in
+                                    let isDeleting = deletingItems.contains(.incident(incident.id))
+                                    SwipeToDeleteRow(isEnabled: !isDeleting) {
+                                        pendingDeletion = .incident(incident)
+                                    } content: {
+                                        NavigationLink {
+                                            IncidentReportView(
+                                                incident: incident,
+                                                cloudAccount: cloudAccount,
+                                                cloudSync: cloudSync
+                                            )
                                         } label: {
-                                            Label(localized("Usuń raport"), systemImage: "trash")
+                                            IncidentListRow(
+                                                incident: incident,
+                                                cloudSync: cloudSync,
+                                                showsCloudStatus: cloudAccount.isAuthenticated
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(isDeleting)
+                                        .opacity(isDeleting ? 0.42 : 1)
+                                        .overlay {
+                                            if isDeleting { HistoryDeletingOverlay() }
+                                        }
+                                        .contextMenu {
+                                            Button(role: .destructive) {
+                                                pendingDeletion = .incident(incident)
+                                            } label: {
+                                                Label(localized("Usuń raport"), systemImage: "trash")
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
 
                         }
 
                         if selectedArchive == 0 {
-                        if sessions.isEmpty {
-                            HistoryEmptyState()
-                        } else {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("PRZEJAZDY")
-                                        .font(.system(size: 13, weight: .black))
-                                        .tracking(1.4)
-                                    Text("Lokalne archiwum telemetrii")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                            if sessions.isEmpty {
+                                HistoryEmptyState()
+                            } else {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text("PRZEJAZDY")
+                                            .font(.system(size: 13, weight: .black))
+                                            .tracking(1.4)
+                                        Text("Lokalne archiwum telemetrii")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Text("\(sessions.count)")
+                                        .font(.headline.monospacedDigit().weight(.black))
+                                        .foregroundStyle(Color.tougeCyan)
                                 }
-                                Spacer()
-                                Text("\(sessions.count)")
-                                    .font(.headline.monospacedDigit().weight(.black))
-                                    .foregroundStyle(Color.tougeCyan)
-                            }
-                            .padding(.top, 4)
+                                .padding(.top, 4)
 
-                            ForEach(sessions.filter { !deletedItems.contains(.session($0.id)) }) { session in
-                                let isDeleting = deletingItems.contains(.session(session.id))
-                                SwipeToDeleteRow(isEnabled: session.id != activeSessionID && !isDeleting) {
-                                    pendingDeletion = .session(session)
-                                } content: {
-                                    NavigationLink {
-                                        DriveSessionDetailView(
-                                            session: session,
-                                            cloudAccount: cloudAccount,
-                                            cloudSync: cloudSync,
-                                            videoOverlays: videoOverlays
-                                        )
-                                    } label: {
-                                        DriveSessionRow(
-                                            session: session,
-                                            recordings: videos.filter { $0.sessionID == session.id },
-                                            cloudSync: cloudSync,
-                                            showsCloudStatus: cloudAccount.isAuthenticated
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                    .disabled(isDeleting)
-                                    .opacity(isDeleting ? 0.42 : 1)
-                                    .overlay {
-                                        if isDeleting { HistoryDeletingOverlay() }
-                                    }
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            pendingDeletion = .session(session)
+                                ForEach(sessions.filter { !deletedItems.contains(.session($0.id)) }) { session in
+                                    let isDeleting = deletingItems.contains(.session(session.id))
+                                    SwipeToDeleteRow(isEnabled: session.id != activeSessionID && !isDeleting) {
+                                        pendingDeletion = .session(session)
+                                    } content: {
+                                        NavigationLink {
+                                            DriveSessionDetailView(
+                                                session: session,
+                                                cloudAccount: cloudAccount,
+                                                cloudSync: cloudSync,
+                                                videoOverlays: videoOverlays
+                                            )
                                         } label: {
-                                            Label(localized("Usuń przejazd"), systemImage: "trash")
+                                            DriveSessionRow(
+                                                session: session,
+                                                recordings: videos.filter { $0.sessionID == session.id },
+                                                cloudSync: cloudSync,
+                                                showsCloudStatus: cloudAccount.isAuthenticated
+                                            )
                                         }
-                                        .disabled(session.id == activeSessionID)
+                                        .buttonStyle(.plain)
+                                        .disabled(isDeleting)
+                                        .opacity(isDeleting ? 0.42 : 1)
+                                        .overlay {
+                                            if isDeleting { HistoryDeletingOverlay() }
+                                        }
+                                        .contextMenu {
+                                            Button(role: .destructive) {
+                                                pendingDeletion = .session(session)
+                                            } label: {
+                                                Label(localized("Usuń przejazd"), systemImage: "trash")
+                                            }
+                                            .disabled(session.id == activeSessionID)
+                                        }
                                     }
                                 }
-                            }
 
-                            LocalArchiveStorageFooter(bytes: localArchiveBytes)
-                        }
+                                LocalArchiveStorageFooter(bytes: localArchiveBytes)
+                            }
 
                         }
 
