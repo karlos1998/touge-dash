@@ -24,13 +24,13 @@ struct TougeDashApp: App {
     @AppStorage(AppAppearance.defaultsKey) private var appearanceValue = AppAppearance.system.rawValue
     @AppStorage(AppLanguage.defaultsKey) private var languageValue = AppLanguage.system.rawValue
     private let modelContainer: ModelContainer
-    @StateObject private var controller: TelemetryController
-    @StateObject private var cloudAccount: CloudAccountService
-    @StateObject private var cloudSync: CloudSyncManager
-    @StateObject private var dashboardTemplates: DashboardTemplateStore
-    @StateObject private var dashboardBuffer: DashboardTelemetryBuffer
-    @StateObject private var videoRecorder: DriveVideoRecorder
-    @StateObject private var videoOverlays: VideoOverlayTemplateStore
+    @State private var controller: TelemetryController
+    @State private var cloudAccount: CloudAccountService
+    @State private var cloudSync: CloudSyncManager
+    @State private var dashboardTemplates: DashboardTemplateStore
+    @State private var dashboardBuffer: DashboardTelemetryBuffer
+    @State private var videoRecorder: DriveVideoRecorder
+    @State private var videoOverlays: VideoOverlayTemplateStore
 
     init() {
         do {
@@ -68,12 +68,12 @@ struct TougeDashApp: App {
             }
             #endif
             modelContainer = container
-            _cloudAccount = StateObject(wrappedValue: account)
-            _cloudSync = StateObject(wrappedValue: sync)
-            _dashboardTemplates = StateObject(wrappedValue: templates)
-            _dashboardBuffer = StateObject(wrappedValue: dashboardBuffer)
-            _videoRecorder = StateObject(wrappedValue: videoRecorder)
-            _videoOverlays = StateObject(wrappedValue: videoOverlays)
+            _cloudAccount = State(initialValue: account)
+            _cloudSync = State(initialValue: sync)
+            _dashboardTemplates = State(initialValue: templates)
+            _dashboardBuffer = State(initialValue: dashboardBuffer)
+            _videoRecorder = State(initialValue: videoRecorder)
+            _videoOverlays = State(initialValue: videoOverlays)
             let incidentRecorder = TelemetryIncidentRecorder(
                 container: container,
                 locationTracker: locationTracker,
@@ -82,7 +82,7 @@ struct TougeDashApp: App {
             incidentRecorder.onIncidentStored = { sampleCount in
                 sync.noteLocalIncidentRecorded(sampleCount: sampleCount)
             }
-            _controller = StateObject(wrappedValue: TelemetryController(
+            _controller = State(initialValue: TelemetryController(
                 historyRecorder: historyRecorder,
                 incidentRecorder: incidentRecorder,
                 cloudSync: sync,

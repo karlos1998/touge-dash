@@ -151,6 +151,7 @@ final class TelemetryController: ObservableObject {
                     Task { await self.cloudSync.prepareVehicle(hardwareIdentifier: historyIdentifier) }
                 }
             } else {
+                self.historyRecorder.saveNow()
                 self.incidentRecorder.finish(sessionID: self.historyRecorder.activeSessionID)
                 self.videoRecorder.connectionDidEnd()
                 self.lastVideoSessionID = nil
@@ -200,6 +201,10 @@ final class TelemetryController: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             #if DEBUG
+            if ProcessInfo.processInfo.environment["TOUGE_DASH_REPLAY_TELEMETRY"] == "1" {
+                await self.replayTelemetryForProfiling()
+                return
+            }
             if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_TELEMETRY"] == "1" {
                 await self.activityManager.stop()
             }
@@ -230,6 +235,32 @@ final class TelemetryController: ObservableObject {
         }
         #endif
     }
+
+    #if DEBUG
+    /// Simulator-only input uses the production parser, alert and persistence pipeline.
+    /// No BLE writes or cloud uploads are performed for this isolated test vehicle.
+    private func replayTelemetryForProfiling() async {
+        activityManuallySuppressed = true
+        cloudSync.setTelemetryActive(true)
+        historyRecorder.activateVehicle(LocalVehicleIdentity.simulatorID)
+        incidentRecorder.activateVehicle(LocalVehicleIdentity.simulatorID)
+        await activityManager.stop()
+        for tick in 0..<4_800 {
+            let phase = Double(tick) / 40
+            let channels: [(UInt8, UInt16)] = [
+                (1, UInt16(3_000 + 1_000 * sin(phase))), (2, UInt16(120 + 30 * sin(phase))),
+                (3, 100), (4, 30), (5, 510), (6, 30), (8, 700), (9, 690), (12, 125),
+                (14, 100), (19, 80), (21, 64), (22, 100), (23, 52), (24, 90),
+                (27, 109), (28, 320), (255, 0)
+            ]
+            var data = Data()
+            for (channel, raw) in channels { data.append(EMUFrameParser.encode(channel: channel, rawValue: raw)) }
+            ingest(data)
+            try? await Task.sleep(for: .milliseconds(25))
+        }
+        historyRecorder.saveNow()
+    }
+    #endif
 
     var connectionLabel: String {
         #if DEBUG
@@ -404,7 +435,13 @@ final class TelemetryController: ObservableObject {
             }
             incidentRecorder.record(value, sessionID: sessionID)
         }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TOUGE_DASH_REPLAY_TELEMETRY"] != "1" {
+            cloudSync.publishLive(value, performance: accelerationEngine)
+        }
+        #else
         cloudSync.publishLive(value, performance: accelerationEngine)
+        #endif
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
             SharedTelemetryStore.save(value)
             lastSharedWrite = now

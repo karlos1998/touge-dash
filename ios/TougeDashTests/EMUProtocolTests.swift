@@ -369,6 +369,43 @@ final class EMUProtocolTests: XCTestCase {
     }
 
     @MainActor
+    func testSustainedHistoryRecordingPreservesAllSamples() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID()).store")
+        defer {
+            for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: url.path + suffix) }
+        }
+        let container = try ModelContainer(
+            for: DriveSession.self, TelemetryHistorySample.self, DriveIncident.self,
+            TimelineAnnotation.self, DriveVideoRecording.self, AccelerationAttempt.self,
+            configurations: ModelConfiguration(url: url)
+        )
+        let recorder = TelemetryHistoryRecorder(container: container, locationTracker: LocationTrackingService())
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        var batchTimes: [Double] = []
+        for batch in 0..<6 {
+            let began = CFAbsoluteTimeGetCurrent()
+            for index in 0..<1_000 {
+                autoreleasepool {
+                    var snapshot = TelemetrySnapshot.preview
+                    snapshot.fuelPressureBar = 2 + Double(index % 30) / 10
+                    recorder.record(snapshot, at: start.addingTimeInterval(Double(batch * 1_000 + index) * 0.101))
+                }
+            }
+            recorder.saveNow()
+            batchTimes.append(CFAbsoluteTimeGetCurrent() - began)
+            print("RECORDING_BATCH \(batch): \(batchTimes.last!) seconds")
+        }
+        print("RECORDING_BENCHMARK seconds_per_1000=\(batchTimes)")
+        XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<TelemetryHistorySample>()), 6_000)
+        let sessions = try container.mainContext.fetch(FetchDescriptor<DriveSession>())
+        XCTAssertEqual(sessions.reduce(0) { $0 + $1.sampleCount }, 6_000)
+        XCTAssertEqual(sessions.reduce(0) { $0 + $1.samples.count }, 6_000)
+        XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<TelemetryHistorySample>(
+            predicate: #Predicate { $0.session == nil }
+        )), 0)
+    }
+
+    @MainActor
     func testHistoryRecorderSamplesAtTenHertzAndSplitsLongGaps() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(

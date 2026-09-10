@@ -19,6 +19,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
     private var lastSavedAt = Date.distantPast
     private var lastDistanceLocation: RecordedLocation?
     private var lastChartSampleAt = Date.distantPast
+    private var pendingSamples: [TelemetryHistorySample] = []
 
     init(
         container: ModelContainer,
@@ -27,7 +28,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         defaults: UserDefaults = .standard
     ) {
         context = ModelContext(container)
-        context.autosaveEnabled = true
+        context.autosaveEnabled = false
         self.defaults = defaults
         self.segmentSettings = segmentSettings ?? DriveSegmentSettingsStore(defaults: defaults)
         vehicleID = LocalVehicleIdentity.resolve()
@@ -36,6 +37,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         Task { [weak self] in
             await Task.yield()
             guard let self else { return }
+            self.saveNow()
             try? HistoryLocalStore.enforceRetention(
                 in: context,
                 keepingActiveSessionID: activeSession?.id
@@ -64,17 +66,17 @@ final class TelemetryHistoryRecorder: ObservableObject {
             snapshot: snapshot,
             timestamp: timestamp,
             location: location,
-            chartEligible: chartEligible,
-            session: session
+            chartEligible: chartEligible
         )
         context.insert(sample)
+        pendingSamples.append(sample)
 
         update(session, with: sample, location: location)
         lastRecordedAt = timestamp
         if chartEligible { lastChartSampleAt = timestamp }
 
         if timestamp.timeIntervalSince(lastSavedAt) >= 5 {
-            try? context.save()
+            saveNow()
             lastSavedAt = timestamp
         }
         return RecordingChange(
@@ -85,7 +87,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         )
     }
 
-    var activeSessionID: UUID? { activeSession?.id }
+    @Published private(set) var activeSessionID: UUID?
     var activeSessionSampleCount: Int { activeSession?.sampleCount ?? 0 }
 
     @discardableResult
@@ -97,6 +99,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         session.revision += 1
         saveNow()
         activeSession = nil
+        activeSessionID = nil
         lastDistanceLocation = nil
         lastRecordedAt = .distantPast
         lastChartSampleAt = .distantPast
@@ -108,6 +111,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         saveNow()
         vehicleID = id
         activeSession = nil
+        activeSessionID = nil
         lastDistanceLocation = nil
         lastRecordedAt = .distantPast
         lastChartSampleAt = .distantPast
@@ -115,6 +119,12 @@ final class TelemetryHistoryRecorder: ObservableObject {
     }
 
     func saveNow() {
+        // Updating the inverse relationship per sample repeatedly walks the entire
+        // drive. Attach one batch per save, preserving the existing cascade schema.
+        if let activeSession, !pendingSamples.isEmpty {
+            activeSession.samples.append(contentsOf: pendingSamples)
+            pendingSamples.removeAll(keepingCapacity: true)
+        }
         try? context.save()
         lastSavedAt = .now
     }
@@ -183,9 +193,12 @@ final class TelemetryHistoryRecorder: ObservableObject {
             return activeSession
         }
 
+        saveNow()
+        lastSavedAt = timestamp
         let session = DriveSession(vehicleID: vehicleID, startedAt: timestamp)
         context.insert(session)
         activeSession = session
+        activeSessionID = session.id
         try? context.save()
         try? HistoryLocalStore.enforceRetention(in: context, keepingActiveSessionID: session.id)
         defaults.removeObject(forKey: manuallyClosedSessionKey)
@@ -204,6 +217,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
               defaults.string(forKey: manuallyClosedSessionKey) != session.id.uuidString,
               Date.now.timeIntervalSince(session.endedAt) <= Self.newSessionGap else { return }
         activeSession = session
+        activeSessionID = session.id
         lastRecordedAt = session.endedAt
 
         let sessionID = session.id

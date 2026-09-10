@@ -1,19 +1,21 @@
 import SwiftUI
 
 struct TougeDashRootView: View {
-    @ObservedObject var controller: TelemetryController
+    let controller: TelemetryController
     @ObservedObject var cloudAccount: CloudAccountService
-    @ObservedObject var cloudSync: CloudSyncManager
-    @ObservedObject var dashboardTemplates: DashboardTemplateStore
-    @ObservedObject var dashboardBuffer: DashboardTelemetryBuffer
-    @ObservedObject var videoRecorder: DriveVideoRecorder
-    @ObservedObject var videoOverlays: VideoOverlayTemplateStore
+    let cloudSync: CloudSyncManager
+    let dashboardTemplates: DashboardTemplateStore
+    let dashboardBuffer: DashboardTelemetryBuffer
+    let videoRecorder: DriveVideoRecorder
+    let videoOverlays: VideoOverlayTemplateStore
     @Binding var appearance: AppAppearance
     @Binding var language: AppLanguage
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @State private var selection: Int
+    @State private var activeSessionID: UUID?
+    @State private var isConnected = false
 
     init(
         controller: TelemetryController,
@@ -65,8 +67,8 @@ struct TougeDashRootView: View {
                 cloudAccount: cloudAccount,
                 cloudSync: cloudSync,
                 videoOverlays: videoOverlays,
-                activeSessionID: controller.historyRecorder.activeSessionID,
-                canSplitActiveDrive: controller.isConnected && controller.historyRecorder.activeSessionID != nil,
+                activeSessionID: activeSessionID,
+                canSplitActiveDrive: isConnected && activeSessionID != nil,
                 onSplitActiveDrive: controller.splitActiveDrive,
                 onShowDashboard: compactLandscape ? { selection = 0 } : nil
             )
@@ -113,6 +115,8 @@ struct TougeDashRootView: View {
         .onChange(of: cloudAccount.isAuthenticated) { _, _ in
             Task { await cloudSync.accountDidChange() }
         }
+        .onReceive(controller.historyRecorder.$activeSessionID.removeDuplicates()) { activeSessionID = $0 }
+        .onReceive(controller.bluetooth.$state.map(\.isConnected).removeDuplicates()) { isConnected = $0 }
         .onReceive(controller.$snapshot) {
             dashboardBuffer.record($0, includeInSessionMaximums: controller.isConnected)
         }
