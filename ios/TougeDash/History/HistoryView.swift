@@ -17,6 +17,7 @@ struct HistoryView: View {
     let canSplitActiveDrive: Bool
     let onSplitActiveDrive: () -> Bool
     let onShowDashboard: (() -> Void)?
+    @State private var selectedArchive = 0
     @State private var showingSplitConfirmation = false
     @State private var splitFeedback = 0
     @State private var pendingDeletion: HistoryDeletionCandidate?
@@ -69,10 +70,22 @@ struct HistoryView: View {
 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 14) {
+                        Picker(localized("Historia"), selection: $selectedArchive) {
+                            Text("Przejazdy").tag(0)
+                            Text("Raporty incydentów").tag(1)
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("history.archiveTabs")
+
                         if canSplitActiveDrive {
                             ManualSessionSplitCard {
                                 showingSplitConfirmation = true
                             }
+                        }
+                        if selectedArchive == 1 {
+                        if incidents.isEmpty {
+                            ContentUnavailableView(localized("Brak raportów incydentów"),
+                                                   systemImage: "checkmark.shield")
                         }
                         if !incidents.isEmpty {
                             HStack {
@@ -126,6 +139,9 @@ struct HistoryView: View {
                             }
                         }
 
+                        }
+
+                        if selectedArchive == 0 {
                         if sessions.isEmpty {
                             HistoryEmptyState()
                         } else {
@@ -183,6 +199,8 @@ struct HistoryView: View {
                             }
 
                             LocalArchiveStorageFooter(bytes: localArchiveBytes)
+                        }
+
                         }
 
                         ProductCreditFooter()
@@ -1024,14 +1042,15 @@ private struct DriveSessionDetailView: View {
 
                         HistoryChartCard(
                             title: "CIŚNIENIA",
-                            subtitle: "Boost i ciśnienie oleju",
+                            subtitle: "Boost, ciśnienie oleju i paliwa",
                             unit: "bar",
                             startedAt: session.startedAt,
                             samples: chartSamples,
                             attempts: accelerationAttempts,
                             series: [
                                 HistoryChartSeries(name: "Boost", color: .tougeCyan, value: { $0.boostBar }),
-                                HistoryChartSeries(name: "Olej", color: .tougeMint, value: { $0.oilPressureBar })
+                                HistoryChartSeries(name: "Olej", color: .tougeMint, value: { $0.oilPressureBar }),
+                                HistoryChartSeries(name: "Paliwo", color: .pink, value: { $0.fuelPressureBar })
                             ],
                             selectedTime: $selectedTime
                         )
