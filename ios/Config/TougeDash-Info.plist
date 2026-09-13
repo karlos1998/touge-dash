@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>it.letscode.touge-dash.video-export.*</string>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -31,10 +35,6 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>it.letscode.touge-dash.video-export.*</string>
-	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>
@@ -48,10 +48,10 @@
 	<string>Touge Dash uses Bluetooth to receive engine data and to send explicitly configured BT Switch or BT Rotary values to a compatible ECUMaster interface.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Touge Dash uses the selected camera to record a drive locally on this device.</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>When route recording is enabled, Touge Dash records location with engine telemetry, including while the phone is locked.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Touge Dash connects directly to your dash camera to find and download recordings selected by you.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>When route recording is enabled, Touge Dash records location with engine telemetry, including while the phone is locked.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Touge Dash can record sound with a local drive video when you enable audio.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
@@ -62,6 +62,25 @@
 	<true/>
 	<key>TougeDashCriticalAlertsEnabled</key>
 	<string>$(TOUGE_DASH_CRITICAL_ALERTS_ENABLED)</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>CPTemplateApplicationScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>Touge Dash CarPlay</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

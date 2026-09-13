@@ -232,10 +232,12 @@ Dokładniejsze informacje o podpisywaniu, BLE i diagnostyce są w
 
 ### CarPlay
 
-Touge Dash nie jest pełną aplikacją CarPlay i nie pojawia się na liście ikon.
-Używa Live Activity w rozmiarze `ActivityFamily.small`. Po podłączeniu telefonu
-aktywność pojawia się w CarPlay Dashboard albo jako powiadomienie. Pokazuje
-ciśnienie i temperaturę oleju, boost, AFR oraz temperaturę płynu chłodniczego.
+Touge Dash używa Live Activity w rozmiarze `ActivityFamily.small`. Po podłączeniu
+telefonu aktywność pojawia się w CarPlay Dashboard albo jako powiadomienie i
+pokazuje ciśnienie i temperaturę oleju, boost, AFR oraz temperaturę płynu
+chłodniczego. Projekt zawiera również uproszczoną scenę pełnej aplikacji CarPlay
+Driving Task. Ikona tej aplikacji pojawi się na ekranie głównym CarPlay po
+przyznaniu przez Apple wymaganego entitlementu i włączeniu go dla App ID.
 
 ### Apple Watch
 
