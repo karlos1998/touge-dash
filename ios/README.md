@@ -167,12 +167,32 @@ boostem, AFR oraz temperaturą płynu chłodniczego. Na iOS 26 aktywność jest
 żądana przed skanowaniem BLE, dzięki czemu początkowe 15 minut wyszukiwania działa
 również po zablokowaniu telefonu.
 
-Projekt zawiera także scenę pełnej aplikacji CarPlay kategorii Driving Task.
-Pokazuje ona uproszczoną, nieinteraktywną listę RPM, boostu, AFR, ciśnienia i
-temperatury oleju oraz temperatury płynu, odświeżaną z tego samego strumienia
-BLE. Scena i jej manifest mogą pozostać w kodzie, ale aplikacja pojawi się na
-ekranie głównym CarPlay dopiero po przyznaniu przez Apple zarządzanego
-entitlementu Driving Task i dodaniu go do profilu podpisującego target iOS.
+### Pełna aplikacja CarPlay — Driving Task
+
+Rozwijana jest również pełna aplikacja CarPlay, która po uruchomieniu z ikony
+`Touge Dash` pokaże kierowcy czytelny, nieinteraktywny podgląd najważniejszych
+parametrów. Funkcja czeka na przyznanie przez Apple zarządzanego entitlementu
+CarPlay Driving Task.
+
+Na branchu funkcji są już gotowe:
+
+- scena CarPlay i wpis w manifeście scen,
+- lista RPM, boostu, AFR, ciśnienia i temperatury oleju oraz temperatury płynu,
+- odświeżanie co 500 ms z istniejącego współdzielonego strumienia telemetrii BLE,
+- stany danych live, rozłączenia, alarmu temperatury i alarmu krytycznego,
+- testy formatowania danych, wykrywania nieaktualnej próbki i priorytetów alarmów.
+
+Do czasu decyzji Apple celowo nie dodajemy entitlementu do pliku uprawnień ani
+profilu podpisującego. Bez niego system nie pokaże ikony Touge Dash na ekranie
+głównym CarPlay i nie pozwoli rzetelnie przetestować pełnej sceny w symulatorze.
+
+Po uzyskaniu zgody pozostaje:
+
+1. Włączyć CarPlay Driving Task dla App ID w Apple Developer.
+2. Dodać przyznany entitlement do targetu i odświeżyć profile provisioning.
+3. Uruchomić scenę w CarPlay Simulator i sprawdzić układ oraz czytelność.
+4. Zweryfikować połączenie BLE, odświeżanie i stany alarmowe na rzeczywistym CarPlay.
+5. Dopracować widok na podstawie testów, wykonać pełną regresję i przygotować wydanie.
 
 ## Apple Watch
 
