@@ -1,6 +1,7 @@
 import AuthenticationServices
 import Foundation
 import SwiftUI
+import WebKit
 
 struct CloudSyncCard: View {
     @ObservedObject var account: CloudAccountService
@@ -225,6 +226,8 @@ private struct CloudAuthenticationView: View {
     @State private var password = ""
     @State private var displayName = ""
     @State private var formError: String?
+    @State private var captchaToken: String?
+    @State private var captchaRevision = UUID()
 #if DEBUG
     @State private var showingServer = false
 #endif
@@ -270,6 +273,24 @@ private struct CloudAuthenticationView: View {
                         passwordStatus
                     }
 
+                    if let url = account.captchaChallengeURL(action: mode == .login ? "login" : "register") {
+                        CaptchaChallengeWebView(
+                            url: url,
+                            onToken: {
+                                captchaToken = $0
+                                formError = nil
+                            },
+                            onError: {
+                                captchaToken = nil
+                                formError = localized("Weryfikacja antybotowa nie powiodła się. Spróbuj ponownie.")
+                            }
+                        )
+                        .id(captchaRevision)
+                        .frame(height: 130)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .accessibilityLabel("Weryfikacja antybotowa")
+                    }
+
                     if let formError {
                         Text(formError)
                             .font(.caption.weight(.semibold))
@@ -283,13 +304,27 @@ private struct CloudAuthenticationView: View {
                             return
                         }
                         formError = nil
+                        guard let captchaToken else {
+                            formError = localized("Potwierdź, że nie jesteś robotem.")
+                            return
+                        }
                         Task {
                             let success = if mode == .login {
-                                await account.login(email: email, password: password)
+                                await account.login(email: email, password: password, captchaToken: captchaToken)
                             } else {
-                                await account.register(email: email, password: password, displayName: displayName)
+                                await account.register(
+                                    email: email,
+                                    password: password,
+                                    displayName: displayName,
+                                    captchaToken: captchaToken
+                                )
                             }
-                            if success { onAuthenticated() }
+                            if success {
+                                onAuthenticated()
+                            } else {
+                                self.captchaToken = nil
+                                captchaRevision = UUID()
+                            }
                         }
                     } label: {
                         Text(localized(account.isWorking ? "ŁĄCZĘ…" : mode == .login ? "ZALOGUJ" : "UTWÓRZ KONTO"))
@@ -301,7 +336,7 @@ private struct CloudAuthenticationView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.tougeCyan)
                     .foregroundStyle(.black)
-                    .disabled(account.isWorking)
+                    .disabled(account.isWorking || captchaToken == nil)
 
                     HStack {
                         Rectangle().fill(Color.primary.opacity(0.09)).frame(height: 1)
@@ -317,6 +352,7 @@ private struct CloudAuthenticationView: View {
                     .signInWithAppleButtonStyle(.white)
                     .frame(height: 48)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .disabled(account.isWorking || captchaToken == nil)
 
                     ProviderButton(title: "Kontynuuj przez Google", icon: "G") {
                         Task { await handleWebAuthentication(provider: "google") }
@@ -369,6 +405,8 @@ private struct CloudAuthenticationView: View {
         .onChange(of: mode) {
             password = ""
             formError = nil
+            captchaToken = nil
+            captchaRevision = UUID()
             account.clearError()
         }
     }
@@ -422,6 +460,10 @@ private struct CloudAuthenticationView: View {
 
     private func handleApple(_ result: Result<ASAuthorization, Error>) async {
         do {
+            guard let captchaToken else {
+                formError = localized("Potwierdź, że nie jesteś robotem.")
+                return
+            }
             guard case .success(let authorization) = result,
                   let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let tokenData = credential.identityToken,
@@ -429,8 +471,16 @@ private struct CloudAuthenticationView: View {
                 throw CloudAPIError.invalidResponse
             }
             let name = credential.fullName.map { PersonNameComponentsFormatter().string(from: $0) }
-            if await account.signInWithApple(identityToken: token, displayName: name), account.isAuthenticated {
+            if await account.signInWithApple(
+                identityToken: token,
+                displayName: name,
+                captchaToken: captchaToken,
+                captchaAction: mode == .login ? "login" : "register"
+            ), account.isAuthenticated {
                 onAuthenticated()
+            } else {
+                self.captchaToken = nil
+                captchaRevision = UUID()
             }
         } catch {
             account.clearError()
@@ -447,6 +497,76 @@ private struct CloudAuthenticationView: View {
             return
         } catch {
             account.report(error)
+        }
+    }
+}
+
+private struct CaptchaChallengeWebView: UIViewRepresentable {
+    let url: URL
+    let onToken: (String) -> Void
+    let onError: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(allowedHost: url.host, onToken: onToken, onError: onError)
+    }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        configuration.userContentController.add(context.coordinator, name: "captcha")
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
+        webView.navigationDelegate = context.coordinator
+        webView.load(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) { }
+
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: "captcha")
+        webView.stopLoading()
+        webView.navigationDelegate = nil
+    }
+
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
+        private let allowedHost: String?
+        private let onToken: (String) -> Void
+        private let onError: () -> Void
+
+        init(allowedHost: String?, onToken: @escaping (String) -> Void, onError: @escaping () -> Void) {
+            self.allowedHost = allowedHost
+            self.onToken = onToken
+            self.onError = onError
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard let payload = message.body as? [String: Any],
+                  let type = payload["type"] as? String else {
+                onError()
+                return
+            }
+            if type == "success", let token = payload["value"] as? String, !token.isEmpty {
+                onToken(token)
+            } else {
+                onError()
+            }
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction
+        ) async -> WKNavigationActionPolicy {
+            guard let target = navigationAction.request.url else {
+                return .cancel
+            }
+            let allowed = target.scheme == "about" || (
+                target.scheme == "https" &&
+                    (target.host == allowedHost || target.host == "challenges.cloudflare.com")
+            )
+            return allowed ? .allow : .cancel
         }
     }
 }

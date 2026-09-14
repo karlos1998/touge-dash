@@ -772,3 +772,6 @@
 "Boost, ciśnienie oleju i paliwa" = "Boost, oil and fuel pressure";
 
 "Paliwo" = "Fuel";
+"Potwierdź, że nie jesteś robotem." = "Confirm that you are not a robot.";
+"Weryfikacja antybotowa" = "Anti-bot verification";
+"Weryfikacja antybotowa nie powiodła się. Spróbuj ponownie." = "Anti-bot verification failed. Please try again.";

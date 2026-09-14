@@ -1,7 +1,16 @@
 package it.letscode.tougedash.ui
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
@@ -46,6 +55,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -227,6 +238,7 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
     var name by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     var googleWorking by remember { mutableStateOf(false) }
+    var captchaPurpose by remember { mutableStateOf<String?>(null) }
     val validEmail = email.contains('@') && email.substringAfter('@').contains('.')
     val validPassword = if (register) password.length in 10..72 && password.any(Char::isLetter) && password.any(Char::isDigit) else password.isNotEmpty()
     val canSubmit = !working && validEmail && validPassword && (!register || name.isNotBlank())
@@ -234,6 +246,65 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
         "Google returned an invalid sign-in response. Please try again.",
         "Google zwróciło nieprawidłową odpowiedź logowania. Spróbuj ponownie."
     )
+    val captchaFailure = appText(
+        "Anti-bot verification failed. Please try again.",
+        "Weryfikacja antybotowa nie powiodła się. Spróbuj ponownie."
+    )
+
+    val completeGoogleLogin: (String, String) -> Unit = { captchaToken, captchaAction ->
+        scope.launch {
+            googleWorking = true
+            try {
+                val option = GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID).build()
+                val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+                val credential = CredentialManager.create(context).getCredential(context, request).credential
+                if (credential !is CustomCredential || credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    error("Unsupported Google credential")
+                }
+                val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                if (container.authRepository.social("GOOGLE", idToken, captchaToken, captchaAction)) {
+                    container.cloudSyncRepository.schedule()
+                }
+            } catch (_: GetCredentialCancellationException) {
+                // Closing the Google account chooser is an intentional cancellation.
+            } catch (_: GoogleIdTokenParsingException) {
+                container.authRepository.reportError(invalidGoogleResponse)
+            } catch (_: Exception) {
+                // Devices without a usable Credential Manager can finish the same
+                // secure flow in the browser and return through the app deep link.
+                openGoogleWebFallback(context)
+            } finally {
+                googleWorking = false
+            }
+        }
+    }
+
+    captchaPurpose?.let { purpose ->
+        val action = if (purpose == "register" || purpose == "google" && register) "register" else "login"
+        CaptchaChallengeDialog(
+            action = action,
+            onDismiss = { captchaPurpose = null },
+            onToken = { token ->
+                captchaPurpose = null
+                if (purpose == "google") {
+                    completeGoogleLogin(token, action)
+                } else {
+                    scope.launch {
+                        val success = if (purpose == "register") {
+                            container.authRepository.register(email, password, name, token)
+                        } else {
+                            container.authRepository.login(email, password, token)
+                        }
+                        if (success) container.cloudSyncRepository.schedule()
+                    }
+                }
+            },
+            onError = {
+                captchaPurpose = null
+                container.authRepository.reportError(captchaFailure)
+            }
+        )
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(
@@ -279,12 +350,7 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
 
         Button(
             enabled = canSubmit,
-            onClick = {
-                scope.launch {
-                    val success = if (register) container.authRepository.register(email, password, name) else container.authRepository.login(email, password)
-                    if (success) container.cloudSyncRepository.schedule()
-                }
-            },
+            onClick = { captchaPurpose = if (register) "register" else "login" },
             modifier = Modifier.fillMaxWidth().height(50.dp),
             shape = CutCornerShape(9.dp),
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
@@ -303,33 +369,7 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
         }
 
         Button(
-            onClick = {
-                scope.launch {
-                    googleWorking = true
-                    try {
-                        val option = GetSignInWithGoogleOption.Builder(BuildConfig.GOOGLE_WEB_CLIENT_ID).build()
-                        val request = GetCredentialRequest.Builder().addCredentialOption(option).build()
-                        val credential = CredentialManager.create(context).getCredential(context, request).credential
-                        if (credential !is CustomCredential || credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
-                            error("Unsupported Google credential")
-                        }
-                        val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
-                        if (container.authRepository.social("GOOGLE", idToken)) {
-                            container.cloudSyncRepository.schedule()
-                        }
-                    } catch (_: GetCredentialCancellationException) {
-                        // Closing the Google account chooser is an intentional cancellation.
-                    } catch (_: GoogleIdTokenParsingException) {
-                        container.authRepository.reportError(invalidGoogleResponse)
-                    } catch (_: Exception) {
-                        // Devices without a usable Credential Manager can finish the same
-                        // secure flow in the browser and return through the app deep link.
-                        openGoogleWebFallback(context)
-                    } finally {
-                        googleWorking = false
-                    }
-                }
-            },
+            onClick = { captchaPurpose = "google" },
             enabled = !working && !googleWorking,
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = CutCornerShape(9.dp),
@@ -351,6 +391,83 @@ private fun SignedOutForm(container: AppContainer, working: Boolean) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 11.sp
         )
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun CaptchaChallengeDialog(
+    action: String,
+    onDismiss: () -> Unit,
+    onToken: (String) -> Unit,
+    onError: () -> Unit
+) {
+    val context = LocalContext.current
+    val apiHost = remember { Uri.parse(BuildConfig.API_BASE_URL).host }
+    val url = remember(action) {
+        Uri.parse(BuildConfig.API_BASE_URL.trimEnd('/') + "/api/v1/public/captcha/challenge")
+            .buildUpon()
+            .appendQueryParameter("action", action)
+            .build()
+            .toString()
+    }
+    val webView = remember(action) {
+        WebView(context).apply {
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            CookieManager.getInstance().setAcceptCookie(true)
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+            addJavascriptInterface(CaptchaJavascriptBridge(onToken, onError), "CaptchaBridge")
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    val target = request.url
+                    return target.scheme != "https" || (target.host != apiHost && target.host != "challenges.cloudflare.com")
+                }
+            }
+            loadUrl(url)
+        }
+    }
+    DisposableEffect(webView) {
+        onDispose {
+            webView.removeJavascriptInterface("CaptchaBridge")
+            webView.destroy()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(appText("Security verification", "Weryfikacja bezpieczeństwa")) },
+        text = {
+            AndroidView(
+                factory = { webView },
+                modifier = Modifier.fillMaxWidth().height(190.dp)
+            )
+        },
+        confirmButton = { },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(appText("Cancel", "Anuluj")) }
+        }
+    )
+}
+
+private class CaptchaJavascriptBridge(
+    private val onToken: (String) -> Unit,
+    private val onError: () -> Unit
+) {
+    private val main = Handler(Looper.getMainLooper())
+
+    @JavascriptInterface
+    fun success(token: String) {
+        if (token.isNotBlank()) main.post { onToken(token) }
+    }
+
+    @JavascriptInterface
+    fun error(@Suppress("UNUSED_PARAMETER") code: String) {
+        main.post(onError)
     }
 }
 

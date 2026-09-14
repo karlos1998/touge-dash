@@ -20,6 +20,7 @@ final class CloudAccountService: ObservableObject {
     }
 
     private let urlSession: URLSession
+    private var refreshTask: Task<CloudAuthSession, Error>?
 
     init(urlSession: URLSession = .shared) {
         self.urlSession = urlSession
@@ -54,30 +55,53 @@ final class CloudAccountService: ObservableObject {
         return storedAddress
     }
 
-    func register(email: String, password: String, displayName: String) async -> Bool {
+    func register(email: String, password: String, displayName: String, captchaToken: String) async -> Bool {
         await authenticate(endpoint: "/api/v1/auth/register", body: [
             "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
             "password": password,
-            "displayName": displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            "displayName": displayName.trimmingCharacters(in: .whitespacesAndNewlines),
+            "captchaToken": captchaToken
         ])
     }
 
-    func login(email: String, password: String) async -> Bool {
+    func login(email: String, password: String, captchaToken: String) async -> Bool {
         await authenticate(endpoint: "/api/v1/auth/login", body: [
             "email": email.trimmingCharacters(in: .whitespacesAndNewlines),
-            "password": password
+            "password": password,
+            "captchaToken": captchaToken
         ])
     }
 
-    func signInWithApple(identityToken: String, displayName: String?) async -> Bool {
+    func captchaChallengeURL(action: String) -> URL? {
+        guard let base = normalizedBaseURL(),
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        components.path = "/api/v1/public/captcha/challenge"
+        components.queryItems = [URLQueryItem(name: "action", value: action)]
+        return components.url
+    }
+
+    func signInWithApple(
+        identityToken: String,
+        displayName: String?,
+        captchaToken: String,
+        captchaAction: String
+    ) async -> Bool {
         struct SocialRequest: Encodable {
             let provider: String
             let token: String
             let displayName: String?
+            let captchaToken: String
+            let captchaAction: String
         }
         return await authenticate(
             endpoint: "/api/v1/auth/social",
-            body: SocialRequest(provider: "APPLE", token: identityToken, displayName: displayName)
+            body: SocialRequest(
+                provider: "APPLE",
+                token: identityToken,
+                displayName: displayName,
+                captchaToken: captchaToken,
+                captchaAction: captchaAction
+            )
         )
     }
 
@@ -203,6 +227,10 @@ final class CloudAccountService: ObservableObject {
         body: Data?,
         response: Response.Type
     ) async throws -> Response {
+        if let expiresAt = session?.accessTokenExpiresAt,
+           expiresAt <= Date().addingTimeInterval(30) {
+            try await refreshSession()
+        }
         guard let token = session?.accessToken else { throw CloudAPIError.unauthorized }
         do {
             return try await perform(endpoint: endpoint, method: method, body: body, bearer: token, response: response)
@@ -216,18 +244,42 @@ final class CloudAccountService: ObservableObject {
     private func refreshSession() async throws {
         guard let refreshToken = session?.refreshToken else { throw CloudAPIError.unauthorized }
         struct RefreshBody: Encodable { let refreshToken: String }
+
+        let pendingRefresh: Task<CloudAuthSession, Error>
+        let ownsRefresh: Bool
+        if let refreshTask {
+            pendingRefresh = refreshTask
+            ownsRefresh = false
+        } else {
+            pendingRefresh = Task { [weak self] in
+                guard let self else { throw CloudAPIError.unauthorized }
+                return try await self.sendWithoutAuthorization(
+                    endpoint: "/api/v1/auth/refresh",
+                    method: "POST",
+                    body: RefreshBody(refreshToken: refreshToken),
+                    response: CloudAuthSession.self
+                )
+            }
+            refreshTask = pendingRefresh
+            ownsRefresh = true
+        }
+
         do {
-            let refreshed: CloudAuthSession = try await sendWithoutAuthorization(
-                endpoint: "/api/v1/auth/refresh",
-                method: "POST",
-                body: RefreshBody(refreshToken: refreshToken),
-                response: CloudAuthSession.self
-            )
+            let refreshed = try await pendingRefresh.value
+            if ownsRefresh { refreshTask = nil }
+
+            // A concurrent waiter may already have stored this rotated session.
+            guard session?.refreshToken == refreshToken else { return }
             try CloudCredentialStore.save(refreshed)
             session = refreshed
         } catch {
-            session = nil
-            CloudCredentialStore.clear()
+            if ownsRefresh { refreshTask = nil }
+
+            // Never erase a newer session established while this request was in flight.
+            if session?.refreshToken == refreshToken {
+                session = nil
+                CloudCredentialStore.clear()
+            }
             throw CloudAPIError.unauthorized
         }
     }

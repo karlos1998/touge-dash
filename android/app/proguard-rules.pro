@@ -4,3 +4,6 @@
 -keepclasseswithmembers class * {
     kotlinx.serialization.KSerializer serializer(...);
 }
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
