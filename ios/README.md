@@ -178,7 +178,7 @@ możliwość `CarPlay Driving Task App` jest włączona dla App ID
 Na branchu funkcji są już gotowe:
 
 - scena CarPlay i wpis w manifeście scen,
-- lista RPM, boostu, AFR, ciśnienia i temperatury oleju oraz temperatury płynu,
+- czytelny, czterowierszowy panel bez przewijania z AFR, ciśnieniem i temperaturą oleju oraz temperaturą płynu,
 - odświeżanie co 500 ms z istniejącego współdzielonego strumienia telemetrii BLE,
 - stany danych live, rozłączenia, alarmu temperatury i alarmu krytycznego,
 - testy formatowania danych, wykrywania nieaktualnej próbki i priorytetów alarmów.

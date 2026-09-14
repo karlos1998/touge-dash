@@ -1,5 +1,6 @@
 import CarPlay
 import Foundation
+import UIKit
 
 struct CarPlayTelemetryPresentation: Equatable {
     enum Status: Equatable {
@@ -10,8 +11,6 @@ struct CarPlayTelemetryPresentation: Equatable {
     }
 
     let status: Status
-    let rpm: String
-    let boost: String
     let afr: String
     let oilPressure: String
     let oilTemperature: String
@@ -31,8 +30,6 @@ struct CarPlayTelemetryPresentation: Equatable {
             status = .live
         }
 
-        rpm = Int(snapshot.rpm.rounded()).formatted(.number.grouping(.never)) + " rpm"
-        boost = snapshot.boostBar.formatted(.number.precision(.fractionLength(2))) + " bar"
         afr = snapshot.afr.formatted(.number.precision(.fractionLength(1)))
         oilPressure = snapshot.oilPressureBar.formatted(.number.precision(.fractionLength(1))) + " bar"
         oilTemperature = Int(snapshot.oilTemperatureCelsius.rounded()).formatted() + " °C"
@@ -80,42 +77,70 @@ final class CarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
     }
 
     private func refreshDashboard() {
-        guard let dashboardTemplate else { return }
+        guard let dashboardTemplate, let interfaceController else { return }
         let presentation = CarPlayTelemetryPresentation(snapshot: SharedTelemetryStore.load())
         guard presentation != lastPresentation else { return }
+        let statusChanged = presentation.status != lastPresentation?.status
         lastPresentation = presentation
-        dashboardTemplate.updateSections([makeSection(for: presentation)])
+        if statusChanged {
+            let replacement = makeDashboardTemplate(for: presentation)
+            self.dashboardTemplate = replacement
+            interfaceController.setRootTemplate(replacement, animated: false, completion: nil)
+        } else {
+            dashboardTemplate.updateSections([makeSection(for: presentation)])
+        }
     }
 
     private func makeDashboardTemplate(for presentation: CarPlayTelemetryPresentation) -> CPListTemplate {
         CPListTemplate(
-            title: "Touge Dash",
+            title: "Touge Dash · \(statusTitle(for: presentation.status))",
             sections: [makeSection(for: presentation)]
         )
     }
 
     private func makeSection(for presentation: CarPlayTelemetryPresentation) -> CPListSection {
-        let rows = [
-            CPListItem(text: "RPM", detailText: presentation.rpm),
-            CPListItem(text: localized("BOOST"), detailText: presentation.boost),
-            CPListItem(text: "AFR", detailText: presentation.afr),
-            CPListItem(text: localized("OIL PRESSURE"), detailText: presentation.oilPressure),
-            CPListItem(text: localized("OIL TEMP"), detailText: presentation.oilTemperature),
-            CPListItem(text: localized("COOLANT"), detailText: presentation.coolantTemperature)
-        ]
-        return CPListSection(
-            items: rows,
-            header: statusTitle(for: presentation.status),
-            sectionIndexTitle: nil
+        CPListSection(items: [
+            makeListItem(
+                label: "AFR",
+                value: presentation.afr,
+                systemImage: "gauge.with.dots.needle.50percent"
+            ),
+            makeListItem(
+                label: localized("OIL PRESSURE"),
+                value: presentation.oilPressure,
+                systemImage: "drop.fill"
+            ),
+            makeListItem(
+                label: localized("OIL TEMP"),
+                value: presentation.oilTemperature,
+                systemImage: "thermometer.high"
+            ),
+            makeListItem(
+                label: localized("COOLANT"),
+                value: presentation.coolantTemperature,
+                systemImage: "thermometer.and.liquid.waves"
+            )
+        ])
+    }
+
+    private func makeListItem(
+        label: String,
+        value: String,
+        systemImage: String
+    ) -> CPListItem {
+        CPListItem(
+            text: value,
+            detailText: label,
+            image: UIImage(systemName: systemImage) ?? UIImage(systemName: "gauge")!
         )
     }
 
     private func statusTitle(for status: CarPlayTelemetryPresentation.Status) -> String {
         switch status {
         case .live:
-            localized("LIVE DATA")
+            "LIVE"
         case .stale:
-            localized("Rozłączono")
+            "OFFLINE"
         case .temperatureAlert:
             localized("TEMP ALERT")
         case .criticalAlert:

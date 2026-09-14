@@ -17,8 +17,7 @@ final class CarPlayTelemetryPresentationTests: XCTestCase {
         )
 
         XCTAssertEqual(presentation.status, .live)
-        XCTAssertEqual(presentation.rpm, "6420 rpm")
-        XCTAssertTrue(presentation.boost.hasSuffix(" bar"))
+        XCTAssertFalse(presentation.afr.isEmpty)
         XCTAssertTrue(presentation.oilPressure.hasSuffix(" bar"))
         XCTAssertTrue(presentation.oilTemperature.hasSuffix(" °C"))
         XCTAssertTrue(presentation.coolantTemperature.hasSuffix(" °C"))
