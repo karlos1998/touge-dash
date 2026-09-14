@@ -61,6 +61,13 @@ targets:
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: true
         TougeDashCriticalAlertsEnabled: $(TOUGE_DASH_CRITICAL_ALERTS_ENABLED)
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneClassName: CPTemplateApplicationScene
+                UISceneConfigurationName: Touge Dash CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
         UIBackgroundModes:
           - bluetooth-central
           - location
@@ -85,6 +92,7 @@ targets:
         com.apple.developer.applesignin:
           - Default
         com.apple.developer.networking.HotspotConfiguration: true
+        com.apple.developer.carplay-driving-task: true
         com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:
