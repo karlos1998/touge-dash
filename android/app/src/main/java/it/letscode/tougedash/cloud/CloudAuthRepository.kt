@@ -45,11 +45,13 @@ class CloudAuthRepository(private val context: Context, private val json: Json) 
     val error = mutableError.asStateFlow()
     val isAuthenticated get() = mutableSession.value != null
 
-    suspend fun login(email: String, password: String) = authenticate("/api/v1/auth/login", buildJsonObject { put("email", email.trim()); put("password", password) })
-    suspend fun register(email: String, password: String, displayName: String) = authenticate("/api/v1/auth/register", buildJsonObject { put("email", email.trim()); put("password", password); put("displayName", displayName.trim()) })
-    suspend fun social(provider: String, token: String) = authenticate("/api/v1/auth/social", buildJsonObject {
+    suspend fun login(email: String, password: String, captchaToken: String) = authenticate("/api/v1/auth/login", buildJsonObject { put("email", email.trim()); put("password", password); put("captchaToken", captchaToken) })
+    suspend fun register(email: String, password: String, displayName: String, captchaToken: String) = authenticate("/api/v1/auth/register", buildJsonObject { put("email", email.trim()); put("password", password); put("displayName", displayName.trim()); put("captchaToken", captchaToken) })
+    suspend fun social(provider: String, token: String, captchaToken: String, captchaAction: String) = authenticate("/api/v1/auth/social", buildJsonObject {
         put("provider", provider)
         put("token", token)
+        put("captchaToken", captchaToken)
+        put("captchaAction", captchaAction)
     })
     suspend fun exchangeHandoff(code: String) = authenticate("/api/v1/auth/mobile-handoff/exchange", buildJsonObject { put("code", code) })
 
