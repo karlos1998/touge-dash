@@ -236,8 +236,8 @@ Touge Dash używa Live Activity w rozmiarze `ActivityFamily.small`. Po podłącz
 telefonu aktywność pojawia się w CarPlay Dashboard albo jako powiadomienie i
 pokazuje ciśnienie i temperaturę oleju, boost, AFR oraz temperaturę płynu
 chłodniczego. Projekt zawiera również uproszczoną scenę pełnej aplikacji CarPlay
-Driving Task. Ikona tej aplikacji pojawi się na ekranie głównym CarPlay po
-przyznaniu przez Apple wymaganego entitlementu i włączeniu go dla App ID.
+Driving Task. Wymagany entitlement został przyznany przez Apple i włączony dla
+App ID, dlatego ikona aplikacji pojawia się na ekranie głównym CarPlay.
 
 ### Apple Watch
 

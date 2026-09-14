@@ -92,6 +92,7 @@ targets:
         com.apple.developer.applesignin:
           - Default
         com.apple.developer.networking.HotspotConfiguration: true
+        com.apple.developer.carplay-driving-task: true
         com.apple.developer.usernotifications.time-sensitive: true
     settings:
       base:

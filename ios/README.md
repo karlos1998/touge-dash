@@ -171,8 +171,9 @@ również po zablokowaniu telefonu.
 
 Rozwijana jest również pełna aplikacja CarPlay, która po uruchomieniu z ikony
 `Touge Dash` pokaże kierowcy czytelny, nieinteraktywny podgląd najważniejszych
-parametrów. Funkcja czeka na przyznanie przez Apple zarządzanego entitlementu
-CarPlay Driving Task.
+parametrów. Apple przyznało zarządzany entitlement CarPlay Driving Task, a
+możliwość `CarPlay Driving Task App` jest włączona dla App ID
+`it.letscode.touge-dash`.
 
 Na branchu funkcji są już gotowe:
 
@@ -182,17 +183,16 @@ Na branchu funkcji są już gotowe:
 - stany danych live, rozłączenia, alarmu temperatury i alarmu krytycznego,
 - testy formatowania danych, wykrywania nieaktualnej próbki i priorytetów alarmów.
 
-Do czasu decyzji Apple celowo nie dodajemy entitlementu do pliku uprawnień ani
-profilu podpisującego. Bez niego system nie pokaże ikony Touge Dash na ekranie
-głównym CarPlay i nie pozwoli rzetelnie przetestować pełnej sceny w symulatorze.
+Target iOS deklaruje `com.apple.developer.carplay-driving-task`. Automatyczne
+podpisywanie Xcode generuje profil zawierający to uprawnienie; podpisany build
+urządzeniowy oraz uruchomienie pełnej sceny w CarPlay Simulator zostały
+zweryfikowane.
 
-Po uzyskaniu zgody pozostaje:
+Przed wydaniem pozostaje:
 
-1. Włączyć CarPlay Driving Task dla App ID w Apple Developer.
-2. Dodać przyznany entitlement do targetu i odświeżyć profile provisioning.
-3. Uruchomić scenę w CarPlay Simulator i sprawdzić układ oraz czytelność.
-4. Zweryfikować połączenie BLE, odświeżanie i stany alarmowe na rzeczywistym CarPlay.
-5. Dopracować widok na podstawie testów, wykonać pełną regresję i przygotować wydanie.
+1. Zweryfikować połączenie BLE, odświeżanie i stany alarmowe na rzeczywistym CarPlay.
+2. Dopracować widok na podstawie testów w samochodzie.
+3. Wykonać pełną regresję i przygotować wydanie.
 
 ## Apple Watch
 
