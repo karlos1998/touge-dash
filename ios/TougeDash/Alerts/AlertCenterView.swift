@@ -25,7 +25,6 @@ struct AlertCenterView: View {
             ScrollView {
                 VStack(spacing: 14) {
                     header
-                    safetyNotice
                     if let conflict = record.conflict {
                         conflictBanner(conflict)
                     }
@@ -305,21 +304,6 @@ struct AlertCenterView: View {
         .padding(16)
         .background(CutCornerPanel(cut: 14).fill(Color.primary.opacity(0.055)))
         .overlay(CutCornerPanel(cut: 14).stroke(Color.primary.opacity(0.1), lineWidth: 1))
-    }
-
-    private var safetyNotice: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "lock.shield.fill").foregroundStyle(Color.tougeMint)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("WYŁĄCZNIE ANALIZA DANYCH").font(.caption2.weight(.black)).tracking(1)
-                Text("Te ustawienia zmieniają tylko sposób wykrywania zdarzeń w Touge Dash. Nic nie jest zapisywane ani wysyłane do sterownika lub EMULOGGERA.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color.tougeMint.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func conflictBanner(_ remote: CloudVehicleAlertConfiguration) -> some View {

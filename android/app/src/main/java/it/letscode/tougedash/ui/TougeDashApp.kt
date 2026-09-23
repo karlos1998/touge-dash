@@ -454,7 +454,6 @@ private fun AppHeader(
         }
         Column(Modifier.padding(start = 12.dp).weight(1f)) {
             Text("TOUGE DASH", fontSize = 18.sp, fontWeight = FontWeight.Black, letterSpacing = 2.1.sp)
-            Text("EMU BLACK  /  DRIVER DISPLAY", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = .9.sp, maxLines = 1)
         }
         Row(Modifier.padding(start = 8.dp).clickable(onClick = onConnection).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), RoundedCornerShape(22.dp)).border(1.dp, if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary.copy(alpha = .32f) else MaterialTheme.colorScheme.outline.copy(alpha = .45f), RoundedCornerShape(22.dp)).padding(horizontal = 11.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error, CircleShape))
@@ -471,7 +470,6 @@ private fun CompactAppHeader(
     Row(Modifier.fillMaxWidth().height(40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(28.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f), CutCornerShape(7.dp)), contentAlignment = Alignment.Center) { DashboardLogoMark(Modifier.size(18.dp)) }
         Text("TOUGE DASH", Modifier.padding(start = 10.dp), fontWeight = FontWeight.Black, letterSpacing = 2.sp)
-        Text("  /  EMU BLACK", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.weight(1f))
         Row(Modifier.clickable(onClick = onConnection).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), RoundedCornerShape(18.dp)).border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .45f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(7.dp).background(if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error, CircleShape))

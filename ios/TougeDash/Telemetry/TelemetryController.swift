@@ -76,13 +76,15 @@ final class TelemetryController: ObservableObject {
     private var activityReconciliationTask: Task<Void, Never>?
     private var activityStateVersion = 0
     private var activityManuallySuppressed = false
+    private var telemetryStartupRequested = false
 
     init(
         historyRecorder: TelemetryHistoryRecorder,
         incidentRecorder: TelemetryIncidentRecorder,
         cloudSync: CloudSyncManager,
         videoRecorder: DriveVideoRecorder,
-        accelerationEngine: AccelerationEngine
+        accelerationEngine: AccelerationEngine,
+        startTelemetryOnLaunch: Bool = true
     ) {
         let restoredSnapshot = SharedTelemetryStore.load()
         snapshot = restoredSnapshot
@@ -198,6 +200,23 @@ final class TelemetryController: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+        if startTelemetryOnLaunch {
+            startTelemetryIfNeeded()
+        }
+        watchBridge.enqueue(snapshot)
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_ALERT"] == "1" {
+            let rules = cloudSync.alertRules.activeRules
+            snapshot = rules.applyingWarningState(to: snapshot)
+            _ = engineAlertManager.evaluate(snapshot, rules: rules, now: snapshot.updatedAt.addingTimeInterval(-5))
+            _ = engineAlertManager.evaluate(snapshot, rules: rules, now: snapshot.updatedAt)
+        }
+        #endif
+    }
+
+    func startTelemetryIfNeeded() {
+        guard !telemetryStartupRequested else { return }
+        telemetryStartupRequested = true
         Task { [weak self] in
             guard let self else { return }
             #if DEBUG
@@ -225,15 +244,6 @@ final class TelemetryController: ObservableObject {
             }
             self.requestActivityReconciliation()
         }
-        watchBridge.enqueue(snapshot)
-        #if DEBUG
-        if ProcessInfo.processInfo.environment["TOUGE_DASH_PREVIEW_ALERT"] == "1" {
-            let rules = cloudSync.alertRules.activeRules
-            snapshot = rules.applyingWarningState(to: snapshot)
-            _ = engineAlertManager.evaluate(snapshot, rules: rules, now: snapshot.updatedAt.addingTimeInterval(-5))
-            _ = engineAlertManager.evaluate(snapshot, rules: rules, now: snapshot.updatedAt)
-        }
-        #endif
     }
 
     #if DEBUG

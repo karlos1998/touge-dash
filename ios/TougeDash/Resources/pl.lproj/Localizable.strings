@@ -1,4 +1,3 @@
-"EMU BLACK  /  DRIVER DISPLAY" = "EMU BLACK  /  EKRAN KIEROWCY";
 "Simulator stopped service FFE0; reconnecting" = "Symulator zatrzymał usługę FFE0; ponowne łączenie";
 "Connection timed out; continuing scan" = "Próba połączenia wygasła; kontynuowanie skanowania";
 "Connection timed out" = "Przekroczono czas połączenia";
@@ -651,3 +650,11 @@
 "Boost, ciśnienie oleju i paliwa" = "Boost, ciśnienie oleju i paliwa";
 
 "Paliwo" = "Paliwo";
+"ZANIM ZACZNIESZ" = "ZANIM ZACZNIESZ";
+"Touge Dash nie jest aplikacją OBD2" = "Touge Dash nie jest aplikacją OBD2";
+"Aplikacja jest przeznaczona dla użytkowników ECUMaster i łączy się z Data Loggerem EDL-1 obsługującym Bluetooth Low Energy (BLE)." = "Aplikacja jest przeznaczona dla użytkowników ECUMaster i łączy się z Data Loggerem EDL-1 obsługującym Bluetooth Low Energy (BLE).";
+"Wymagany: ECUMaster Data Logger EDL-1 z BLE" = "Wymagany: ECUMaster Data Logger EDL-1 z BLE";
+"To nie jest uniwersalny interfejs do każdego auta" = "To nie jest uniwersalny interfejs do każdego auta";
+"Aplikacja nie odczytuje danych z gniazda OBD2" = "Aplikacja nie odczytuje danych z gniazda OBD2";
+"Rozumiem wymagania i mam zgodny Data Logger EDL-1 z BLE." = "Rozumiem wymagania i mam zgodny Data Logger EDL-1 z BLE.";
+"Przejdź do aplikacji" = "Przejdź do aplikacji";

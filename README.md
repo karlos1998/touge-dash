@@ -3,9 +3,9 @@
 [![Android CI](https://github.com/karlos1998/touge-dash/actions/workflows/android.yml/badge.svg)](https://github.com/karlos1998/touge-dash/actions/workflows/android.yml)
 [![iOS CI](https://github.com/karlos1998/touge-dash/actions/workflows/ios.yml/badge.svg)](https://github.com/karlos1998/touge-dash/actions/workflows/ios.yml)
 
-Natywne aplikacje mobilne do podglądu danych z ECUMaster EMU Black na Androidzie,
-iPhonie, Apple Watch i ekranie CarPlay. Powstały po to, żeby najważniejsze parametry
-silnika były zawsze pod ręką bez telefonu przyklejonego do szyby.
+Natywne aplikacje mobilne do podglądu danych odbieranych z ECUMaster Data Logger
+EDL-1 przez Bluetooth Low Energy na Androidzie, iPhonie, Apple Watch i ekranie
+CarPlay. Touge Dash nie jest uniwersalnym czytnikiem OBD2 i wymaga zgodnego EDL-1.
 
 Kod protokołu jest niezależną implementacją — projekt nie zawiera kodu ani
 zasobów z oficjalnego eDash.
@@ -50,7 +50,7 @@ zasobów z oficjalnego eDash.
 
 ## Co działa
 
-- automatyczne wykrywanie i łączenie z interfejsami ECUMaster BLE,
+- automatyczne wykrywanie i łączenie z ECUMaster Data Logger EDL-1 BLE,
 - odczyt ramek z `EMULOGGER` przez GATT `FFE0` / `FFE1`,
 - RPM, boost/MAP, TPS, AFR/lambda, temperatury, ciśnienia i napięcie,
 - konfigurowalny dashboard na Androida, iPhone'a i iPada, w pionie i poziomie,
@@ -79,8 +79,7 @@ Aktualna wersja była testowana na:
 - emulatorze Android Automotive OS 14 (1408 × 792) z systemowym Templates Host,
 - iPhone 14 Pro z iOS 26.5.2,
 - Apple Watch Series 11 (46 mm) Simulator z watchOS 26.2,
-- ECUMaster EMU Black,
-- EDL-1 widocznym w BLE jako `EMULOGGER`,
+- ECUMaster Data Logger EDL-1 widocznym w BLE jako `EMULOGGER`,
 - symulatorem BLE uruchomionym na Macu i fizycznym iPhonem.
 
 Połączenie jest nawiązywane automatycznie. Aplikacja zapamiętuje ostatni

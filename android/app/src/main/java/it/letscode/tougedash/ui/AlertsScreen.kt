@@ -118,12 +118,6 @@ fun AlertsScreen(container: AppContainer, connectedHardwareId: String?) {
             }
         }
         if (!canEdit) item { Text(appText("You have read-only access to this vehicle. Only the owner or a mechanic can change its alert limits.", "Masz dostęp tylko do odczytu. Progi może zmienić właściciel albo mechanik."), color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(12.dp)) }
-        item {
-            Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondary.copy(alpha = .08f), CutCornerShape(9.dp)).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Security, null, tint = MaterialTheme.colorScheme.secondary)
-                Column(Modifier.padding(start = 12.dp)) { Text(appText("READ-ONLY DATA ANALYSIS", "WYŁĄCZNIE ANALIZA DANYCH"), color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.Bold, fontSize = 11.sp); Text(appText("Changing these limits never writes anything to the ECU or EMULOGGER.", "Zmiana progów nigdy nie zapisuje niczego do ECU ani EMULOGGERA."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
-            }
-        }
         item { AlertRuleCard(appText("Oil pressure", "Ciśnienie oleju"), appText("Alarm only above the configured engine speed.", "Alarm tylko powyżej zadanych obrotów silnika."), rules.lowOilPressureEnabled, { rules = rules.copy(lowOilPressureEnabled = it) }, MaterialTheme.colorScheme.secondary, canEdit, listOf(
             RuleField(appText("MINIMUM", "MINIMUM"), rules.minimumOilPressureBar, "bar") { rules = rules.copy(minimumOilPressureBar = it) },
             RuleField(appText("FROM RPM", "OD OBROTÓW"), rules.lowOilMinimumRpm, "rpm") { rules = rules.copy(lowOilMinimumRpm = it) },

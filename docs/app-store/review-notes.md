@@ -1,20 +1,20 @@
 # App Review notes
 
-Touge Dash is an independent telemetry dashboard for compatible Bluetooth Low Energy interfaces connected to an ECUMaster EMU Black ECU. It does not contain or reuse code or assets from ECUMaster eDash.
+Touge Dash is an independent telemetry dashboard for an ECUMaster Data Logger EDL-1 that supports Bluetooth Low Energy. It is not an OBD2 application and does not contain or reuse code or assets from ECUMaster eDash.
 
 ## Important hardware information
 
 Live engine values require all of the following:
 
-1. an ECUMaster EMU Black ECU installed in a vehicle,
-2. a compatible BLE data interface advertising as `EMULOGGER`,
+1. an ECUMaster Data Logger EDL-1 with Bluetooth Low Energy, advertising as `EMULOGGER`,
+2. a compatible ECUMaster installation in the vehicle,
 3. Bluetooth access on the iPhone.
 
 The app automatically discovers and reconnects to the compatible interface. It intentionally does not present the reviewer with a list of unrelated Bluetooth devices.
 
 Because this hardware and a running vehicle are difficult to provide to App Review, a private recording made with the physical ECU, EMULOGGER, iPhone and iPad is attached in App Store Connect. The recording demonstrates automatic connection, live dashboard updates, connection diagnostics and local drive history.
 
-Telemetry is passive and read-only. Users may optionally add explicit `BT Switch` or `BT Rotary` cards to a custom dashboard. Those cards can only send the documented eight-byte virtual-control state to a recognized ECUMaster BLE characteristic after the app has received the complete current state from the interface. They cannot write ECU maps, engine calibration, CAN messages or arbitrary GATT data. The UI waits for an identical loopback value from the interface and reports a timeout instead of assuming that a change succeeded.
+Telemetry collection does not edit ECU maps or calibration. Users may optionally add explicit `BT Switch` or `BT Rotary` cards to a custom dashboard. Those cards can only send the documented eight-byte virtual-control state to a recognized ECUMaster BLE characteristic after the app has received the complete current state from the interface. They cannot write ECU maps, engine calibration, CAN messages or arbitrary GATT data. The UI waits for an identical loopback value from the interface and reports a timeout instead of assuming that a change succeeded.
 
 The app remains usable without the hardware: the reviewer can inspect navigation, account functionality, permissions, existing synchronized vehicle data in the web dashboard and account deletion. No feature requires payment or an in-app purchase.
 
@@ -29,7 +29,7 @@ The account uses the same production environment as the submitted build and cont
 
 ## Suggested review flow
 
-1. Launch the app and allow Bluetooth access. Without the required interface, the dashboard correctly shows a disconnected state.
+1. Launch the app, confirm the EDL-1 BLE hardware requirement, then allow Bluetooth access. Without the required interface, the dashboard correctly shows a disconnected state.
 2. Open `Ustawienia` → `Rejestrowanie przejazdów` to inspect the optional `Zapis trasy` control.
    Route recording starts only after the user enables it and the app connects to a compatible
    EMULOGGER. It continues while the iPhone is locked so that GPS positions remain synchronized

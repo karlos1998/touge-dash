@@ -235,13 +235,6 @@ private struct IncidentHeroCard: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Label("TYLKO ODCZYT", systemImage: "lock.shield.fill")
-                    .font(.system(size: 8, weight: .black))
-                    .tracking(0.7)
-                    .foregroundStyle(Color.tougeMint)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 6)
-                    .background(Color.tougeMint.opacity(0.1), in: Capsule())
             }
 
             HStack(spacing: 8) {
