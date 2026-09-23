@@ -1,6 +1,5 @@
 package it.letscode.tougedash.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,12 +9,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,7 +47,6 @@ internal fun EcuSwitchCard(
     TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 126.dp else 145.dp)) {
         Row(
             Modifier.fillMaxSize()
-                .clickable(enabled = interactionEnabled && state.ready) { toggle(channel) }
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -64,13 +61,19 @@ internal fun EcuSwitchCard(
                 )
                 Text(ecuControlStatus(state, pending), color = ecuControlStatusColor(state, pending), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = .55.sp, maxLines = 1)
             }
-            Box(
-                Modifier.size(width = 64.dp, height = 36.dp)
-                    .background(if (value == true) accent.copy(alpha = .3f) else MaterialTheme.colorScheme.onSurface.copy(alpha = .08f), RoundedCornerShape(20.dp)),
-                contentAlignment = if (value == true) Alignment.CenterEnd else Alignment.CenterStart
-            ) {
-                Box(Modifier.padding(4.dp).size(28.dp).background(if (value == true) accent else MaterialTheme.colorScheme.onSurfaceVariant, CircleShape))
-            }
+            Switch(
+                checked = value == true,
+                onCheckedChange = { requested ->
+                    if (value != null && requested != value) toggle(channel)
+                },
+                enabled = interactionEnabled && state.ready && value != null,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.surface,
+                    checkedTrackColor = accent,
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            )
         }
     }
 }
