@@ -1,5 +1,20 @@
 # App Store release checklist
 
+## Current release — 2026-10-22
+
+- [x] iOS 1.4.5 (27): 116 simulator tests passed.
+- [x] Signed Release archive built and installed on iPhone 14 Pro.
+- [x] App Store upload completed and build processing finished.
+- [x] Build 27 selected for version 1.4.5.
+- [x] English and Polish release notes saved; review notes explain EDL-1 onboarding, optional ECU controls, background GPS and local diagnostics.
+- [x] Submitted at 22:57 Europe/Warsaw; App Store Connect status **Waiting for Review**.
+- [x] Automatic release after approval selected.
+- [x] Current web landing deployed and verified at `/auth`; health and public auth-config return HTTP 200.
+- [ ] Real EMULOGGER startup/scroll/switch validation (owner plans to test October 23).
+- [ ] Critical Alerts entitlement: Account Holder must submit the request; App ID shows No Requests and the App Manager cannot access the form. See [prepared request](../critical-alerts.md). This build continues to use Time Sensitive alerts.
+
+The checklist below records the historical 1.4.2 preparation.
+
 ## Build
 
 - [x] Production bundle identifiers and App Group are configured.

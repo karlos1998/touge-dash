@@ -47,8 +47,9 @@ threshold. The Release log recorded startup and foreground activity with no
 startup, radio throughput and real ECU switch confirmation remain unverified.
 The owner will test at the car on October 23. A separate simulator replay on a
 copy of the phone archive kept telemetry running while navigating the dashboard,
-history and settings. Its first frame incurred a 624 ms heartbeat delay; one
-five-second history save took 80 ms. These remaining costs are logged explicitly
+history and settings. The replay persisted 1,025 samples with 1,025 valid parent
+relationships. Its first frame incurred a 624 ms heartbeat delay; two
+five-second history saves took 80 and 89 ms. These remaining costs are logged explicitly
 and should not be described as a guarantee of zero UI stalls. A local copy of the phone archive
 contained 44,117 telemetry samples in ten sessions; personal data and profiler
 artifacts are excluded from Git under `build/investigation/`.
