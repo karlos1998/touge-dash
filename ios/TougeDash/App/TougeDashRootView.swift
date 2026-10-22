@@ -102,6 +102,7 @@ struct TougeDashRootView: View {
         }
         .tint(.tougeCyan)
         .onChange(of: scenePhase) { _, phase in
+            PerformanceDiagnostics.shared.setActive(phase == .active)
             if phase != .active {
                 controller.historyRecorder.saveNow()
                 Task { await cloudSync.syncNow() }

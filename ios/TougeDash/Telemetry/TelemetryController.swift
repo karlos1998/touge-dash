@@ -129,6 +129,7 @@ final class TelemetryController: ObservableObject {
         }
         bluetooth.onConnectionChanged = { [weak self] state in
             guard let self else { return }
+            PerformanceDiagnostics.shared.event("bluetooth connected=\(state.isConnected)")
             self.ecuControls.connectionChanged(isConnected: state.isConnected)
             self.cloudSync.setTelemetryActive(state.isConnected)
             if state.isConnected {
@@ -398,7 +399,7 @@ final class TelemetryController: ObservableObject {
         guard let rawValue = pendingRawSnapshot else { return }
         pendingRawSnapshot = nil
         lastTelemetryProcess = now
-        process(rawValue, at: now)
+        PerformanceDiagnostics.measure("telemetry.process") { process(rawValue, at: now) }
     }
 
     private func process(_ rawValue: TelemetrySnapshot, at now: Date) {
@@ -418,7 +419,7 @@ final class TelemetryController: ObservableObject {
         if !alertEvaluation.triggered.isEmpty {
             watchBridge.sendAlertEvents(alertEvaluation.triggered, snapshot: value)
         }
-        if let change = historyRecorder.record(value, at: now) {
+        if let change = PerformanceDiagnostics.measure("history.record", { historyRecorder.record(value, at: now) }) {
             cloudSync.noteLocalSampleRecorded(
                 sessionID: change.sessionID,
                 sessionBecamePending: change.sessionBecamePending
@@ -443,7 +444,7 @@ final class TelemetryController: ObservableObject {
                 lastVideoSessionID = sessionID
                 lastVideoHeartbeat = now
             }
-            incidentRecorder.record(value, sessionID: sessionID)
+            PerformanceDiagnostics.measure("incident.record") { incidentRecorder.record(value, sessionID: sessionID) }
         }
         #if DEBUG
         if ProcessInfo.processInfo.environment["TOUGE_DASH_REPLAY_TELEMETRY"] != "1" {
@@ -453,7 +454,7 @@ final class TelemetryController: ObservableObject {
         cloudSync.publishLive(value, performance: accelerationEngine)
         #endif
         if now.timeIntervalSince(lastSharedWrite) >= 0.2 {
-            SharedTelemetryStore.save(value)
+            PerformanceDiagnostics.measure("shared-telemetry.save") { SharedTelemetryStore.save(value) }
             lastSharedWrite = now
         }
         if now.timeIntervalSince(lastWidgetReload) >= 15 {

@@ -11,6 +11,8 @@ final class TelemetryHistoryRecorder: ObservableObject {
     let locationTracker: LocationTrackingService
     let segmentSettings: DriveSegmentSettingsStore
 
+    private let container: ModelContainer
+    private var retentionTask: Task<Void, Never>?
     private let context: ModelContext
     private let defaults: UserDefaults
     private var vehicleID: UUID
@@ -27,6 +29,7 @@ final class TelemetryHistoryRecorder: ObservableObject {
         segmentSettings: DriveSegmentSettingsStore? = nil,
         defaults: UserDefaults = .standard
     ) {
+        self.container = container
         context = ModelContext(container)
         context.autosaveEnabled = false
         self.defaults = defaults
@@ -34,15 +37,8 @@ final class TelemetryHistoryRecorder: ObservableObject {
         vehicleID = LocalVehicleIdentity.resolve()
         self.locationTracker = locationTracker
         restoreRecentSession()
-        Task { [weak self] in
-            await Task.yield()
-            guard let self else { return }
-            self.saveNow()
-            try? HistoryLocalStore.enforceRetention(
-                in: context,
-                keepingActiveSessionID: activeSession?.id
-            )
-        }
+        scheduleRetention()
+
     }
 
     struct RecordingChange: Equatable, Sendable {
@@ -119,6 +115,10 @@ final class TelemetryHistoryRecorder: ObservableObject {
     }
 
     func saveNow() {
+        PerformanceDiagnostics.measure("history.save") { savePendingSamples() }
+    }
+
+    private func savePendingSamples() {
         // Updating the inverse relationship per sample repeatedly walks the entire
         // drive. Attach one batch per save, preserving the existing cascade schema.
         if let activeSession, !pendingSamples.isEmpty {
@@ -200,10 +200,33 @@ final class TelemetryHistoryRecorder: ObservableObject {
         activeSession = session
         activeSessionID = session.id
         try? context.save()
-        try? HistoryLocalStore.enforceRetention(in: context, keepingActiveSessionID: session.id)
+        scheduleRetention()
         defaults.removeObject(forKey: manuallyClosedSessionKey)
         lastDistanceLocation = nil
         return session
+    }
+
+    func waitForRetention() async {
+        await retentionTask?.value
+    }
+
+    private func scheduleRetention() {
+        guard retentionTask == nil else { return }
+        let container = container
+        let activeID = activeSession?.id
+        // Construct the ModelActor off the main actor so its context uses a
+        // private executor. Never pass live SwiftData models across executors.
+        retentionTask = Task { [weak self] in
+            await Task.detached(priority: .utility) {
+                let worker = HistoryDeletionWorker(modelContainer: container)
+                do {
+                    try await worker.enforceRetention(keepingActiveSessionID: activeID)
+                } catch {
+                    PerformanceDiagnostics.shared.event("history.retention failed")
+                }
+            }.value
+            self?.retentionTask = nil
+        }
     }
 
     private func restoreRecentSession() {

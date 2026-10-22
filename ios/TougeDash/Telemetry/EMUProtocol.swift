@@ -19,26 +19,30 @@ struct EMUFrameParser: Sendable {
         buffer.append(contentsOf: data)
         var frames: [EMUFrame] = []
 
-        while buffer.count >= 5 {
-            guard buffer[1] == 0xA3 else {
-                buffer.removeFirst()
+        var offset = 0
+        while buffer.count - offset >= 5 {
+            guard buffer[offset + 1] == 0xA3 else {
+                offset += 1
                 stats.droppedBytes += 1
                 continue
             }
 
-            let expected = UInt8(truncatingIfNeeded: buffer[0...3].reduce(0) { $0 + Int($1) })
-            guard expected == buffer[4] else {
-                buffer.removeFirst()
+            let expected = UInt8(truncatingIfNeeded: buffer[offset...offset + 3].reduce(0) { $0 + Int($1) })
+            guard expected == buffer[offset + 4] else {
+                offset += 1
                 stats.badChecksums += 1
                 stats.droppedBytes += 1
                 continue
             }
 
-            let rawValue = UInt16(buffer[2]) << 8 | UInt16(buffer[3])
-            frames.append(EMUFrame(channel: buffer[0], rawValue: rawValue))
-            buffer.removeFirst(5)
+            let rawValue = UInt16(buffer[offset + 2]) << 8 | UInt16(buffer[offset + 3])
+            frames.append(EMUFrame(channel: buffer[offset], rawValue: rawValue))
+            offset += 5
             stats.validFrames += 1
         }
+        // Compact once per BLE delivery; per-byte removal becomes quadratic
+        // when iOS delivers a backlog after launch or foreground restoration.
+        buffer.removeFirst(offset)
         return frames
     }
 

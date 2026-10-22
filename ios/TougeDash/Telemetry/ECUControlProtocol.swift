@@ -211,21 +211,23 @@ struct ECUControlStatusFrameParser: Sendable {
         buffer.append(contentsOf: data)
         var frames: [Data] = []
 
-        while buffer.count >= 2 {
-            guard buffer[0] == 0x08, buffer[1] == 0x55 else {
-                buffer.removeFirst()
+        var offset = 0
+        while buffer.count - offset >= 2 {
+            guard buffer[offset] == 0x08, buffer[offset + 1] == 0x55 else {
+                offset += 1
                 continue
             }
-            guard buffer.count >= 8 else { break }
+            guard buffer.count - offset >= 8 else { break }
 
-            let candidate = Data(buffer.prefix(8))
+            let candidate = Data(buffer[offset..<offset + 8])
             guard ECUControlSnapshot.isValidStatusFrame(candidate) else {
-                buffer.removeFirst()
+                offset += 1
                 continue
             }
             frames.append(candidate)
-            buffer.removeFirst(8)
+            offset += 8
         }
+        buffer.removeFirst(offset)
 
         return frames
     }

@@ -34,6 +34,7 @@ struct TougeDashApp: App {
     @State private var videoOverlays: VideoOverlayTemplateStore
 
     init() {
+        PerformanceDiagnostics.shared.start()
         do {
             let container = try ModelContainer(
                 for: DriveSession.self,
