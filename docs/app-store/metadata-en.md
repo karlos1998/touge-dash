@@ -21,7 +21,7 @@ Live ECUMaster dashboard, GPS drive history, performance timing, alerts and sync
 
 ## Description
 
-Touge Dash is an independent telemetry dashboard and drive recorder for compatible Bluetooth interfaces working with an ECUMaster EMU Black ECU.
+Touge Dash is an independent dashboard and drive recorder for data received from an ECUMaster Data Logger EDL-1 over Bluetooth Low Energy. It is not a universal OBD2 reader and requires a compatible EDL-1.
 
 Key engine data is clear from the moment the app launches. Touge Dash automatically finds a remembered EMULOGGER and displays oil temperature and pressure, coolant temperature, boost, AFR, RPM, speed and other useful parameters.
 
@@ -47,7 +47,7 @@ Live Activity keeps essential values available on the Lock Screen and in support
 
 FEATURES
 
-• automatic discovery of a compatible BLE interface,
+• automatic discovery of an ECUMaster Data Logger EDL-1 with BLE,
 • configurable dashboards for iPhone and iPad,
 • local drive history and interactive charts,
 • optional GPS route recording,
@@ -65,4 +65,4 @@ Touge Dash is an independent project and is not affiliated with or authorised by
 
 ## Keywords
 
-`ECUMaster,EMU Black,EMULOGGER,telemetry,engine,boost,AFR,temperature,oil pressure,OBD`
+`ECUMaster,EDL-1,Data Logger,EMULOGGER,telemetry,engine,boost,AFR,temperature,oil pressure`

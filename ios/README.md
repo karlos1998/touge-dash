@@ -1,6 +1,6 @@
 # Touge Dash for iPhone and Apple Watch
 
-Natywna aplikacja SwiftUI do podglądu telemetrii ECUMaster EMU Black. Projekt zawiera:
+Natywna aplikacja SwiftUI do podglądu danych z ECUMaster Data Logger EDL-1 BLE. Projekt zawiera:
 
 - dashboard pionowy i poziomy,
 - automatyczne skanowanie oraz ponowne łączenie BLE,
@@ -23,7 +23,7 @@ Natywna aplikacja SwiftUI do podglądu telemetrii ECUMaster EMU Black. Projekt z
 - iPhone z iOS 26 do prezentacji widgetów i Live Activities w CarPlay,
 - opcjonalnie Apple Watch z watchOS 26,
 - bezpłatne albo płatne konto Apple Developer skonfigurowane w Xcode,
-- interfejs ECUMaster obsługujący BLE.
+- ECUMaster Data Logger EDL-1 obsługujący BLE.
 
 Domyślna konfiguracja używa bundle ID `it.letscode.touge-dash` oraz App Group
 `group.it.letscode.touge-dash`. Przed podpisaniem forka zmień je na własne,
@@ -35,19 +35,10 @@ Nazwę produktu i bundle ID można zmienić w `project.yml` przed utworzeniem re
 
 | Interfejs | Bezpośrednio z iPhone | Uwagi |
 |---|---:|---|
-| BT CAN z BLE | Tak | Urządzenia produkowane w 2026 mają gwarantowane BLE; starsze trzeba sprawdzić. |
 | Nowszy EDL-1 z BLE | Tak | Wymagane aktualne firmware odpowiednie dla wersji EMU. |
-| Stary moduł Bluetooth SPP/Classic | Nie | iOS nie udostępnia aplikacjom zwykłego portu SPP. Potrzebny jest BT CAN BLE albo kompatybilny EDL-1. |
+| Starszy EDL-1 Bluetooth SPP/Classic | Nie | iOS nie udostępnia aplikacjom zwykłego portu SPP. Potrzebny jest EDL-1 z BLE. |
 
-Touge Dash rozpoczyna skanowanie od razu po uruchomieniu, odrzuca wszystkie urządzenia niezwiązane z ECUMaster i automatycznie łączy pierwszy pasujący interfejs. Po pierwszym udanym połączeniu identyfikator urządzenia jest zapamiętywany, więc kolejne uruchomienia nie wymagają otwierania listy. Nie należy parować BLE ręcznie w systemowych Ustawieniach iPhone'a.
-
-## Ustawienie EMU Black dla BT CAN
-
-W EMU Black Client otwórz `CAN, Serial → CAN setup`, następnie:
-
-1. ustaw CAN na `500 kbps`,
-2. włącz `Send data to BTCAN module`,
-3. zapisz ustawienia na stałe klawiszem F2.
+Po jednorazowym potwierdzeniu zgodności sprzętu Touge Dash rozpoczyna skanowanie, odrzuca urządzenia niezwiązane z ECUMaster i automatycznie łączy pierwszy pasujący EDL-1. Po pierwszym udanym połączeniu identyfikator urządzenia jest zapamiętywany, więc kolejne uruchomienia nie wymagają otwierania listy. Nie należy parować BLE ręcznie w systemowych Ustawieniach iPhone'a.
 
 Przed jazdą porównaj RPM, MAP, temperatury i ciśnienia z EMU Black Client. Aplikacja nie jest homologowanym przyrządem bezpieczeństwa.
 

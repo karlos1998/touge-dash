@@ -16,3 +16,4 @@ android/.kotlin/
 android/keystore.properties
 android/*.jks
 android/*.keystore
+build

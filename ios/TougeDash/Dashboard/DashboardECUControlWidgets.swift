@@ -11,35 +11,28 @@ struct DashboardECUSwitchWidget: View {
     private var isPending: Bool { controls.isPending(kind: .switchValue, channel: channel) }
 
     var body: some View {
-        Button {
-            _ = controls.toggleSwitch(channel: channel)
-        } label: {
-            GeometryReader { geometry in
-                if geometry.size.width < 190 {
+        GeometryReader { geometry in
+            if geometry.size.width < 190 {
+                VStack(alignment: .leading, spacing: compact ? 4 : 7) {
+                    header
+                    Spacer(minLength: 0)
+                    switchControl(expands: true)
+                    Spacer(minLength: 0)
+                    statusLabel
+                }
+            } else {
+                HStack(spacing: compact ? 9 : 14) {
                     VStack(alignment: .leading, spacing: compact ? 4 : 7) {
                         header
-                        Spacer(minLength: 0)
-                        stateSelector(expands: true)
-                        Spacer(minLength: 0)
                         statusLabel
                     }
-                } else {
-                    HStack(spacing: compact ? 9 : 14) {
-                        VStack(alignment: .leading, spacing: compact ? 4 : 7) {
-                            header
-                            statusLabel
-                        }
-                        Spacer(minLength: 4)
-                        stateSelector(expands: false)
-                    }
+                    Spacer(minLength: 4)
+                    switchControl(expands: false)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .padding(compact ? 11 : 15)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(!interactionEnabled || !controls.isReady)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .padding(compact ? 11 : 15)
         .cardSurface(accent: value == true ? widget.accent.color : widget.accent.color.opacity(0.55))
         .accessibilityLabel(widget.displayTitle)
         .accessibilityValue(stateTitle)
@@ -75,48 +68,27 @@ struct DashboardECUSwitchWidget: View {
             .allowsTightening(true)
     }
 
-    private func stateSelector(expands: Bool) -> some View {
-        HStack(spacing: compact ? 4 : 6) {
-            stateBadge(
-                systemImage: "circle",
-                title: localized("WYŁĄCZONY"),
-                isSelected: value == false,
-                selectedColor: .secondary
-            )
-            stateBadge(
-                systemImage: "power",
-                title: localized("WŁĄCZONY"),
-                isSelected: value == true,
-                selectedColor: widget.accent.color
-            )
+    private func switchControl(expands: Bool) -> some View {
+        Toggle(isOn: switchBinding) {
+            Text(stateTitle)
+                .font(.system(size: compact ? 9 : 11, weight: .bold))
+                .foregroundStyle(value == true ? widget.accent.color : .secondary)
         }
-        .frame(width: expands ? nil : (compact ? 66 : 88))
-        .frame(maxWidth: expands ? .infinity : nil)
+        .toggleStyle(.switch)
+        .tint(widget.accent.color)
+        .disabled(!interactionEnabled || !controls.isReady || value == nil)
+        .frame(maxWidth: expands ? .infinity : nil, alignment: .trailing)
         .opacity(value == nil ? 0.5 : 1)
     }
 
-    private func stateBadge(
-        systemImage: String,
-        title: String,
-        isSelected: Bool,
-        selectedColor: Color
-    ) -> some View {
-        Image(systemName: systemImage)
-            .font(.system(size: compact ? 12 : 16, weight: .black))
-            .foregroundStyle(isSelected ? selectedColor : Color.secondary.opacity(value == nil ? 0.28 : 0.42))
-            .frame(maxWidth: .infinity)
-            .frame(height: compact ? 24 : 31)
-            .background(
-                isSelected ? selectedColor.opacity(0.16) : Color.primary.opacity(0.035),
-                in: RoundedRectangle(cornerRadius: compact ? 7 : 9, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: compact ? 7 : 9, style: .continuous)
-                    .stroke(isSelected ? selectedColor.opacity(0.72) : Color.primary.opacity(0.08), lineWidth: 1)
+    private var switchBinding: Binding<Bool> {
+        Binding(
+            get: { value ?? false },
+            set: { newValue in
+                guard value != nil, value != newValue else { return }
+                _ = controls.toggleSwitch(channel: channel)
             }
-            .shadow(color: isSelected ? selectedColor.opacity(0.3) : .clear, radius: 5)
-            .accessibilityLabel(title)
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        )
     }
 }
 

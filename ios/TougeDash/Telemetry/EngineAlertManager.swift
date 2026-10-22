@@ -157,16 +157,19 @@ final class EngineAlertManager: NSObject, UNUserNotificationCenterDelegate {
         now: Date = .now
     ) -> EngineAlertEvaluation {
         let result = evaluator.evaluate(snapshot, rules: rules, now: now)
-        if !result.triggered.isEmpty { postNotification(for: result.triggered) }
+        if !result.triggered.isEmpty {
+            Task { await postNotification(for: result.triggered) }
+        }
         return result
     }
 
-    private func postNotification(for events: [EngineAlertEvent]) {
+    private func postNotification(for events: [EngineAlertEvent]) async {
+        let settings = await notificationCenter.notificationSettings()
         let isCritical = events.contains { $0.severity == .critical }
         let content = UNMutableNotificationContent()
         content.title = localized(isCritical ? "Touge Dash — krytyczny alert silnika" : "Touge Dash — ostrzeżenie silnika")
         content.body = warningDescription(for: events)
-        if isCritical, criticalAlertsEnabled {
+        if isCritical, criticalAlertsEnabled, settings.criticalAlertSetting == .enabled {
             content.sound = .defaultCritical
             content.interruptionLevel = .critical
         } else {
@@ -178,7 +181,11 @@ final class EngineAlertManager: NSObject, UNUserNotificationCenterDelegate {
         content.userInfo = ["alertEventIds": events.map(\.id.uuidString)]
 
         let identifier = "touge-dash-engine-alert-" + events.map { $0.kind.rawValue }.joined(separator: "-")
-        notificationCenter.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+        do {
+            try await notificationCenter.add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
+        } catch {
+            PerformanceDiagnostics.shared.event("engine-alert notification-delivery-failed")
+        }
     }
 
     private func warningDescription(for events: [EngineAlertEvent]) -> String {

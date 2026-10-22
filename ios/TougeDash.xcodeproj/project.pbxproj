@@ -53,6 +53,7 @@
 		A6CD8DBB2FCE3F3AB3D631E2 /* AlertCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23DB35220D4E5079DFF7037A /* AlertCenterView.swift */; };
 		A75AF4BD0081032CCBDDF0FF /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20B274E00E4B4234DED32AC0 /* HistoryView.swift */; };
 		A9615A0E213F94BEF515418D /* TougeDashWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F7D2162918AB6BD8E89767 /* TougeDashWatchApp.swift */; };
+		A9DFCD9279D2A10D86450227 /* PerformanceDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E1B271683CF0F6F6535497F /* PerformanceDiagnostics.swift */; };
 		AC5764AE471942645415FCA0 /* TelemetrySnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DB0D1D5FED4E8830756D098 /* TelemetrySnapshot.swift */; };
 		AC8C11B6916757CC66953A44 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E32E18F950BFA52335DE7A0D /* Assets.xcassets */; };
 		ACF330D29DAF30624D6ECE14 /* DashboardTemplateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5040EC799703D53C4627A5F7 /* DashboardTemplateTests.swift */; };
@@ -144,6 +145,7 @@
 		2A31118FAAC584270E040350 /* TougeDashApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TougeDashApp.swift; sourceTree = "<group>"; };
 		2BEF1664EF73C11A88CEDB49 /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		2C91642725B1BB61E1466BB0 /* ConfigurableDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfigurableDashboardView.swift; sourceTree = "<group>"; };
+		2E1B271683CF0F6F6535497F /* PerformanceDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceDiagnostics.swift; sourceTree = "<group>"; };
 		324ECA2B4DB8807A9925483F /* DriveVideoRecordingCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DriveVideoRecordingCard.swift; sourceTree = "<group>"; };
 		3341A32D8FEF3D27A3E169BD /* WatchAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = WatchAssets.xcassets; sourceTree = "<group>"; };
 		390DDE5663561312036818FF /* pl */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = pl; path = pl.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -209,6 +211,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		0065553915F29C6CBE039381 /* Diagnostics */ = {
+			isa = PBXGroup;
+			children = (
+				2E1B271683CF0F6F6535497F /* PerformanceDiagnostics.swift */,
+			);
+			path = Diagnostics;
+			sourceTree = "<group>";
+		};
 		0AA15F125343CC11AFE11626 /* Config */ = {
 			isa = PBXGroup;
 			children = (
@@ -257,6 +267,7 @@
 				A6FE12EEF2E84297515140A2 /* App */,
 				E61245182A25B216AC161B03 /* CarPlay */,
 				1A8EF268F66188CBB3B6312E /* Dashboard */,
+				0065553915F29C6CBE039381 /* Diagnostics */,
 				96A63637DDA1E4D1D806F0D8 /* History */,
 				D5A18A140B3A43BFD8447CF4 /* Online */,
 				2CEEA1877963B97AB8CC7E1A /* Resources */,
@@ -687,6 +698,7 @@
 				2B49A361609CA52600C27390 /* IncidentCaptureEngine.swift in Sources */,
 				AF4F369F54060C2522FCADD9 /* IncidentReportView.swift in Sources */,
 				E2D3EA6F1A250823543FCE12 /* LocationTrackingService.swift in Sources */,
+				A9DFCD9279D2A10D86450227 /* PerformanceDiagnostics.swift in Sources */,
 				496188B2E321CB03E40EB9CE /* SeventyMaiM300ImportView.swift in Sources */,
 				C09EC2F6343D5E10FCD79356 /* SeventyMaiM300Service.swift in Sources */,
 				60AAEF7A1ECA24D0B7DB69EF /* TelemetryActivityManager.swift in Sources */,
@@ -828,7 +840,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -843,7 +855,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.4.4;
+				MARKETING_VERSION = 1.4.5;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -890,7 +902,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 26;
+				CURRENT_PROJECT_VERSION = 27;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = UCT44QZ8L4;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -911,7 +923,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.4.4;
+				MARKETING_VERSION = 1.4.5;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

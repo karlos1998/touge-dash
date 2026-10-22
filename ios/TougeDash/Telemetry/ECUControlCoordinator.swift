@@ -154,6 +154,7 @@ final class ECUControlCoordinator: ObservableObject {
             startedAt: .now,
             loopbackRevisionAtStart: loopback.currentRevision
         )
+        PerformanceDiagnostics.shared.event("ecu-control send kind=\(kind) channel=\(channel)")
         pending = request
         let frame = target.encodedStatusFrame()
 
@@ -197,6 +198,7 @@ final class ECUControlCoordinator: ObservableObject {
             )
         }
         if let pending, let confirmedSnapshot, confirms(pending, with: confirmedSnapshot) {
+            PerformanceDiagnostics.shared.event("ecu-control confirmed ms=\(Int(Date.now.timeIntervalSince(pending.startedAt) * 1000))")
             self.pending = nil
             errorMessage = nil
             confirmationTask?.cancel()
@@ -215,6 +217,7 @@ final class ECUControlCoordinator: ObservableObject {
 
     private func failPending(_ message: String) {
         guard pending != nil else { return }
+        PerformanceDiagnostics.shared.event("ecu-control cancelled-or-failed")
         pending = nil
         confirmationTask?.cancel()
         confirmationTask = nil

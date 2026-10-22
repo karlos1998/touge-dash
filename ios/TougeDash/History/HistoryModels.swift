@@ -129,6 +129,12 @@ enum HistoryLocalStore {
 
 @ModelActor
 actor HistoryDeletionWorker {
+    func enforceRetention(keepingActiveSessionID: UUID?) throws {
+        try PerformanceDiagnostics.measure("history.retention") {
+            try HistoryLocalStore.enforceRetention(in: modelContext, keepingActiveSessionID: keepingActiveSessionID)
+        }
+    }
+
     func deleteSession(id: UUID) async throws {
         try await pauseForUITestIfRequested()
         var descriptor = FetchDescriptor<DriveSession>(

@@ -281,8 +281,6 @@
 "Zapisano lokalnie · połącz auto, aby zsynchronizować" = "Saved locally · connect the vehicle to sync";
 "Zmiany czekają na synchronizację" = "Changes are waiting to sync";
 "Domyślne progi Touge Dash" = "Default Touge Dash thresholds";
-"WYŁĄCZNIE ANALIZA DANYCH" = "DATA ANALYSIS ONLY";
-"Te ustawienia zmieniają tylko sposób wykrywania zdarzeń w Touge Dash. Nic nie jest zapisywane ani wysyłane do sterownika lub EMULOGGERA." = "These settings only change how Touge Dash detects events. Nothing is written or sent to the ECU or EMULOGGER.";
 "Ciśnienie oleju" = "Oil pressure";
 "Alarm tylko przy pracującym silniku i zadanych obrotach." = "The alert is active only above the configured engine speed.";
 "Mieszanka pod doładowaniem" = "Mixture under boost";
@@ -775,3 +773,11 @@
 "Potwierdź, że nie jesteś robotem." = "Confirm that you are not a robot.";
 "Weryfikacja antybotowa" = "Anti-bot verification";
 "Weryfikacja antybotowa nie powiodła się. Spróbuj ponownie." = "Anti-bot verification failed. Please try again.";
+"ZANIM ZACZNIESZ" = "BEFORE YOU START";
+"Touge Dash nie jest aplikacją OBD2" = "Touge Dash is not an OBD2 app";
+"Aplikacja jest przeznaczona dla użytkowników ECUMaster i łączy się z Data Loggerem EDL-1 obsługującym Bluetooth Low Energy (BLE)." = "This app is for ECUMaster users and connects to a Data Logger EDL-1 that supports Bluetooth Low Energy (BLE).";
+"Wymagany: ECUMaster Data Logger EDL-1 z BLE" = "Required: ECUMaster Data Logger EDL-1 with BLE";
+"To nie jest uniwersalny interfejs do każdego auta" = "This is not a universal interface for every vehicle";
+"Aplikacja nie odczytuje danych z gniazda OBD2" = "The app does not read data from the OBD2 port";
+"Rozumiem wymagania i mam zgodny Data Logger EDL-1 z BLE." = "I understand the requirements and have a compatible Data Logger EDL-1 with BLE.";
+"Przejdź do aplikacji" = "Continue to the app";

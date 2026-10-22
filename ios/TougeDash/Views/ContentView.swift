@@ -306,12 +306,6 @@ private struct DashboardHeader: View {
                     .font(.system(size: compact ? 15 : 17, weight: .black, design: .rounded))
                     .fontWidth(.expanded)
                     .tracking(1.5)
-                if !compact {
-                    Text("EMU BLACK  /  DRIVER DISPLAY")
-                        .font(.system(size: 9, weight: .bold))
-                        .tracking(1.1)
-                        .foregroundStyle(.secondary)
-                }
             }
 
             Spacer()

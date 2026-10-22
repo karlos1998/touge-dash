@@ -21,6 +21,8 @@ import it.letscode.tougedash.telemetry.TelemetryRuntime
 import it.letscode.tougedash.ui.TougeDashApp
 import it.letscode.tougedash.ui.AppLanguageEnvironment
 import it.letscode.tougedash.ui.AppLanguagePreference
+import it.letscode.tougedash.ui.CompatibilityOnboardingPreference
+import it.letscode.tougedash.ui.CompatibilityOnboardingScreen
 import it.letscode.tougedash.ui.theme.TougeDashTheme
 import it.letscode.tougedash.ui.theme.AppThemePreference
 
@@ -42,6 +44,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             var appTheme by remember { mutableStateOf(AppThemePreference.read(this)) }
             var appLanguage by remember { mutableStateOf(AppLanguagePreference.read(this)) }
+            var compatibilityAccepted by remember {
+                mutableStateOf(CompatibilityOnboardingPreference.read(this))
+            }
             AppLanguageEnvironment(appLanguage) {
                 TougeDashTheme(appTheme) {
                     val snapshot by container.runtime.snapshot.collectAsStateWithLifecycle()
@@ -49,27 +54,36 @@ class MainActivity : ComponentActivity() {
                     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
                         startTelemetry()
                     }
-                    LaunchedEffect(Unit) {
-                        if (hasBluetoothPermissions()) startTelemetry()
-                        else permissionLauncher.launch(requestedPermissions())
+                    LaunchedEffect(compatibilityAccepted) {
+                        if (compatibilityAccepted) {
+                            if (hasBluetoothPermissions()) startTelemetry()
+                            else permissionLauncher.launch(requestedPermissions())
+                        }
                     }
-                    TougeDashApp(
-                        container = container,
-                        snapshot = snapshot,
-                        connection = connection,
-                        appTheme = appTheme,
-                        onAppThemeChanged = {
-                            appTheme = it
-                            AppThemePreference.write(this, it)
-                        },
-                        appLanguage = appLanguage,
-                        onAppLanguageChanged = {
-                            appLanguage = it
-                            AppLanguagePreference.write(this, it)
-                        },
-                        requestPermissions = { permissionLauncher.launch(requestedPermissions()) },
-                        rescan = { startTelemetry(TelemetryService.ACTION_RESCAN) }
-                    )
+                    if (compatibilityAccepted) {
+                        TougeDashApp(
+                            container = container,
+                            snapshot = snapshot,
+                            connection = connection,
+                            appTheme = appTheme,
+                            onAppThemeChanged = {
+                                appTheme = it
+                                AppThemePreference.write(this, it)
+                            },
+                            appLanguage = appLanguage,
+                            onAppLanguageChanged = {
+                                appLanguage = it
+                                AppLanguagePreference.write(this, it)
+                            },
+                            requestPermissions = { permissionLauncher.launch(requestedPermissions()) },
+                            rescan = { startTelemetry(TelemetryService.ACTION_RESCAN) }
+                        )
+                    } else {
+                        CompatibilityOnboardingScreen {
+                            CompatibilityOnboardingPreference.accept(this@MainActivity)
+                            compatibilityAccepted = true
+                        }
+                    }
                 }
             }
         }

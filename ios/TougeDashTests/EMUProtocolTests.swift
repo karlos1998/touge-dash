@@ -47,7 +47,7 @@ final class EMUProtocolTests: XCTestCase {
     }
 
     @MainActor
-    func testLocalHistoryRetentionKeepsTenNewestSessionsAndIncidentsWithTheirChildren() throws {
+    func testLocalHistoryRetentionKeepsTenNewestSessionsAndIncidentsWithTheirChildren() async throws {
         let container = try ModelContainer(
             for: DriveSession.self,
             TelemetryHistorySample.self,
@@ -122,7 +122,10 @@ final class EMUProtocolTests: XCTestCase {
         }
         try context.save()
 
-        try HistoryLocalStore.enforceRetention(in: context)
+        try await Task.detached {
+            let worker = HistoryDeletionWorker(modelContainer: container)
+            try await worker.enforceRetention(keepingActiveSessionID: nil)
+        }.value
 
         XCTAssertEqual(Set(try context.fetch(FetchDescriptor<DriveSession>()).map(\.id)), Set(newestSessionIDs))
         XCTAssertEqual(Set(try context.fetch(FetchDescriptor<DriveIncident>()).map(\.id)), Set(newestIncidentIDs))
@@ -369,7 +372,7 @@ final class EMUProtocolTests: XCTestCase {
     }
 
     @MainActor
-    func testSustainedHistoryRecordingPreservesAllSamples() throws {
+    func testSustainedHistoryRecordingPreservesAllSamples() async throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("recording-\(UUID()).store")
         defer {
             for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(atPath: url.path + suffix) }
@@ -395,6 +398,7 @@ final class EMUProtocolTests: XCTestCase {
             batchTimes.append(CFAbsoluteTimeGetCurrent() - began)
             print("RECORDING_BATCH \(batch): \(batchTimes.last!) seconds")
         }
+        await recorder.waitForRetention()
         print("RECORDING_BENCHMARK seconds_per_1000=\(batchTimes)")
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<TelemetryHistorySample>()), 6_000)
         let sessions = try container.mainContext.fetch(FetchDescriptor<DriveSession>())
@@ -886,5 +890,37 @@ final class AccelerationEngineTests: XCTestCase {
 
     private func snapshot(speed: Double) -> TelemetrySnapshot {
         TelemetrySnapshot(rpm: 4_500, throttlePercent: 82, speedKPH: speed)
+    }
+}
+
+
+extension EMUProtocolTests {
+    func testLargeBLEBacklogPreservesFramesAndFragmentedTail() {
+        let frame = EMUFrameParser.encode(channel: 1, rawValue: 4200)
+        var data = Data(repeating: 0, count: 100_000)
+        for _ in 0..<20_000 { data.append(frame) }
+        data.append(contentsOf: frame.prefix(3))
+        var parser = EMUFrameParser()
+        let began = CFAbsoluteTimeGetCurrent()
+        let frames = parser.feed(data)
+        print("BLE_BACKLOG telemetry_seconds=\(CFAbsoluteTimeGetCurrent() - began)")
+        XCTAssertEqual(frames.count, 20_000)
+        XCTAssertTrue(frames.allSatisfy { $0 == EMUFrame(channel: 1, rawValue: 4200) })
+        XCTAssertEqual(parser.stats.droppedBytes, 100_000)
+        XCTAssertEqual(parser.feed(Data(frame.suffix(2))), [EMUFrame(channel: 1, rawValue: 4200)])
+        XCTAssertTrue(parser.buffer.isEmpty)
+    }
+
+    func testControlParserLargeTelemetryBacklogPreservesFragmentedStatus() {
+        let status = ECUControlSnapshot().encodedStatusFrame()
+        var data = Data(repeating: 0xA3, count: 200_000)
+        data.append(status)
+        data.append(contentsOf: status.prefix(5))
+        var parser = ECUControlStatusFrameParser()
+        let began = CFAbsoluteTimeGetCurrent()
+        XCTAssertEqual(parser.feed(data), [status])
+        print("BLE_BACKLOG control_seconds=\(CFAbsoluteTimeGetCurrent() - began)")
+        XCTAssertEqual(parser.feed(Data(status.suffix(3))), [status])
+        XCTAssertTrue(parser.feed(Data()).isEmpty)
     }
 }
