@@ -7,7 +7,7 @@
     <string name="dashboard">Dashboard</string>
     <string name="history">History</string>
     <string name="alerts">Alerts</string>
-    <string name="more">More</string>
+    <string name="more">Settings</string>
     <string name="connect">Connect</string>
     <string name="rescan">Scan again</string>
     <string name="close">Close</string>

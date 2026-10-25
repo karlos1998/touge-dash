@@ -7,6 +7,15 @@ import androidx.media3.common.MimeTypes
 import kotlin.math.min
 import kotlin.math.roundToInt
 
+enum class DriveVideoExportQuality { FAST_FULL_HD, ORIGINAL;
+    fun dimensions(width: Int, height: Int): Pair<Int, Int> {
+        val w = width.takeIf { it > 0 } ?: 1920
+        val h = height.takeIf { it > 0 } ?: 1080
+        val factor = if (this == FAST_FULL_HD) min(1.0, 1920.0 / maxOf(w, h)) else 1.0
+        return maxOf(2, (w * factor / 2).roundToInt() * 2) to maxOf(2, (h * factor / 2).roundToInt() * 2)
+    }
+}
+
 internal data class VideoEncodingPlan(
     val mimeType: String,
     val bitrate: Int
@@ -60,10 +69,10 @@ internal object VideoExportQuality {
     }
 }
 
-internal fun overlayBitmapSize(width: Int, height: Int): Pair<Int, Int> {
+internal fun overlayBitmapSize(width: Int, height: Int, maximumLongEdge: Int = 3840): Pair<Int, Int> {
     val sourceWidth = width.takeIf { it > 0 } ?: 1920
     val sourceHeight = height.takeIf { it > 0 } ?: 1080
-    val scale = min(1.0, 3840.0 / maxOf(sourceWidth, sourceHeight))
+    val scale = min(1.0, maximumLongEdge.coerceAtLeast(2).toDouble() / maxOf(sourceWidth, sourceHeight))
     return maxOf(2, (sourceWidth * scale).roundToInt()) to
         maxOf(2, (sourceHeight * scale).roundToInt())
 }

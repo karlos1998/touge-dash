@@ -12,7 +12,11 @@ zasobów z oficjalnego eDash.
 
 ## Aplikacja
 
-### Android
+#Szczegółowe porównanie aplikacji Android i iOS, poprawki eksportu filmów,
+importu 70mai i wyniki testów są opisane w
+[raporcie zgodności Android / iOS](docs/android-ios-parity.md).
+
+## Android
 
 <p align="center">
   <img src="docs/screenshots/android-dashboard.png" width="250" alt="Dashboard Touge Dash na Androidzie" />
@@ -170,6 +174,10 @@ lub nowszego. Wydanie można pobrać bez konta Google Play:
 Po pobraniu system może poprosić o jednorazową zgodę na instalację aplikacji z
 przeglądarki. Aktualizacje są podpisywane tym samym kluczem, więc kolejne APK
 instalują się na poprzedniej wersji bez utraty lokalnej historii.
+
+Tag `android-v*` uruchamia publikację podpisanego APK w GitHub Actions na
+`ubuntu-latest`. Strona korzysta ze stałego linku do najnowszego wydania.
+Opis Androida 1.9.0 znajduje się w [informacjach o wydaniu](docs/releases/android-1.9.0.md).
 
 Projekt otwiera się w Android Studio przez katalog `android/`. Build developerski:
 

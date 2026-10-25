@@ -119,10 +119,26 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
     val connection by container.runtime.connection.collectAsState()
     var deleteSession by remember { mutableStateOf<DriveSessionEntity?>(null) }
     var showSplitConfirmation by remember { mutableStateOf(false) }
+    var archiveTab by remember { mutableStateOf(0) }
+    val allIncidents by container.dao.incidents().collectAsState(initial = emptyList())
+    var inspectedIncident by remember { mutableStateOf<IncidentEntity?>(null) }
     val canSplit = connection.state == ConnectionState.Connected && activeSession != null
     Column(Modifier.fillMaxSize()) {
         Text(appText("DRIVE ARCHIVE", "ARCHIWUM PRZEJAZDÓW"), color = MaterialTheme.colorScheme.primary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 18.dp, top = 18.dp))
         Text(appText("History", "Historia"), fontSize = 34.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 18.dp))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(archiveTab == 0, { archiveTab = 0 }, label = { Text(appText("Drives", "Przejazdy")) })
+            FilterChip(archiveTab == 1, { archiveTab = 1 }, label = { Text(appText("Incidents", "Incydenty") + " (${allIncidents.size})") })
+        }
+        if (archiveTab == 1) {
+            if (allIncidents.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(appText("No recorded incidents", "Brak zapisanych incydentów"), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            else LazyColumn { items(allIncidents, key = { it.id }) { incident ->
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Text(DateFormat.getDateTimeInstance().format(Date(incident.triggeredAt)), fontSize = 12.sp)
+                    IncidentSection(listOf(incident), incident.captureStartedAt) { inspectedIncident = it }
+                }
+            } }
+        } else {
         if (canSplit) {
             ManualSessionSplitCard(activeSession!!.sampleCount) { showSplitConfirmation = true }
         }
@@ -137,7 +153,9 @@ private fun SessionList(container: AppContainer, select: (String) -> Unit) {
             }
             item { LocalArchiveStorageFooter(localArchiveBytes) }
         }
+        }
     }
+    inspectedIncident?.let { IncidentReportDialog(it, container) { inspectedIncident = null } }
     if (showSplitConfirmation) {
         AlertDialog(
             onDismissRequest = { showSplitConfirmation = false },
@@ -283,6 +301,7 @@ private fun SessionRow(session: DriveSessionEntity, tags: List<it.letscode.touge
             }
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 MiniValue(appText("MAX BOOST", "MAX DOŁADOWANIE"), "${"%.2f".format(session.maxBoostBar)} bar", MaterialTheme.colorScheme.primary)
+                MiniValue(appText("MAX SPEED", "MAKS. PRĘDKOŚĆ"), "${session.maxSpeedKph.roundToInt()} km/h", MaterialTheme.colorScheme.primary)
                 MiniValue(appText("MAX OIL", "MAX OLEJ"), "${session.maxOilTemperatureCelsius.roundToInt()}°C", MaterialTheme.colorScheme.tertiary)
                 MiniValue(appText("MAX COOLANT", "MAX PŁYN"), "${session.maxCoolantCelsius.roundToInt()}°C", MaterialTheme.colorScheme.secondary)
             }
@@ -346,6 +365,9 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
         if (session == null) item { Box(Modifier.fillMaxWidth().height(300.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         else {
             item { SessionSummary(session!!) }
+            item { DriveVideoSection(container, session!!, rawSamples, scrubber) { timestamp ->
+                scrubber = ((timestamp - session!!.startedAt).toDouble() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).toFloat().coerceIn(0f, 1f)
+            } }
             val detailTags = sessionTags(container, session!!)
             if (detailTags.isNotEmpty()) item {
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -375,14 +397,14 @@ private fun SessionDetail(container: AppContainer, id: String, back: () -> Unit)
                 val updateCursor: (Long) -> Unit = { timestamp ->
                     scrubber = ((timestamp - session!!.startedAt).toFloat() / (session!!.endedAt - session!!.startedAt).coerceAtLeast(1)).coerceIn(0f, 1f)
                 }
-                item { TelemetryChart(appText("Boost / oil pressure", "Doładowanie / ciśnienie oleju"), chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.BOOST to MaterialTheme.colorScheme.primary, TelemetryMetric.OIL_PRESSURE to MaterialTheme.colorScheme.secondary), updateCursor) }
+                item { TelemetryChart(appText("Boost / oil / fuel pressure", "Doładowanie / ciśnienie oleju / paliwa"), chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.BOOST to MaterialTheme.colorScheme.primary, TelemetryMetric.OIL_PRESSURE to MaterialTheme.colorScheme.secondary, TelemetryMetric.FUEL_PRESSURE to MaterialTheme.colorScheme.tertiary), updateCursor) }
                 item { TelemetryChart(appText("Temperatures", "Temperatury"), chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.OIL_TEMPERATURE to MaterialTheme.colorScheme.tertiary, TelemetryMetric.COOLANT to MaterialTheme.colorScheme.primary), updateCursor) }
                 item { TelemetryChart("EGT", chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.EGT1 to MaterialTheme.colorScheme.tertiary, TelemetryMetric.EGT2 to MaterialTheme.colorScheme.error), updateCursor) }
                 item { TelemetryChart(appText("RPM / speed", "Obroty / prędkość"), chartSamples, selected, session!!.startedAt, session!!.endedAt, accelerationAttempts, listOf(TelemetryMetric.RPM to MaterialTheme.colorScheme.error, TelemetryMetric.SPEED to MaterialTheme.colorScheme.secondary), updateCursor) }
             }
             if (annotations.isNotEmpty()) item { AnnotationSection(annotations, session!!.startedAt) }
-            item { DriveVideoSection(container, session!!, rawSamples, scrubber) }
-            if (chartSamples.any { it.latitude != null && it.longitude != null }) item { RouteMap(chartSamples) }
+
+            if (chartSamples.any { it.latitude != null && it.longitude != null }) item { RouteMap(chartSamples, selected?.recordedAt) }
         }
     }
     if (noteDialog && session != null) AddNoteDialog { body ->
@@ -1068,7 +1090,7 @@ private fun DriveShareDialog(container: AppContainer, session: DriveSessionEntit
 }
 
 @Composable
-private fun RouteMap(samples: List<TelemetrySampleEntity>) {
+private fun RouteMap(samples: List<TelemetrySampleEntity>, selectedAt: Long?) {
     val context = LocalContext.current
     val points = remember(samples) { samples.mapNotNull { value -> value.latitude?.let { lat -> value.longitude?.let { GeoPoint(lat, it) } } } }
     Card(Modifier.fillMaxWidth().padding(14.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -1079,12 +1101,22 @@ private fun RouteMap(samples: List<TelemetrySampleEntity>) {
                     Configuration.getInstance().userAgentValue = context.packageName
                     MapView(context).apply {
                         setMultiTouchControls(true)
+                        overlayManager.add(org.osmdroid.views.overlay.Marker(this).apply { setAnchor(.5f, .5f); title = "" })
                         overlayManager.add(Polyline().apply { outlinePaint.color = android.graphics.Color.CYAN; outlinePaint.strokeWidth = 7f; setPoints(points) })
                         if (points.isNotEmpty()) controller.setCenter(points[points.size / 2])
                         controller.setZoom(14.0)
                     }
                 },
-                update = { map -> (map.overlays.filterIsInstance<Polyline>().firstOrNull())?.setPoints(points); map.invalidate() },
+                update = { map ->
+                    (map.overlays.filterIsInstance<Polyline>().firstOrNull())?.setPoints(points)
+                    val located = samples.filter { it.latitude != null && it.longitude != null }
+                    val current = selectedAt?.let { nearestSample(located, it) } ?: located.firstOrNull()
+                    map.overlays.filterIsInstance<org.osmdroid.views.overlay.Marker>().firstOrNull()?.let { marker ->
+                        marker.isEnabled = current != null
+                        current?.let { marker.position = GeoPoint(it.latitude!!, it.longitude!!) }
+                    }
+                    map.invalidate()
+                },
                 modifier = Modifier.fillMaxWidth().height(260.dp)
             )
         }

@@ -104,8 +104,12 @@ fun ConfigurableDashboardScreen(
     hardwareId: String?,
     editing: Boolean
 ) {
-    val template by container.dashboardRepository.selected.collectAsState(initial = DashboardTemplate.factory())
-    val templates by container.dashboardRepository.templates.collectAsState(initial = listOf(DashboardTemplate.factory()))
+    val loadedTemplate by container.dashboardRepository.selected.collectAsState(initial = null)
+    val templates by container.dashboardRepository.templates.collectAsState(initial = emptyList())
+    // Do not let the pager select its placeholder factory page while Room is
+    // still restoring the user's selected dashboard.
+    val template = loadedTemplate ?: return
+    if (templates.isEmpty()) return
     val chartPoints by container.runtime.chartPoints.collectAsState()
     val sessionMaximums by container.runtime.sessionMaximums.collectAsState()
     val performance by container.accelerationEngine.state.collectAsState()

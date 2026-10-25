@@ -15,12 +15,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-val TougeCyan = Color(0xFF26D7E5)
-val TougeMint = Color(0xFF43E8A8)
-val TougeOrange = Color(0xFFFF9D3D)
-val TougeRed = Color(0xFFFF4B3E)
-val TougeBlue = Color(0xFF4B9EFF)
-val TougeBackground = Color(0xFF050A0D)
+val TougeCyan = Color(0xFF0DE0F0)
+val TougeMint = Color(0xFF36E89E)
+val TougeOrange = Color(0xFFFF7830)
+val TougeRed = Color(0xFFFF3840)
+val TougeBlue = Color(0xFF297AFF)
+val TougeBackground = Color(0xFF030507)
 val TougePanel = Color(0xFF0B1217)
 val TougePanelLight = Color(0xFF111C23)
 val TougeMuted = Color(0xFF8498A4)

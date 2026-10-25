@@ -183,6 +183,7 @@ data class VideoProjectEntity(
     val telemetryTrimStartSeconds: Double = 0.0,
     val exportDurationSeconds: Double,
     val overlayTemplateId: String? = null,
+    val overlayDefinitionJson: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

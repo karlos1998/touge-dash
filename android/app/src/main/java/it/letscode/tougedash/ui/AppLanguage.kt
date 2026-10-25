@@ -1,15 +1,19 @@
 package it.letscode.tougedash.ui
 
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.LocaleList
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import java.util.Locale
+
+val LocalAppLocale = staticCompositionLocalOf { Locale.getDefault() }
 
 enum class AppLanguage(val storedValue: String) {
     SYSTEM("system"),
@@ -53,10 +57,17 @@ fun AppLanguageEnvironment(language: AppLanguage, content: @Composable () -> Uni
         }
     }
     val localizedContext = remember(baseContext, configuration) {
-        baseContext.createConfigurationContext(configuration)
+        val configured = baseContext.createConfigurationContext(configuration)
+        // Keep the Activity in the ContextWrapper chain. Activity Result, camera
+        // permissions and native dialogs find their owners through this chain.
+        object : ContextWrapper(baseContext) {
+            override fun getResources(): Resources = configured.resources
+            override fun getAssets(): android.content.res.AssetManager = configured.assets
+        }
     }
 
     CompositionLocalProvider(
+        LocalAppLocale provides configuration.locales[0],
         LocalContext provides localizedContext,
         LocalConfiguration provides configuration,
         content = content

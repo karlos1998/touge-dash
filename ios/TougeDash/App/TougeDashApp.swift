@@ -67,6 +67,7 @@ struct TougeDashApp: App {
             #if DEBUG
             if ProcessInfo.processInfo.environment["TOUGE_DASH_HISTORY_PREVIEW"] == "1" {
                 historyRecorder.seedPreviewDataIfNeeded()
+                Task { await historyRecorder.seedPreviewVideoIfNeeded() }
             }
             #endif
             modelContainer = container

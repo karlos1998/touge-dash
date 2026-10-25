@@ -33,7 +33,8 @@ class RouteMapSnapshot(
     val bitmap: Bitmap,
     sourcePoints: List<RouteMapPoint>,
     val detailedBitmap: Bitmap? = null,
-    sourceDetailedPoints: List<RouteMapPoint> = emptyList()
+    sourceDetailedPoints: List<RouteMapPoint> = emptyList(),
+    val sourceIsLight: Boolean = true
 ) {
     val points: List<RouteMapPoint> = compacted(sourcePoints)
     val detailedPoints: List<RouteMapPoint> = compacted(sourceDetailedPoints)
@@ -215,7 +216,7 @@ private suspend fun captureRouteMapLayer(
         map.controller.setCenter(geoPoints.first())
         map.controller.setZoom(if (detailed) 18.0 else 17.0)
     }
-    map.post {
+    android.os.Handler(android.os.Looper.getMainLooper()).post {
         val projected = located.map { (sample, geoPoint) ->
             val pixel = map.projection.toPixels(geoPoint, Point())
             RouteMapPoint(
@@ -272,5 +273,5 @@ private fun fallbackRouteMapSnapshot(
             y = (.9 - .8 * (point.latitude - minimumLatitude) / latitudeSpan).toFloat()
         )
     }
-    return RouteMapSnapshot(bitmap, points)
+    return RouteMapSnapshot(bitmap, points, sourceIsLight = false)
 }

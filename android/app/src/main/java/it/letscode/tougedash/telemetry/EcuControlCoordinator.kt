@@ -60,6 +60,10 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
     fun transportChanged(available: Boolean, writer: ((ByteArray) -> Boolean)? = null) {
         this.writer = writer.takeIf { available }
         val current = mutableState.value
+        if (!available) {
+            confirmationJob?.cancel()
+            confirmationJob = null
+        }
         mutableState.value = current.copy(
             transportAvailable = current.connected && available,
             pending = if (available) current.pending else null,
@@ -113,9 +117,11 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
     }
 
     @Synchronized
-    fun transportWriteFailed() {
+    fun transportWriteFailed(request: PendingEcuControl) {
         val current = mutableState.value
-        if (current.pending == null) return
+        // A GATT completion can arrive after EMU feedback, timeout or reconnect.
+        // It belongs only to the request that actually initiated that write.
+        if (current.pending !== request) return
         confirmationJob?.cancel()
         confirmationJob = null
         mutableState.value = current.copy(pending = null, displayed = current.observed, error = EcuControlError.WRITE_REJECTED)
@@ -134,7 +140,7 @@ class EcuControlCoordinator(private val scope: CoroutineScope) {
             delay(2_000)
             synchronized(this@EcuControlCoordinator) {
                 val current = mutableState.value
-                if (current.pending == request) {
+                if (current.pending === request) {
                     mutableState.value = current.copy(pending = null, displayed = current.observed, error = EcuControlError.CONFIRMATION_TIMEOUT)
                 }
             }

@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: [self-hosted, macOS, ARM64, touge-dash-android-release]
+    runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
@@ -19,10 +19,6 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v6
-      - name: Configure Android SDK
-        run: |
-          echo "ANDROID_HOME=$HOME/Library/Android/sdk" >> "$GITHUB_ENV"
-          echo "$HOME/Library/Android/sdk/platform-tools" >> "$GITHUB_PATH"
       - name: Restore release key
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -43,7 +39,15 @@ jobs:
       - name: Publish release asset
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" touge-dash-android.apk --generate-notes --title "Touge Dash Android ${GITHUB_REF_NAME#android-v}"
+        run: |
+          RELEASE_NOTES="docs/releases/android-${GITHUB_REF_NAME#android-v}.md"
+          if test -f "$RELEASE_NOTES"; then
+            gh release create "$GITHUB_REF_NAME" touge-dash-android.apk --latest \
+              --notes-file "$RELEASE_NOTES" --title "Touge Dash Android ${GITHUB_REF_NAME#android-v}"
+          else
+            gh release create "$GITHUB_REF_NAME" touge-dash-android.apk --latest \
+              --generate-notes --title "Touge Dash Android ${GITHUB_REF_NAME#android-v}"
+          fi
       - name: Remove release key
         if: always()
         run: rm -f "$RUNNER_TEMP/touge-dash-release.jks"

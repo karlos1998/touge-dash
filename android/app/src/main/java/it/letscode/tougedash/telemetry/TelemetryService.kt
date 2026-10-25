@@ -63,6 +63,7 @@ class TelemetryService : Service() {
     private val controlStatusParser = EcuControlStatusFrameParser()
     private val accumulator = EmuTelemetryAccumulator()
     private val connectionSlot = BleConnectionSlot<BluetoothGatt>()
+    private val controlWrites = EcuControlWriteTracker<BluetoothGatt>()
     private val bluetoothManager by lazy { getSystemService(BluetoothManager::class.java) }
     private val adapter: BluetoothAdapter? get() = bluetoothManager?.adapter
     private val container get() = (application as TougeDashApplication).container
@@ -133,6 +134,7 @@ class TelemetryService : Service() {
             it.close()
         }
         stopSampling()
+        controlWrites.reset()
         container.ecuControls.connectionChanged(false)
         container.locationTracker.stop()
         overlayController.destroy()
@@ -199,6 +201,7 @@ class TelemetryService : Service() {
                 it.close()
             }
             controlCharacteristic = null
+            controlWrites.reset()
             notificationQueue.clear()
             telemetryCharacteristics.clear()
             container.ecuControls.transportChanged(false)
@@ -243,6 +246,7 @@ class TelemetryService : Service() {
             it.close()
         }
         controlCharacteristic = null
+        controlWrites.reset()
         notificationQueue.clear()
         telemetryCharacteristics.clear()
         container.ecuControls.connectionChanged(false)
@@ -439,6 +443,7 @@ class TelemetryService : Service() {
                 lastAddress = gatt.device.address
                 updateConnection(ConnectionState.Connected, gatt.device.name ?: "EMULOGGER", gatt.device.address)
                 controlStatusParser.reset()
+                controlWrites.reset()
                 container.ecuControls.connectionChanged(true)
                 val priorityAccepted = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                 TelemetryRuntime.diagnostic("BLE high connection priority requested: $priorityAccepted")
@@ -553,10 +558,11 @@ class TelemetryService : Service() {
         }
 
         override fun onCharacteristicWrite(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, status: Int) {
-            if (characteristic.uuid != controlCharacteristic?.uuid) return
+            if (!connectionSlot.isActive(gatt)) return
+            val request = controlWrites.complete(gatt, characteristicKey(characteristic)) ?: return
             if (status != BluetoothGatt.GATT_SUCCESS) {
                 TelemetryRuntime.diagnostic("ECU control write failed ($status)")
-                container.ecuControls.transportWriteFailed()
+                container.ecuControls.transportWriteFailed(request)
             }
         }
     }
@@ -596,6 +602,7 @@ class TelemetryService : Service() {
         connectionTimeoutJob = null
         connectionReady = false
         controlCharacteristic = null
+        controlWrites.reset()
         notificationQueue.clear()
         telemetryCharacteristics.clear()
         container.ecuControls.connectionChanged(false)
@@ -642,6 +649,7 @@ class TelemetryService : Service() {
         connectionReady = false
         TelemetryRuntime.diagnostic(reason)
         controlCharacteristic = null
+        controlWrites.reset()
         notificationQueue.clear()
         telemetryCharacteristics.clear()
         container.ecuControls.connectionChanged(false)
@@ -710,19 +718,30 @@ class TelemetryService : Service() {
         characteristic: BluetoothGattCharacteristic,
         data: ByteArray
     ): Boolean {
-        if (!connectionSlot.isActive(gatt) || !EcuControlSnapshot.isValidStatusFrame(data) || !supportsWrite(characteristic)) return false
+        if (!hasBluetoothPermission() || !connectionReady || !connectionSlot.isActive(gatt) ||
+            !EcuControlSnapshot.isValidStatusFrame(data) || !supportsWrite(characteristic)) return false
+        val request = container.ecuControls.state.value.pending ?: return false
+        val endpoint = characteristicKey(characteristic)
+        if (!controlWrites.begin(gatt, endpoint, request)) return false
         val writeType = if (characteristic.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) {
             BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
         } else {
             BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         }
-        val accepted = if (Build.VERSION.SDK_INT >= 33) {
-            gatt.writeCharacteristic(characteristic, data, writeType) == BluetoothStatusCodes.SUCCESS
-        } else {
-            characteristic.writeType = writeType
-            characteristic.value = data
-            gatt.writeCharacteristic(characteristic)
+        val accepted = try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                gatt.writeCharacteristic(characteristic, data, writeType) == BluetoothStatusCodes.SUCCESS
+            } else {
+                characteristic.writeType = writeType
+                characteristic.value = data
+                gatt.writeCharacteristic(characteristic)
+            }
+        } catch (_: SecurityException) {
+            false
+        } catch (_: IllegalStateException) {
+            false
         }
+        if (!accepted) controlWrites.complete(gatt, endpoint)
         if (accepted) {
             TelemetryRuntime.diagnostic("ECU TX [${characteristic.uuid}] ${data.joinToString(" ") { "%02X".format(it.toUByte().toInt()) }}")
         }
@@ -743,7 +762,9 @@ class TelemetryService : Service() {
                     val now = System.currentTimeMillis()
                     val snapshot = TelemetryRuntime.snapshot.value
                     val location = container.locationTracker.location.value
-                    if (TelemetryRuntime.consumeDriveSplitRequest()) {
+                    val activeDrive = container.historyRepository.activeSession.value
+                    val automaticSplit = activeDrive != null && snapshot.isFresh && container.driveSegmentSettings.shouldSplit(activeDrive.startedAt, now)
+                    if (TelemetryRuntime.consumeDriveSplitRequest() || automaticSplit) {
                         val closingSessionId = container.historyRepository.activeSessionId()
                         if (closingSessionId != null) {
                             container.incidentEngine.finish(hardwareId, closingSessionId)

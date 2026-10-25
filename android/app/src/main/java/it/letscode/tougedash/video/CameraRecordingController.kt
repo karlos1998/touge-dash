@@ -35,7 +35,7 @@ class CameraRecordingController(
     private var recording: Recording? = null
     private var activeFile: File? = null
     private var activeSessionId: String? = null
-    private var activeCameraName = "Rear camera"
+    private var activeCameraName = context.videoText("Rear camera", "Tylna kamera")
     private var activeHasAudio = false
     private var preparingAutomaticRecording = false
     private val mutableRecording = MutableStateFlow(false)
@@ -53,7 +53,7 @@ class CameraRecordingController(
                 val recorder = createRecorder()
                 videoCapture = VideoCapture.withOutput(recorder)
                 val selector = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-                activeCameraName = if (front) "Front camera" else "Rear camera"
+                activeCameraName = if (front) context.videoText("Front camera", "Przednia kamera") else context.videoText("Rear camera", "Tylna kamera")
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(owner, selector, preview, videoCapture)
                 result(true)
@@ -73,7 +73,7 @@ class CameraRecordingController(
                 provider = cameraProvider
                 videoCapture = VideoCapture.withOutput(createRecorder())
                 val selector = if (settings.frontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-                activeCameraName = if (settings.frontCamera) "Front camera" else "Rear camera"
+                activeCameraName = if (settings.frontCamera) context.videoText("Front camera", "Przednia kamera") else context.videoText("Rear camera", "Tylna kamera")
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(owner, selector, videoCapture)
                 start(sessionId)
@@ -95,15 +95,17 @@ class CameraRecordingController(
         var pending: PendingRecording = capture.output.prepareRecording(context, FileOutputOptions.Builder(file).build())
         if (audio) pending = pending.withAudioEnabled()
         activeFile = file; activeSessionId = sessionId; activeHasAudio = audio; mutableError.value = null
+        val cameraName = activeCameraName
+        var startedAt = System.currentTimeMillis()
         recording = pending.start(ContextCompat.getMainExecutor(context)) { event ->
             when (event) {
-                is VideoRecordEvent.Start -> mutableRecording.value = true
+                is VideoRecordEvent.Start -> { mutableRecording.value = true; startedAt = System.currentTimeMillis() - event.recordingStats.recordedDurationNanos / 1_000_000 }
                 is VideoRecordEvent.Finalize -> {
                     mutableRecording.value = false
-                    val completed = activeFile; val session = activeSessionId
                     recording = null; activeFile = null; activeSessionId = null
-                    if (event.hasError()) { completed?.delete(); mutableError.value = event.cause?.message ?: "Camera recording failed (${event.error})" }
-                    else if (completed != null && session != null) repository.registerCameraRecording(session, completed, activeCameraName, activeHasAudio)
+                    if (event.hasError() && event.error != VideoRecordEvent.Finalize.ERROR_SOURCE_INACTIVE) {
+                        file.delete(); mutableError.value = event.cause?.message ?: "Camera recording failed (${event.error})"
+                    } else if (file.length() > 0) repository.registerCameraRecording(sessionId, file, cameraName, audio, startedAt)
                 }
             }
         }

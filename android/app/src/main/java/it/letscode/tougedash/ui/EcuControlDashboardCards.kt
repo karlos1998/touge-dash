@@ -3,6 +3,7 @@ package it.letscode.tougedash.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,29 +48,35 @@ internal fun EcuSwitchCard(
     val value = state.switchValue(channel)
     val pending = state.pending?.kind == EcuControlKind.SWITCH && state.pending.channel == channel
     val accent = widget.accent.color()
-    TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 126.dp else 145.dp)) {
-        Row(
-            Modifier.fillMaxSize()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text((widget.title?.takeIf { it.isNotBlank() } ?: "BT SWITCH $channel").uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, maxLines = 1)
-                Text(
-                    when (value) { true -> appText("ON", "WŁĄCZONY"); false -> appText("OFF", "WYŁĄCZONY"); null -> "—" },
-                    color = if (value == true) accent else MaterialTheme.colorScheme.onSurface,
-                    fontSize = if (landscape) 25.sp else 34.sp,
-                    fontWeight = FontWeight.Black
-                )
-                Text(ecuControlStatus(state, pending), color = ecuControlStatusColor(state, pending), fontSize = 8.sp, fontWeight = FontWeight.Black, letterSpacing = .55.sp, maxLines = 1)
-            }
+    val title = widget.title?.takeIf { it.isNotBlank() } ?: "BT SWITCH $channel"
+    val stateTitle = when (value) {
+        true -> appText("ON", "WŁĄCZONY")
+        false -> appText("OFF", "WYŁĄCZONY")
+        null -> "—"
+    }
+    val status = ecuControlStatus(state, pending)
+    val statusColor = ecuControlStatusColor(state, pending)
+    @Composable fun header() {
+        Text(title.uppercase(), color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, maxLines = 1)
+    }
+    @Composable fun statusLabel() {
+        Text(status, color = statusColor, fontSize = 8.sp, fontWeight = FontWeight.Black,
+            letterSpacing = .55.sp, maxLines = 2)
+    }
+    @Composable fun control() {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(stateTitle, color = if (value == true) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Switch(
                 checked = value == true,
                 onCheckedChange = { requested ->
                     if (value != null && requested != value) toggle(channel)
                 },
                 enabled = interactionEnabled && state.ready && value != null,
+                modifier = Modifier.testTag("ecu-switch-$channel").semantics {
+                    contentDescription = "$title, BT Switch $channel"
+                },
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = MaterialTheme.colorScheme.surface,
                     checkedTrackColor = accent,
@@ -74,6 +84,26 @@ internal fun EcuSwitchCard(
                     uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             )
+        }
+    }
+    TougePanelSurface(accent, Modifier.fillMaxWidth().height(if (landscape) 126.dp else 145.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(if (landscape) 11.dp else 15.dp)) {
+            if (maxWidth < 220.dp) {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                    header()
+                    control()
+                    statusLabel()
+                }
+            } else {
+                Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        header()
+                        statusLabel()
+                    }
+                    control()
+                }
+            }
         }
     }
 }
@@ -121,7 +151,8 @@ internal fun EcuRotaryCard(
 
 @Composable
 private fun ecuControlStatus(state: EcuControlState, pending: Boolean): String = when {
-    pending -> appText("WAITING FOR EMU", "OCZEKIWANIE NA EMU")
+    pending -> appText("SENDING WHOLE STATE", "WYSYŁANIE PEŁNEGO STANU")
+    state.pending != null -> appText("WAITING FOR EMU", "OCZEKIWANIE NA EMU")
     !state.connected -> appText("DISCONNECTED", "BRAK POŁĄCZENIA")
     !state.transportAvailable -> appText("READ ONLY", "TYLKO ODCZYT")
     !state.applicationActive -> appText("APP IN BACKGROUND", "APLIKACJA W TLE")
@@ -139,7 +170,7 @@ private fun ecuControlStatus(state: EcuControlState, pending: Boolean): String =
 @Composable
 private fun ecuControlStatusColor(state: EcuControlState, pending: Boolean): Color = when {
     state.error != null -> MaterialTheme.colorScheme.error
-    pending -> MaterialTheme.colorScheme.tertiary
+    pending || state.pending != null -> MaterialTheme.colorScheme.tertiary
     state.ready -> MaterialTheme.colorScheme.secondary
     else -> MaterialTheme.colorScheme.onSurfaceVariant
 }

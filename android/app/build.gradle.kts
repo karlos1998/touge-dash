@@ -25,8 +25,8 @@ android {
         applicationId = "it.letscode.tougedash"
         minSdk = 26
         targetSdk = 35
-        versionCode = 24
-        versionName = "1.8.10"
+        versionCode = 25
+        versionName = "1.9.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "API_BASE_URL", "\"https://touge-dash-engine.letscode.it\"")
@@ -82,7 +82,10 @@ android {
     )
     testOptions.unitTests.isIncludeAndroidResources = true
 
+    bundle.language.enableSplit = false
+
     sourceSets {
+        getByName("androidTest").assets.srcDir("$projectDir/schemas")
         getByName("debug") {
             java.srcDir("src/carPreview/java")
             res.srcDir("src/carPreview/res")
@@ -107,6 +110,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("androidx.lifecycle:lifecycle-service:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.navigation:navigation-compose:2.8.5")
@@ -153,7 +157,9 @@ dependencies {
     testImplementation("androidx.room:room-testing:2.6.1")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     testImplementation("androidx.test:core:1.6.1")
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-tooling")

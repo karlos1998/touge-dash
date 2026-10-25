@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -42,6 +43,8 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -169,9 +172,10 @@ fun TougeDashApp(
         while (videoSettings.automaticRecording) {
             val sessionId = container.historyRepository.activeSessionId()
             val activeVideoSessionId = sessionId.takeIf { connection.state == ConnectionState.Connected }
-            container.cameraRecordingController.stopWhenSessionEnds(activeVideoSessionId)
             if (activeVideoSessionId != null) {
-                container.cameraRecordingController.ensureAutomaticRecording(lifecycleOwner, activeVideoSessionId)
+                if (!it.letscode.tougedash.video.DriveRecordingService.running && lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                    runCatching { ContextCompat.startForegroundService(context, Intent(context, it.letscode.tougedash.video.DriveRecordingService::class.java)) }
+                }
             }
             delay(500)
         }
@@ -193,7 +197,7 @@ fun TougeDashApp(
         containerColor = MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onBackground,
         bottomBar = {
-            if (tab != 0) AppNavigationBar(tab, landscape) { tab = it }
+            if ((!landscape && !dashboardEditing) || tab != 0) AppNavigationBar(tab, landscape) { tab = it }
         }
     ) { padding ->
         DashboardBackdrop(Modifier.padding(padding)) {
@@ -223,7 +227,7 @@ fun TougeDashApp(
                     )
                 }
             }
-            if (tab == 0 && !dashboardEditing) DashboardNavigationOverlay(
+            if (tab == 0 && !dashboardEditing && landscape) DashboardNavigationOverlay(
                 expanded = dashboardNavigationVisible,
                 landscape = landscape,
                 reveal = { dashboardNavigationVisible = true },
@@ -251,7 +255,7 @@ private fun AppNavigationBar(selectedTab: Int, landscape: Boolean, overlay: Bool
             Triple(R.string.dashboard, Icons.Default.DirectionsCar, 0),
             Triple(R.string.history, Icons.Default.History, 1),
             Triple(R.string.alerts, Icons.Default.Notifications, 2),
-            Triple(R.string.more, Icons.Default.MoreHoriz, 3)
+            Triple(R.string.more, Icons.Default.Settings, 3)
         ).forEach { item ->
             NavigationBarItem(
                 selected = selectedTab == item.third,
@@ -385,6 +389,23 @@ private fun DriverDashboardHeader(
     toggleDashboardEditor: () -> Unit,
     showNavigation: () -> Unit
 ) {
+    if (!landscape) {
+        Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(42.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = .12f), CutCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                DashboardLogoMark(Modifier.size(26.dp))
+            }
+            Text("TOUGE\nDASH", fontSize = 14.sp, lineHeight = 16.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = toggleDashboardEditor, modifier = Modifier.size(36.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), RoundedCornerShape(10.dp))) {
+                Icon(if (dashboardEditing) Icons.Default.Done else Icons.Default.Tune, appText("Edit dashboard", "Edytuj dashboard"), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            }
+            Row(Modifier.widthIn(max = 140.dp).clickable(onClick = onConnection).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f), RoundedCornerShape(18.dp)).padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(6.dp).background(if (connection.state == ConnectionState.Connected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.error, CircleShape))
+                Text(connection.deviceName ?: connection.state.localizedLabel().uppercase(), Modifier.padding(start = 6.dp), fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        return
+    }
     val controlSize = if (landscape) 30.dp else 34.dp
     val touchSize = if (landscape) 38.dp else 44.dp
     Row(
@@ -419,7 +440,7 @@ private fun DriverDashboardHeader(
                 ) {
                     Icon(
                         if (dashboardEditing) Icons.Default.Done else Icons.Default.Edit,
-                        null,
+                        appText("Edit dashboard", "Edytuj dashboard"),
                         tint = if (dashboardEditing) Color.Black else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(if (landscape) 16.dp else 18.dp)
                     )
@@ -664,26 +685,45 @@ private fun ValueWidget(metric: TelemetryMetric, snapshot: TelemetrySnapshot, se
 @Composable
 private fun GaugeWidget(widget: DashboardWidget, snapshot: TelemetrySnapshot, sessionMaximums: Map<TelemetryMetric, Double>, accent: Color, compact: Boolean, fittedPortrait: Boolean) {
     val metric = widget.metrics.first()
-    val min = widget.gaugeMinimum ?: metric.defaultMin
-    val max = widget.gaugeMaximum ?: metric.defaultMax
-    val progress = ((metric.value(snapshot) - min) / (max - min)).coerceIn(0.0, 1.0).toFloat()
-    val gaugeTrack = MaterialTheme.colorScheme.onSurface.copy(alpha = .07f)
-    Box(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-            TelemetryGlyph(metric, accent, Modifier.size(if (compact) 15.dp else 20.dp))
+    val minimum = widget.gaugeMinimum ?: metric.defaultMin
+    val maximum = maxOf(minimum + .01, widget.gaugeMaximum ?: metric.defaultMax)
+    val progress = ((metric.value(snapshot) - minimum) / (maximum - minimum)).coerceIn(0.0, 1.0).toFloat()
+    val track = MaterialTheme.colorScheme.onSurface.copy(alpha = .10f)
+    val tick = MaterialTheme.colorScheme.onSurface
+    Column(Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TelemetryGlyph(metric, MaterialTheme.colorScheme.onSurfaceVariant, Modifier.size(if (compact) 12.dp else 14.dp))
+            Text(widget.title?.takeIf(String::isNotBlank)?.uppercase() ?: metric.localizedName(), Modifier.padding(start = 6.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp, maxLines = 1)
         }
-        Box(Modifier.fillMaxSize().padding(top = if (compact) 7.dp else 14.dp), contentAlignment = Alignment.Center) {
-            Canvas(Modifier.fillMaxHeight(.88f).aspectRatio(1f)) {
-                drawArc(gaugeTrack, 150f, 240f, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
-                drawArc(Brush.sweepGradient(listOf(TougeBlue, accent)), 150f, 240f * progress, false, style = Stroke(if (compact) 8.dp.toPx() else 12.dp.toPx(), cap = StrokeCap.Round))
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.BottomCenter) {
+            Canvas(Modifier.fillMaxSize()) {
+                val dimension = minOf(size.width, size.height * 1.28f)
+                val radius = dimension * .4f
+                val origin = Offset(size.width / 2, size.height * .58f)
+                val topLeft = Offset(origin.x - radius, origin.y - radius)
+                val arcSize = androidx.compose.ui.geometry.Size(radius * 2, radius * 2)
+                val lineWidth = (if (compact) 7.dp else 10.dp).toPx()
+                drawArc(track, 150f, 240f, false, topLeft, arcSize, style = Stroke(lineWidth, cap = StrokeCap.Round))
+                drawArc(accent, 150f, 240f * progress, false, topLeft, arcSize, style = Stroke(lineWidth, cap = StrokeCap.Round))
+                repeat(11) { index ->
+                    val angle = Math.toRadians(150.0 + index * 24.0)
+                    val cosine = kotlin.math.cos(angle).toFloat()
+                    val sine = kotlin.math.sin(angle).toFloat()
+                    val length = (if (compact) 7.dp else 11.dp).toPx()
+                    drawLine(tick.copy(alpha = if (index % 5 == 0) .75f else .25f),
+                        Offset(origin.x + cosine * (radius - length), origin.y + sine * (radius - length)),
+                        Offset(origin.x + cosine * radius, origin.y + sine * radius), (if (index % 5 == 0) 2.dp else 1.dp).toPx())
+                }
+                val angle = Math.toRadians(150.0 + 240.0 * progress)
+                drawLine(accent, origin, Offset(origin.x + kotlin.math.cos(angle).toFloat() * radius * .78f, origin.y + kotlin.math.sin(angle).toFloat() * radius * .78f), (if (compact) 3.dp else 4.dp).toPx(), cap = StrokeCap.Round)
+                drawCircle(accent, 5.dp.toPx(), origin)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(verticalAlignment = Alignment.Top) {
-                    Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 24.sp else if (fittedPortrait) 31.sp else 38.sp, lineHeight = if (compact) 25.sp else if (fittedPortrait) 32.sp else 39.sp, fontWeight = FontWeight.Black)
-                    SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 3.dp), compact || fittedPortrait)
+                    Text(metric.format(metric.value(snapshot)), fontSize = if (compact) 23.sp else 34.sp, lineHeight = if (compact) 25.sp else 36.sp, fontWeight = FontWeight.Black)
+                    SessionMaximumText(metric, sessionMaximums[metric], Modifier.padding(start = 3.dp), compact)
                 }
-                Text(metric.unit, color = accent, fontSize = if (compact) 8.sp else if (fittedPortrait) 9.sp else 10.sp, fontWeight = FontWeight.Black)
+                Text(metric.unit, color = accent, fontSize = if (compact) 8.sp else 10.sp, fontWeight = FontWeight.Black)
             }
         }
     }
@@ -936,6 +976,18 @@ private fun MoreScreen(
                     }
                 }
             }
+            val segmentLength by container.driveSegmentSettings.length.collectAsState()
+            TougePanelSurface(MaterialTheme.colorScheme.primary, Modifier.fillMaxWidth().padding(top = 10.dp)) {
+                Column(Modifier.padding(14.dp)) {
+                    Text(appText("Automatic drive splitting", "Automatyczne dzielenie przejazdu"), fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        it.letscode.tougedash.history.DriveSegmentLength.entries.forEach { length ->
+                            FilterChip(segmentLength == length, { container.driveSegmentSettings.update(length) }, label = { Text(if (length.minutes == 60) appText("1 hour", "1 godz.") else "${length.minutes} min") })
+                        }
+                    }
+                    Text(appText("Telemetry and video start a new segment together without disconnecting Bluetooth.", "Telemetria i film rozpoczynają razem nowy odcinek bez rozłączania Bluetooth."), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             TougePanelSurface(MaterialTheme.colorScheme.tertiary, Modifier.fillMaxWidth().padding(top = 10.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1094,16 +1146,17 @@ private fun ConnectionDialog(connection: TelemetryConnection, close: () -> Unit,
 internal fun DashboardAccent.color(): Color = when (this) {
     DashboardAccent.CYAN -> MaterialTheme.colorScheme.primary
     DashboardAccent.MINT -> MaterialTheme.colorScheme.secondary
-    DashboardAccent.BLUE, DashboardAccent.ICE -> TougeBlue
+    DashboardAccent.BLUE -> if (MaterialTheme.colorScheme.background.red < .5f) TougeBlue else Color(0xFF1461E0)
+    DashboardAccent.ICE -> if (MaterialTheme.colorScheme.background.red < .5f) Color(0xFF61BFFF) else Color(0xFF0D7AC7)
     DashboardAccent.ORANGE -> MaterialTheme.colorScheme.tertiary
-    DashboardAccent.YELLOW -> Color(0xFFFFC83D)
+    DashboardAccent.YELLOW -> if (MaterialTheme.colorScheme.background.red < .5f) Color(0xFFFFC430) else Color(0xFFB87800)
     DashboardAccent.RED -> MaterialTheme.colorScheme.error
     DashboardAccent.WHITE -> MaterialTheme.colorScheme.onBackground
 }
 
 @Composable
 internal fun TelemetryMetric.format(value: Double): String {
-    val locale = if (LocalConfiguration.current.locales[0].language == "pl") Locale.forLanguageTag("pl-PL") else Locale.US
+    val locale = if (LocalAppLocale.current.language == "pl") Locale.forLanguageTag("pl-PL") else Locale.US
     return when (precision) {
         0 -> value.roundToInt().toString()
         1 -> String.format(locale, "%.1f", value)

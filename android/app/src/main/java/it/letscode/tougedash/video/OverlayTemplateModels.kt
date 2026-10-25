@@ -9,6 +9,7 @@ import java.util.UUID
 @Serializable
 enum class OverlayElementKind {
     DIGITAL,
+    TELEMETRY_TIMESTAMP,
     GAUGE,
     BAR,
     SPEED_CLUSTER,
@@ -274,3 +275,18 @@ data class VideoOverlayTemplate(
     val entity: OverlayTemplateEntity,
     val definition: VideoOverlayTemplateDefinition
 )
+
+
+/** Legacy enum migration must only touch metric/accent fields. A dashboard
+ * migration also lowercases GAUGE, which invalidates video widget kinds. */
+internal fun normalizeVideoOverlayJson(value: String): String {
+    fun visit(element: kotlinx.serialization.json.JsonElement): kotlinx.serialization.json.JsonElement = when (element) {
+        is kotlinx.serialization.json.JsonObject -> kotlinx.serialization.json.JsonObject(element.mapValues { (key, child) ->
+            if (key == "metric" || key == "accent") kotlinx.serialization.json.Json.parseToJsonElement(it.letscode.tougedash.dashboard.normalizeLegacyDashboardJson(child.toString()))
+            else visit(child)
+        })
+        is kotlinx.serialization.json.JsonArray -> kotlinx.serialization.json.JsonArray(element.map(::visit))
+        else -> element
+    }
+    return visit(kotlinx.serialization.json.Json.parseToJsonElement(value)).toString()
+}

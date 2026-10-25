@@ -3,9 +3,17 @@
 package it.letscode.tougedash.ui
 
 import android.net.Uri
-import android.graphics.Color as AndroidColor
-import android.graphics.Paint as AndroidPaint
-import android.graphics.Typeface
+import it.letscode.tougedash.R
+import androidx.compose.material3.Switch
+import androidx.compose.ui.platform.LocalConfiguration
+import it.letscode.tougedash.video.TelemetryBitmapOverlay
+import it.letscode.tougedash.video.VideoTimeline
+import it.letscode.tougedash.video.DriveVideoExportQuality
+import it.letscode.tougedash.video.RouteMapSnapshot
+import it.letscode.tougedash.video.createRouteMapSnapshot
+import it.letscode.tougedash.video.bounds
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -78,7 +86,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -88,10 +95,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.boundsInParent
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -120,64 +126,114 @@ import it.letscode.tougedash.video.VideoOverlayElement
 import it.letscode.tougedash.video.VideoOverlayTemplate
 import it.letscode.tougedash.video.VideoOverlayTemplateDefinition
 import kotlinx.coroutines.delay
-import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Polyline
 import kotlin.math.roundToInt
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.math.abs
 
 @Composable
-fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samples: List<TelemetrySampleEntity>, scrubber: Float) {
+fun DriveVideoSection(container: AppContainer, session: DriveSessionEntity, samples: List<TelemetrySampleEntity>, scrubber: Float, onScrub: (Long) -> Unit = {}) {
     val videos by container.historyRepository.videos(session.id).collectAsState(initial = emptyList())
     val task by container.videoRepository.task.collectAsState()
-    var editing by remember { mutableStateOf<VideoProjectEntity?>(null) }
+    val cameraTask by container.seventyMaiImporter.state.collectAsState()
+    var editing by remember(session.id) { mutableStateOf<VideoProjectEntity?>(null) }
+    var deleting by remember { mutableStateOf<VideoProjectEntity?>(null) }
+    var cameraImport by remember { mutableStateOf(false) }
+    var selectedRecordingId by remember { mutableStateOf<String?>(null) }
+    val captured = videos.filter { it.sourceKind == "CAMERA" }
+    val external = videos.filter { it.sourceKind != "CAMERA" }
+    val selectedRecording = captured.firstOrNull { it.id == selectedRecordingId } ?: captured.firstOrNull()
     val driveDuration = (session.endedAt - session.startedAt).coerceAtLeast(1) / 1000.0
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { container.videoRepository.importFromGallery(session.id, driveDuration, it) }
     }
-    Column(Modifier.fillMaxWidth().padding(14.dp)) {
-        Column {
-            Text("VIDEO + TELEMETRY", color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Text(appText("Synchronized drive footage", "Nagrania zsynchronizowane z przejazdem"), fontWeight = FontWeight.Black)
-        }
-        Button(
-            onClick = { picker.launch("video/*") },
-            modifier = Modifier.fillMaxWidth().padding(top = 10.dp).heightIn(min = 44.dp)
-        ) {
-            Icon(Icons.Default.VideoLibrary, null, Modifier.size(18.dp))
-            Text(appText(" Use my video", " Użyj mojego filmu"))
-        }
-        if (task.operation != null) {
-            Card(Modifier.fillMaxWidth().padding(top = 10.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.padding(12.dp)) {
-                    Text(localizedVideoOperation(task.operation!!), fontWeight = FontWeight.Bold)
-                    LinearProgressIndicator(progress = { task.progress }, modifier = Modifier.fillMaxWidth().padding(top = 7.dp))
-                    Text("${(task.progress * 100).roundToInt()}%${if (task.totalBytes > 0) "  •  ${videoBytes(task.transferredBytes)} / ${videoBytes(task.totalBytes)}" else ""}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
-                    if (task.completed && task.outputWidth > 0) {
-                        val codec = if (task.outputVideoMimeType?.contains("hevc", ignoreCase = true) == true) "HEVC" else "H.264"
-                        val bitrate = task.outputVideoBitrate.takeIf { it > 0 }?.let { " • %.1f Mb/s".format(it / 1_000_000.0) }.orEmpty()
-                        Text(
-                            "$codec • ${task.outputWidth}×${task.outputHeight}$bitrate${if (task.outputHasAudio) " • audio" else ""}",
-                            color = TougeCyan,
-                            fontSize = 10.sp
-                        )
-                    }
-                    task.error?.let { Text(it, color = TougeRed) }
-                    if (task.completed || task.error != null) TextButton(onClick = container.videoRepository::clearTask) { Text(appText("Close", "Zamknij")) }
-                    else if (task.operation == "Rendering telemetry HUD") TextButton(onClick = container.videoRepository::cancelExport) { Text(appText("Cancel export", "Anuluj eksport"), color = TougeRed) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        VideoSectionPanel(TougeCyan) {
+            Text(appText("APP RECORDINGS", "NAGRANIA Z APLIKACJI"), color = TougeCyan, fontSize = 11.sp, fontWeight = FontWeight.Black)
+            Text(appText("Touge Dash camera · automatically synchronized with the drive", "Kamera Touge Dash · automatyczna synchronizacja z przejazdem"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            if (captured.isEmpty()) {
+                Text(appText("No Touge Dash camera recording", "Brak nagrania z kamery Touge Dash"), Modifier.padding(top = 14.dp), fontWeight = FontWeight.Bold)
+                Text(appText("This drive contains telemetry; in-app video recording was inactive.", "Ten przejazd zachował telemetrię, ale nagrywanie w aplikacji nie było aktywne."), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                selectedRecording?.let { recording ->
+                    SynchronizedDrivePlayer(recording, session, scrubber, onScrub)
+                    Button(onClick = { editing = recording }, modifier = Modifier.fillMaxWidth()) { Text(appText("Export video", "Eksport filmu")) }
                 }
+                VideoGroup(appText("RECORDINGS", "NAGRANIA"), captured, editing = { selectedRecordingId = it.id }, delete = { deleting = it })
             }
         }
-        VideoGroup(appText("RECORDED BY TOUGE DASH", "NAGRANE PRZEZ TOUGE DASH"), videos.filter { it.sourceKind == "CAMERA" }, editing = { editing = it }, delete = container.videoRepository::delete)
-        VideoGroup(appText("GALLERY EDITS", "PROJEKTY Z GALERII"), videos.filter { it.sourceKind == "GALLERY" }, editing = { editing = it }, delete = container.videoRepository::delete)
-        if (videos.isEmpty() && task.operation == null) Text(appText("Record a drive with the phone camera or attach footage from a dashcam. The source video stays local on this device.", "Nagraj przejazd kamerą telefonu albo dodaj film z wideorejestratora. Film źródłowy pozostaje lokalnie na tym urządzeniu."), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+        VideoSectionPanel(TougeMint) {
+            Text(appText("EDIT YOUR OWN VIDEO", "MONTAŻ Z WŁASNEGO FILMU"), color = TougeMint, fontSize = 11.sp, fontWeight = FontWeight.Black)
+            Text(appText("Separate projects · manual telemetry alignment", "Osobne projekty · ręczne dopasowanie telemetrii"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { picker.launch("video/*") }, enabled = !container.videoRepository.isBusy && !cameraTask.busy, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.VideoLibrary, null, Modifier.size(18.dp))
+                    Text(appText(" Library", " Biblioteka"))
+                }
+                OutlinedButton(onClick = { container.seventyMaiImporter.clear(); cameraImport = true }, enabled = !container.videoRepository.isBusy, modifier = Modifier.weight(1f)) { Text("70mai") }
+            }
+            if (cameraTask.busy) TextButton(onClick = { cameraImport = true }) { Text(appText("70mai import in progress…", "Trwa import 70mai…")) }
+            if (external.isEmpty()) {
+                Text(appText("No video edit for this drive yet", "Nie masz jeszcze montażu dla tego przejazdu"), Modifier.padding(top = 10.dp), fontWeight = FontWeight.Bold)
+                Text(appText("Choose a video, match a telemetry fragment and export a copy with a HUD.", "Wybierz film, wskaż odpowiadający mu fragment danych i wyeksportuj gotową kopię z HUD-em."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            } else VideoGroup(appText("VIDEO PROJECTS", "PROJEKTY FILMÓW"), external, editing = { editing = it }, delete = { deleting = it })
+            Text(appText("A local working copy keeps your project editable. Videos are not uploaded to the cloud.", "Lokalna kopia robocza pozwala wrócić do edycji projektu. Filmy nie trafiają do chmury."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+        }
+        if (task.operation != null || task.error != null) VideoSectionPanel(TougeCyan) {
+            Text(localizedVideoOperation(task.operation ?: ""), fontWeight = FontWeight.Bold)
+            LinearProgressIndicator(progress = { task.progress }, modifier = Modifier.fillMaxWidth())
+            Text("${(task.progress * 100).roundToInt()}%${if (task.totalBytes > 0) " · ${videoBytes(task.transferredBytes)} / ${videoBytes(task.totalBytes)}" else ""}", fontSize = 11.sp)
+            if (task.completed && task.outputWidth > 0) Text("${task.outputWidth}×${task.outputHeight} · ${if (task.outputVideoMimeType?.contains("hevc") == true) "HEVC" else "H.264"}${if (task.outputHasAudio) " · audio" else ""}", color = TougeCyan)
+            task.error?.let { Text(it, color = TougeRed) }
+            TextButton(onClick = { if (task.completed || task.error != null) container.videoRepository.clearTask() else container.videoRepository.cancelExport() }) {
+                Text(if (task.completed || task.error != null) appText("Close", "Zamknij") else appText("Cancel", "Anuluj"))
+            }
+        }
     }
-    editing?.let { project -> VideoAlignmentEditor(project, driveDuration, samples, container, { editing = null }, { changed -> container.videoRepository.update(changed); editing = changed }) }
+    if (cameraImport) SeventyMaiImportDialog(container, session) { cameraImport = false }
+    deleting?.let { project ->
+        AlertDialog(onDismissRequest = { deleting = null }, title = { Text(appText("Delete video?", "Usunąć film?")) },
+            text = { Text(appText("The local source and project will be deleted. Drive telemetry remains available.", "Lokalny film źródłowy i projekt zostaną usunięte. Telemetria przejazdu pozostanie dostępna.")) },
+            confirmButton = { TextButton(onClick = { container.videoRepository.delete(project); deleting = null }) { Text(appText("Delete", "Usuń"), color = TougeRed) } },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text(appText("Cancel", "Anuluj")) } })
+    }
+    editing?.let { project -> VideoAlignmentEditor(project, session, driveDuration, samples, container, { editing = null }, container.videoRepository::update) }
+}
+
+@Composable
+private fun VideoSectionPanel(accent: Color, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    TougePanelSurface(accent, Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    }
+}
+
+@Composable
+private fun SynchronizedDrivePlayer(project: VideoProjectEntity, session: DriveSessionEntity, scrubber: Float, onScrub: (Long) -> Unit) {
+    val context = LocalContext.current
+    val timeline = remember(project) { VideoTimeline.from(project) }
+    val player = remember(project.id) { ExoPlayer.Builder(context).build().apply { setMediaItem(MediaItem.fromUri(project.localUri)); prepare() } }
+    val latestScrub by rememberUpdatedState(onScrub)
+    var lastReported by remember(project.id) { mutableLongStateOf(Long.MIN_VALUE) }
+    DisposableEffect(player) { onDispose { player.release() } }
+    val selected = session.startedAt + ((session.endedAt - session.startedAt) * scrubber).toLong()
+    LaunchedEffect(selected) {
+        if (lastReported == Long.MIN_VALUE || kotlin.math.abs(selected - lastReported) > 250) {
+            val seconds = timeline.videoAt((selected - session.startedAt) / 1000.0).coerceIn(timeline.videoStart, timeline.videoStart + timeline.duration)
+            player.seekTo((seconds * 1000).toLong())
+        }
+    }
+    LaunchedEffect(player, timeline) {
+        var previous = -1L
+        while (true) {
+            val position = player.currentPosition
+            if (position != previous && (player.isPlaying || kotlin.math.abs(position - previous) > 250)) {
+                lastReported = session.startedAt + (timeline.telemetryAt(position / 1000.0) * 1000).toLong()
+                latestScrub(lastReported)
+                previous = position
+            }
+            delay(100)
+        }
+    }
+    AndroidView(factory = { (android.view.LayoutInflater.from(it).inflate(R.layout.drive_video_player, null) as PlayerView).apply { useController = true; this.player = player } }, modifier = Modifier.fillMaxWidth().aspectRatio(project.pixelWidth.coerceAtLeast(1).toFloat() / project.pixelHeight.coerceAtLeast(1)))
 }
 
 @Composable
@@ -202,6 +258,7 @@ private fun VideoGroup(title: String, videos: List<VideoProjectEntity>, editing:
 @Composable
 private fun VideoAlignmentEditor(
     initial: VideoProjectEntity,
+    session: DriveSessionEntity,
     driveDuration: Double,
     samples: List<TelemetrySampleEntity>,
     container: AppContainer,
@@ -209,7 +266,22 @@ private fun VideoAlignmentEditor(
     save: (VideoProjectEntity) -> Unit
 ) {
     val context = LocalContext.current
-    var value by remember(initial.id) { mutableStateOf(initial) }
+    var pendingExport by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val galleryPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) pendingExport?.invoke()
+        pendingExport = null
+    }
+    var thumbnails by remember(initial.id) { mutableStateOf<List<android.graphics.Bitmap>>(emptyList()) }
+    LaunchedEffect(initial.id) {
+        thumbnails = runCatching { it.letscode.tougedash.video.loadVideoTimelineThumbnails(context, Uri.parse(initial.localUri), initial.durationSeconds) }.getOrDefault(emptyList())
+    }
+    val editorConfiguration = LocalConfiguration.current
+    val landscapeEditor = editorConfiguration.screenWidthDp > editorConfiguration.screenHeightDp
+    var value by remember(initial.id) { mutableStateOf(VideoTimeline.from(initial).normalized(initial.durationSeconds, driveDuration).applyTo(initial)) }
+    var addsOverlay by remember(initial.id) { mutableStateOf(true) }
+    val exportPreferences = remember { context.getSharedPreferences("video-export", 0) }
+    var exportQuality by remember { mutableStateOf(runCatching { DriveVideoExportQuality.valueOf(exportPreferences.getString("quality", "FAST_FULL_HD")!!) }.getOrDefault(DriveVideoExportQuality.FAST_FULL_HD)) }
+    var loadedTemplateId by remember(initial.id) { mutableStateOf<String?>(null) }
     val templates by container.videoRepository.overlayTemplates.collectAsState(initial = emptyList())
     var templateId by remember(initial.id) { mutableStateOf(initial.overlayTemplateId ?: "RACE") }
     var overlayDefinition by remember(initial.id) { mutableStateOf(VideoOverlayTemplateDefinition(runCatching { OverlayStyle.valueOf(initial.overlayTemplateId ?: "RACE") }.getOrDefault(OverlayStyle.RACE))) }
@@ -226,13 +298,28 @@ private fun VideoAlignmentEditor(
                 templateId = it.entity.id
                 value = value.copy(overlayTemplateId = it.entity.id)
             }
-            overlayDefinition = it.definition.copy(elements = it.definition.resolvedElements())
-            selectedElementId = overlayDefinition.elements.firstOrNull()?.id
+            if (loadedTemplateId != templateId) {
+                overlayDefinition = if (loadedTemplateId == null) {
+                    initial.overlayDefinitionJson?.let { draft -> runCatching { container.json.decodeFromString<VideoOverlayTemplateDefinition>(draft) }.getOrNull() }
+                        ?: it.definition.copy(elements = it.definition.resolvedElements())
+                } else it.definition.copy(elements = it.definition.resolvedElements())
+                loadedTemplateId = templateId
+                selectedElementId = null
+            }
         }
     }
+    var previewReady by remember(initial.id) { mutableStateOf(false) }
+    var playbackError by remember(initial.id) { mutableStateOf<String?>(null) }
     val player = remember(initial.id) { ExoPlayer.Builder(context).build().apply { setMediaItem(MediaItem.fromUri(initial.localUri)); prepare(); seekTo((initial.videoTrimStartSeconds * 1000).toLong()) } }
     var position by remember { mutableLongStateOf((initial.videoTrimStartSeconds * 1000).toLong()) }
-    DisposableEffect(player) { onDispose { player.release() } }
+    DisposableEffect(player) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onRenderedFirstFrame() { previewReady = true }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { playbackError = error.localizedMessage }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener); player.release() }
+    }
     LaunchedEffect(player) {
         while (true) {
             position = player.currentPosition
@@ -247,7 +334,7 @@ private fun VideoAlignmentEditor(
         }
     }
     val telemetrySecond = value.telemetryTrimStartSeconds + (position / 1000.0 - value.videoTrimStartSeconds).coerceAtLeast(0.0)
-    val first = samples.firstOrNull()?.recordedAt ?: 0
+    val first = session.startedAt
     val previewRecordedAt = (first + telemetrySecond * 1000).toLong()
     val sample = samples.nearestTo(previewRecordedAt)
     val transformElement: (String, Float, Float, Float) -> Unit = { id, dx, dy, zoom ->
@@ -266,10 +353,12 @@ private fun VideoAlignmentEditor(
     val currentElementBounds by rememberUpdatedState(elementBounds)
     val preview: @Composable BoxScope.() -> Unit = {
         AndroidView(
-            factory = { PlayerView(it).apply { useController = false; this.player = player } },
+            factory = { (android.view.LayoutInflater.from(it).inflate(R.layout.drive_video_player, null) as PlayerView).apply { this.player = player } },
             modifier = Modifier.fillMaxSize()
         )
-        sample?.let { current ->
+        if (previewReady) Box(Modifier.size(1.dp).testTag("video-ready"))
+        playbackError?.let { Text(it, color = TougeRed, modifier = Modifier.align(Alignment.Center)) }
+        if (addsOverlay) sample?.let { current ->
             EditableHudPreview(
                 sample = current,
                 samples = samples,
@@ -291,7 +380,7 @@ private fun VideoAlignmentEditor(
                 requestDelete = { deletingElementId = it }
             )
         }
-        Box(
+        if (addsOverlay) Box(
             Modifier
                 .align(Alignment.TopEnd)
                 .padding(10.dp)
@@ -309,6 +398,15 @@ private fun VideoAlignmentEditor(
                 expanded = widgetMenuOpen,
                 onDismissRequest = { widgetMenuOpen = false }
             ) {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(appText("Telemetry date and time", "Data i czas telemetrii")) },
+                    onClick = {
+                        val widget = VideoOverlayElement(metric = TelemetryMetric.SPEED, kind = OverlayElementKind.TELEMETRY_TIMESTAMP, landscapePosition = OverlayPosition(.5f, .11f), portraitPosition = OverlayPosition(.5f, .1f))
+                        overlayDefinition = overlayDefinition.copy(elements = overlayDefinition.elements + widget, allowsEmptyLayout = true)
+                        selectedElementId = widget.id
+                        widgetMenuOpen = false
+                    }
+                )
                 templates.forEach { template ->
                     template.definition.resolvedElements().forEach { source ->
                         androidx.compose.material3.DropdownMenuItem(
@@ -350,7 +448,7 @@ private fun VideoAlignmentEditor(
     }
     val controls: @Composable () -> Unit = {
         Column(
-            Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             Text(appText("CHOOSE CLIP TO EXPORT", "WYBIERZ FRAGMENT DO EKSPORTU"), color = TougeOrange, fontSize = 10.sp, fontWeight = FontWeight.Black)
             Row(Modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -390,32 +488,19 @@ private fun VideoAlignmentEditor(
                     start = value.videoTrimStartSeconds,
                     end = value.videoTrimStartSeconds + value.exportDurationSeconds,
                     cursor = position / 1000.0,
-                    speedValues = samples.map { it.speedKph },
+                    speedValues = emptyList(),
+                    thumbnails = thumbnails,
                     startChanged = { requested ->
-                        val oldStart = value.videoTrimStartSeconds
-                        val oldEnd = oldStart + value.exportDurationSeconds
-                        val newStart = requested.coerceIn(0.0, (oldEnd - .1).coerceAtLeast(0.0))
-                        val delta = newStart - oldStart
-                        val newDuration = oldEnd - newStart
-                        val newTelemetryStart = (value.telemetryTrimStartSeconds + delta)
-                            .coerceIn(0.0, (driveDuration - newDuration).coerceAtLeast(0.0))
-                        value = value.copy(
-                            videoTrimStartSeconds = newStart,
-                            telemetryTrimStartSeconds = newTelemetryStart,
-                            exportDurationSeconds = newDuration
-                        )
+                        value = VideoTimeline.from(value).trimStart(requested).applyTo(value)
+                        val newStart = value.videoTrimStartSeconds
                         player.pause()
                         val target = (newStart * 1000).toLong()
                         player.seekTo(target)
                         position = target
                     },
                     endChanged = { requested ->
-                        val maximumEnd = minOf(
-                            value.durationSeconds,
-                            value.videoTrimStartSeconds + driveDuration - value.telemetryTrimStartSeconds
-                        )
-                        val newEnd = requested.coerceIn(value.videoTrimStartSeconds + .1, maximumEnd.coerceAtLeast(value.videoTrimStartSeconds + .1))
-                        value = value.copy(exportDurationSeconds = newEnd - value.videoTrimStartSeconds)
+                        value = VideoTimeline.from(value).trimEnd(requested, value.durationSeconds, driveDuration).applyTo(value)
+                        val newEnd = value.videoTrimStartSeconds + value.exportDurationSeconds
                         player.pause()
                         val target = (newEnd * 1000).toLong()
                         player.seekTo(target)
@@ -450,6 +535,13 @@ private fun VideoAlignmentEditor(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 5.dp)
                     )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        listOf(-10.0, -1.0, 1.0, 10.0).forEach { delta ->
+                            TextButton(onClick = {
+                                value = value.copy(telemetryTrimStartSeconds = (value.telemetryTrimStartSeconds + delta).coerceIn(0.0, (driveDuration - value.exportDurationSeconds).coerceAtLeast(0.0)))
+                            }) { Text("${if (delta > 0) "+" else ""}${delta.toInt()} s") }
+                        }
+                    }
                     Slider(
                         value.telemetryTrimStartSeconds.toFloat(),
                         {
@@ -464,19 +556,35 @@ private fun VideoAlignmentEditor(
                 }
             }
 
-            Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(appText("Render telemetry on video", "Nanieś parametry na film"), Modifier.weight(1f), fontWeight = FontWeight.Bold)
+                Switch(addsOverlay, { addsOverlay = it })
+            }
+            Text(appText("EXPORT QUALITY", "JAKOŚĆ EKSPORTU"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                templates.forEach { item ->
-                    FilterChip(
-                        selected = templateId == item.entity.id,
-                        onClick = {
+                DriveVideoExportQuality.entries.forEach { quality ->
+                    FilterChip(exportQuality == quality, {
+                        exportQuality = quality
+                        exportPreferences.edit().putString("quality", quality.name).apply()
+                    }, label = { Text(if (quality == DriveVideoExportQuality.FAST_FULL_HD) appText("Fast · 1080p", "Szybki · 1080p") else appText("Original resolution", "Oryginalna rozdzielczość")) })
+                }
+            }
+            Text(if (exportQuality == DriveVideoExportQuality.FAST_FULL_HD) appText("Faster export and smaller file, still in high quality", "Szybszy eksport i mniejszy plik, nadal w wysokiej jakości") else appText("Full camera resolution and longer rendering time", "Pełna rozdzielczość kamery i dłuższy czas renderowania"), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (addsOverlay) {
+            Text(appText("HUD TEMPLATE", "SZABLON HUD"), color = TougeCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 14.dp))
+            var templateMenu by remember { mutableStateOf(false) }
+            Box {
+                OutlinedButton(onClick = { templateMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(templates.firstOrNull { it.entity.id == templateId }?.entity?.name ?: "HUD") }
+                androidx.compose.material3.DropdownMenu(templateMenu, { templateMenu = false }) {
+                    templates.forEach { item ->
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(item.entity.name) }, onClick = {
                             templateId = item.entity.id
                             overlayDefinition = item.definition.copy(elements = item.definition.resolvedElements())
-                            selectedElementId = overlayDefinition.elements.firstOrNull()?.id
+                            selectedElementId = null
                             value = value.copy(overlayTemplateId = item.entity.id)
-                        },
-                        label = { Text(item.entity.name) }
-                    )
+                            templateMenu = false
+                        })
+                    }
                 }
             }
             Text(appText("Drag HUD elements and pinch with two fingers to resize. Tap a widget to reveal its remove button. Portrait and landscape layouts are stored separately.", "Przeciągaj elementy HUD i uszczypnij dwoma palcami, aby zmienić rozmiar. Stuknij widget, aby pokazać przycisk usuwania. Układ pionowy i poziomy zapisuje się osobno."), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp)
@@ -488,29 +596,12 @@ private fun VideoAlignmentEditor(
                 onClick = { editingTemplate = templates.firstOrNull { it.entity.id == templateId }?.copy(definition = overlayDefinition) },
                 modifier = Modifier.fillMaxWidth()
             ) { Icon(Icons.Default.Tune, null); Text(appText(" Edit HUD parameters", " Edytuj parametry HUD")) }
+            }
         }
     }
-    Dialog(
-        onDismissRequest = dismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
-    ) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = dismiss) { Icon(Icons.Default.Close, appText("Close", "Zamknij")) }
-                    Column(Modifier.weight(1f)) {
-                        Text(appText("VIDEO + TELEMETRY", "WIDEO + TELEMETRIA"), color = TougeCyan, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                        Text(appText("Align and arrange HUD", "Dopasuj film i ustaw HUD"), fontWeight = FontWeight.Black)
-                    }
-                    TextButton(onClick = { save(value.copy(overlayTemplateId = templateId)); dismiss() }) {
-                        Text(appText("Save", "Zapisz"))
-                    }
-                }
-                BoxWithConstraints(
-                    Modifier.fillMaxWidth().weight(1f).background(Color.Black),
+    val stage: @Composable (Modifier) -> Unit = { stageModifier ->
+        BoxWithConstraints(
+                    stageModifier.background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
                     val aspect = initial.pixelWidth.coerceAtLeast(1).toFloat() / initial.pixelHeight.coerceAtLeast(1)
@@ -521,6 +612,7 @@ private fun VideoAlignmentEditor(
                     }
                     Box(
                         stageModifier
+                            .testTag("hud-preview")
                             .background(Color.Black)
                             .onSizeChanged { previewSize = it }
                             .pointerInput(portraitVideo, previewSize) {
@@ -563,21 +655,66 @@ private fun VideoAlignmentEditor(
                         content = preview
                     )
                 }
-                Box(Modifier.fillMaxWidth().heightIn(max = 440.dp).background(MaterialTheme.colorScheme.surface)) { controls() }
+    }
+    Dialog(
+        onDismissRequest = dismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        val dialogView = androidx.compose.ui.platform.LocalView.current
+        val background = MaterialTheme.colorScheme.background.toArgb()
+        androidx.compose.runtime.SideEffect {
+            (dialogView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window?.apply {
+                setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+                setBackgroundDrawable(android.graphics.drawable.ColorDrawable(background))
+            }
+        }
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = dismiss) { Icon(Icons.Default.Close, appText("Close", "Zamknij")) }
+                    Column(Modifier.weight(1f)) {
+                        Text(appText("VIDEO + TELEMETRY", "WIDEO + TELEMETRIA"), color = TougeCyan, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        Text(appText("Align and arrange HUD", "Dopasuj film i ustaw HUD"), fontWeight = FontWeight.Black)
+                    }
+                    TextButton(onClick = { save(value.copy(overlayTemplateId = templateId, overlayDefinitionJson = container.json.encodeToString(overlayDefinition))); dismiss() }) {
+                        Text(appText("Save", "Zapisz"))
+                    }
+                }
+                if (landscapeEditor) {
+                    Row(Modifier.fillMaxWidth().weight(1f)) {
+                        stage(Modifier.weight(1.45f).fillMaxHeight())
+                        Box(Modifier.weight(1f).fillMaxHeight().verticalScroll(androidx.compose.foundation.rememberScrollState())) { controls() }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                        val aspect = initial.pixelWidth.coerceAtLeast(1).toFloat() / initial.pixelHeight.coerceAtLeast(1)
+                        stage(Modifier.fillMaxWidth().aspectRatio(aspect).heightIn(max = 560.dp))
+                        controls()
+                    }
+                }
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
-                        onClick = { save(value.copy(overlayTemplateId = templateId)); dismiss() },
+                        onClick = { save(value.copy(overlayTemplateId = templateId, overlayDefinitionJson = container.json.encodeToString(overlayDefinition))); dismiss() },
                         modifier = Modifier.weight(1f)
                     ) { Text(appText("Save project", "Zapisz projekt")) }
                     Button(
                         onClick = {
-                            val exportValue = value.copy(overlayTemplateId = templateId)
+                            val exportValue = value.copy(overlayTemplateId = templateId, overlayDefinitionJson = container.json.encodeToString(overlayDefinition))
                             save(exportValue)
-                            container.videoRepository.export(exportValue, samples, overlayDefinition)
-                            dismiss()
+                            val begin = {
+                                container.videoRepository.export(exportValue, samples, overlayDefinition, addsOverlay, exportQuality, session.startedAt)
+                                dismiss()
+                            }
+                            if (android.os.Build.VERSION.SDK_INT < 29 && androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                pendingExport = begin
+                                galleryPermission.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                            } else begin()
                         },
                         modifier = Modifier.weight(1f)
                     ) {
@@ -634,7 +771,8 @@ private fun VideoTrimRangeSelector(
     startChanged: (Double) -> Unit,
     endChanged: (Double) -> Unit,
     cursorChanged: (Double) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    thumbnails: List<android.graphics.Bitmap> = emptyList()
 ) {
     val currentStart by rememberUpdatedState(start)
     val currentEnd by rememberUpdatedState(end)
@@ -697,6 +835,11 @@ private fun VideoTrimRangeSelector(
         val cursorX = (width * (cursor.coerceIn(start, end) / safeTotal).toFloat()).coerceIn(left, right)
 
         drawRect(Color.White.copy(alpha = .08f))
+        thumbnails.forEachIndexed { index, thumbnail ->
+            val left = width * index / thumbnails.size
+            val right = width * (index + 1) / thumbnails.size
+            drawContext.canvas.nativeCanvas.drawBitmap(thumbnail, null, android.graphics.RectF(left, 0f, right, size.height), null)
+        }
         if (speedValues.size > 1) {
             val maximum = speedValues.maxOrNull()?.coerceAtLeast(1.0) ?: 1.0
             val path = Path()
@@ -745,6 +888,7 @@ private fun VideoTrimRangeSelector(
 @Composable
 private fun widgetKindName(kind: OverlayElementKind) = when (kind) {
     OverlayElementKind.DIGITAL -> appText("Digital value", "Wartość cyfrowa")
+    OverlayElementKind.TELEMETRY_TIMESTAMP -> appText("Telemetry date and time", "Data i czas telemetrii")
     OverlayElementKind.GAUGE -> appText("Gauge", "Zegar")
     OverlayElementKind.BAR -> appText("Telemetry bar", "Pasek telemetrii")
     OverlayElementKind.SPEED_CLUSTER -> appText("Speed cluster", "Zespół prędkości")
@@ -789,69 +933,44 @@ private fun BoxScope.EditableHudPreview(
     mapZoom: (String, Float) -> Unit,
     requestDelete: (String) -> Unit
 ) {
+    if (canvasSize.width <= 0 || canvasSize.height <= 0) return
+    val context = LocalContext.current
     val density = LocalDensity.current
-    val previewWidthDp = with(density) { canvasSize.width.toDp().value }
-    val fitScale = (previewWidthDp / if (portrait) 430f else 760f).coerceIn(.34f, .9f)
+    val timestampLabel = appText("TELEMETRY TIME", "CZAS TELEMETRII")
+    val locale = LocalAppLocale.current
+    var routeMap by remember(samples) { mutableStateOf<RouteMapSnapshot?>(null) }
+    val needsMap = definition.elements.any { it.kind.isRouteMap }
+    val needsDetailedMap = definition.elements.any { it.kind.isRouteMap && it.mapZoom > 1.85f }
+    LaunchedEffect(samples, needsMap, needsDetailedMap) {
+        if (needsMap) routeMap = createRouteMapSnapshot(context, samples, includesDetailedLayer = needsDetailedMap)
+    }
+    val renderer = remember(samples, definition, canvasSize, routeMap, timestampLabel) {
+        TelemetryBitmapOverlay(samples, 0.0, definition, canvasSize.width, canvasSize.height, routeMap, telemetryOriginMillis = 0L, timestampLabel = timestampLabel, locale = locale)
+    }
+    // Render through the actual export implementation. Selection controls are the only editor-only layer.
+    Canvas(Modifier.fillMaxSize()) {
+        val frame = renderer.getBitmap(routeTimestamp * 1000)
+        drawContext.canvas.nativeCanvas.drawBitmap(frame, null, android.graphics.Rect(0, 0, size.width.toInt(), size.height.toInt()), null)
+    }
     definition.elements.forEach { element ->
-        val position = element.position(portrait)
+        val bounds = element.bounds(canvasSize.width, canvasSize.height)
+        val rect = Rect(bounds.left, bounds.top, bounds.left + bounds.width, bounds.top + bounds.height)
+        LaunchedEffect(element.id, rect) { elementBoundsChanged(element.id, rect) }
         Box(
-            Modifier
-                .align(Alignment.TopStart)
-                .graphicsLayer {
-                    translationX = position.x * canvasSize.width - 55.dp.toPx()
-                    translationY = position.y * canvasSize.height - 33.dp.toPx()
-                    val previewScale = (fitScale * element.effectiveScale).coerceIn(.24f, 1.5f)
-                    scaleX = previewScale
-                    scaleY = previewScale
-                }
-                .onGloballyPositioned { elementBoundsChanged(element.id, it.boundsInParent()) }
+            Modifier.offset { androidx.compose.ui.unit.IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
+                .testTag("hud-widget-${element.kind.name}-${element.metric.name}")
+                .size(with(density) { bounds.width.toDp() }, with(density) { bounds.height.toDp() })
+                .border(if (selectedElementId == element.id) 1.dp else 0.dp, if (selectedElementId == element.id) Color.White else Color.Transparent, RoundedCornerShape(8.dp))
+                .clickable { select(element.id) }
         ) {
-            HudElementPreview(
-                sample = sample,
-                samples = samples,
-                routeTimestamp = routeTimestamp,
-                element = element,
-                definition = definition,
-                style = definition.style,
-                selected = selectedElementId == element.id,
-                modifier = Modifier.clickable { select(element.id) }
-            )
             if (selectedElementId == element.id) {
-                IconButton(
-                    onClick = { requestDelete(element.id) },
-                    modifier = Modifier
-                        .align(
-                            if (position.y < .3f) {
-                                if (position.x < .3f) Alignment.BottomEnd else Alignment.BottomStart
-                            } else {
-                                if (position.x < .3f) Alignment.TopEnd else Alignment.TopStart
-                            }
-                        )
-                        .offset(
-                            x = if (position.x < .3f) (-8).dp else 8.dp,
-                            y = if (position.y < .3f) (-8).dp else 8.dp
-                        )
-                        .size(30.dp)
-                        .background(TougeRed.copy(alpha = .94f), androidx.compose.foundation.shape.CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = .9f), androidx.compose.foundation.shape.CircleShape)
-                ) {
+                IconButton(onClick = { requestDelete(element.id) }, modifier = Modifier.align(Alignment.TopEnd).size(30.dp).background(TougeRed, androidx.compose.foundation.shape.CircleShape)) {
                     Icon(Icons.Default.Delete, appText("Remove widget", "Usuń widget"), tint = Color.White, modifier = Modifier.size(16.dp))
                 }
-            }
-            if (element.kind.isRouteMap) {
-                Column(
-                    Modifier
-                        .align(if (position.x > .7f) Alignment.CenterStart else Alignment.CenterEnd)
-                        .offset(x = if (position.x > .7f) (-38).dp else 38.dp)
-                        .background(Color.Black.copy(alpha = .78f), RoundedCornerShape(40.dp))
-                        .border(1.dp, element.accent.color().copy(alpha = .85f), RoundedCornerShape(40.dp))
-                        .padding(3.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(1.dp)
-                ) {
-                    MapZoomButton("+") { mapZoom(element.id, .15f) }
-                    Text("%.1f".format(element.mapZoom), color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Black)
+                if (element.kind.isRouteMap) Row(Modifier.align(Alignment.BottomCenter).background(Color.Black.copy(alpha = .8f), RoundedCornerShape(20.dp)), verticalAlignment = Alignment.CenterVertically) {
                     MapZoomButton("−") { mapZoom(element.id, -.15f) }
+                    Text("%.1f".format(element.mapZoom), color = Color.White, fontSize = 9.sp)
+                    MapZoomButton("+") { mapZoom(element.id, .15f) }
                 }
             }
         }
@@ -866,383 +985,6 @@ private fun MapZoomButton(label: String, action: () -> Unit) {
     ) {
         Text(label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Black)
     }
-}
-
-@Composable
-private fun HudElementPreview(
-    sample: TelemetrySampleEntity,
-    samples: List<TelemetrySampleEntity>,
-    routeTimestamp: Long,
-    element: VideoOverlayElement,
-    definition: VideoOverlayTemplateDefinition,
-    style: OverlayStyle,
-    selected: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val accent = element.accent.color()
-    val background = if (style == OverlayStyle.UNDERGROUND) Color.Black.copy(alpha = .82f) else Color(0xE6071014)
-    val value = element.metric.sampleValue(sample)
-    val circularMap = element.kind.isCircularRouteMap
-    val shellShape = if (circularMap) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(12.dp)
-    val shell = modifier
-        .background(background, shellShape)
-        .border(if (selected) 2.dp else 1.dp, if (selected) Color.White else accent.copy(alpha = .45f), shellShape)
-        .padding(horizontal = 12.dp, vertical = 8.dp)
-    when (element.kind) {
-        OverlayElementKind.DIGITAL -> Column(shell, horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(element.metric.localizedName(), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 8.sp, fontWeight = FontWeight.Black)
-            Text(element.metric.format(value), color = accent, fontSize = 25.sp, fontWeight = FontWeight.Black)
-            Text(element.metric.unit, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-        }
-        OverlayElementKind.GAUGE -> Box(shell.size(112.dp), contentAlignment = Alignment.Center) {
-            val progress = definition.progress(element.metric, value)
-            RacingDial(progress, definition.range(element.metric), element.metric, accent, Modifier.fillMaxSize())
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(element.metric.format(value), fontSize = 21.sp, fontWeight = FontWeight.Black)
-                Text(element.metric.shortName, color = accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
-            }
-        }
-        OverlayElementKind.BAR -> Column(shell.fillMaxWidth(.62f)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(element.metric.shortName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                Text("${element.metric.format(value)} ${element.metric.unit}", fontWeight = FontWeight.Black)
-            }
-            val progress = definition.progress(element.metric, value)
-            Box(Modifier.fillMaxWidth().height(7.dp).background(Color.White.copy(alpha = .10f), RoundedCornerShape(4.dp))) {
-                Box(Modifier.fillMaxWidth(progress.coerceAtLeast(.01f)).height(7.dp).background(accent, RoundedCornerShape(4.dp)))
-            }
-        }
-        OverlayElementKind.SPEED_CLUSTER -> Box(shell.size(132.dp), contentAlignment = Alignment.Center) {
-            RacingDial(definition.progress(TelemetryMetric.SPEED, sample.speedKph), definition.range(TelemetryMetric.SPEED), TelemetryMetric.SPEED, accent, Modifier.fillMaxSize())
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 19.dp)) {
-                Text("RPM ${sample.rpm.roundToInt()}", color = Color.White.copy(alpha = .72f), fontSize = 7.sp, fontWeight = FontWeight.Black)
-                Text(sample.speedKph.roundToInt().toString(), color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Black)
-                Text("km/h", color = accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
-                Text("BOOST ${"%.1f".format(sample.boostBar)}", color = TougeMint, fontSize = 6.sp, fontWeight = FontWeight.Black)
-                val boost = definition.progress(TelemetryMetric.BOOST, sample.boostBar)
-                Box(Modifier.width(54.dp).height(4.dp).background(Color.White.copy(alpha = .13f), RoundedCornerShape(3.dp))) {
-                    Box(Modifier.fillMaxWidth(boost.coerceAtLeast(.01f)).height(4.dp).background(TougeMint, RoundedCornerShape(3.dp)))
-                }
-            }
-        }
-        OverlayElementKind.OIL_CLUSTER -> Box(shell.size(120.dp), contentAlignment = Alignment.Center) {
-            RacingDial(definition.progress(TelemetryMetric.OIL_TEMPERATURE, sample.oilTemperatureCelsius), definition.range(TelemetryMetric.OIL_TEMPERATURE), TelemetryMetric.OIL_TEMPERATURE, accent, Modifier.fillMaxSize())
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(top = 14.dp)) {
-                Text("OIL TEMP", color = accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
-                Text("${sample.oilTemperatureCelsius.roundToInt()}°", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                Text("OIL P  ${"%.1f".format(sample.oilPressureBar)} bar", color = Color.White.copy(alpha = .78f), fontSize = 7.sp, fontWeight = FontWeight.Black)
-            }
-        }
-        OverlayElementKind.NEON_TACH,
-        OverlayElementKind.BLACKLIST_TACH,
-        OverlayElementKind.CARBON_TACH,
-        OverlayElementKind.STREET_SHIFT_TACH -> ArcadeTachPreview(sample, element.kind, definition, shell)
-        OverlayElementKind.ROUTE_MAP,
-        OverlayElementKind.ROUTE_MAP_CIRCULAR,
-        OverlayElementKind.ROUTE_MAP_FOLLOW,
-        OverlayElementKind.ROUTE_MAP_LIGHT,
-        OverlayElementKind.ROUTE_MAP_LIGHT_CIRCULAR,
-        OverlayElementKind.ROUTE_MAP_AMBER -> NfsRouteMapPreview(samples, routeTimestamp, element.kind, element.mapZoom, accent, circularMap, shell)
-    }
-}
-
-@Composable
-private fun NfsRouteMapPreview(
-    samples: List<TelemetrySampleEntity>,
-    routeTimestamp: Long,
-    kind: OverlayElementKind,
-    mapZoom: Float,
-    accent: Color,
-    circular: Boolean,
-    modifier: Modifier
-) {
-    val context = LocalContext.current
-    val located = remember(samples) {
-        samples.mapNotNull { value ->
-            val latitude = value.latitude
-            val longitude = value.longitude
-            if (latitude == null || longitude == null) null else value to GeoPoint(latitude, longitude)
-        }.fold(mutableListOf<Pair<TelemetrySampleEntity, GeoPoint>>()) { result, point ->
-            val previous = result.lastOrNull()?.second
-            if (previous == null || previous.latitude != point.second.latitude || previous.longitude != point.second.longitude) {
-                result += point
-            }
-            result
-        }
-    }
-    val currentPosition = remember(located, routeTimestamp) { located.interpolatePosition(routeTimestamp) }
-    val previousPosition = remember(located, routeTimestamp) { located.interpolatePosition(routeTimestamp - 1_500) }
-    val nextPosition = remember(located, routeTimestamp) { located.interpolatePosition(routeTimestamp + 1_500) }
-    val travelled = remember(located, routeTimestamp, currentPosition) {
-        located.takeWhile { it.first.recordedAt <= routeTimestamp }.map { it.second }.toMutableList().apply {
-            currentPosition?.let(::add)
-        }
-    }
-    val points = remember(located) { located.map { it.second } }
-    val routeKey = remember(points) { points.firstOrNull()?.let { "${points.size}:${it.latitude}:${it.longitude}:${points.last().latitude}:${points.last().longitude}" } }
-    val sizeModifier = if (circular) Modifier.size(172.dp) else Modifier.width(240.dp).height(150.dp)
-    val mapShape = if (circular) androidx.compose.foundation.shape.CircleShape else RoundedCornerShape(12.dp)
-    Box(modifier.then(sizeModifier).graphicsLayer { shape = mapShape; clip = true }.padding(0.dp)) {
-        if (points.isNotEmpty()) {
-            AndroidView(
-                factory = {
-                    Configuration.getInstance().userAgentValue = context.packageName
-                    MapView(context).apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
-                        setMultiTouchControls(false)
-                        isClickable = false
-                        isFocusable = false
-                    }
-                },
-                update = { map ->
-                    val fullRoute = Polyline().apply {
-                        outlinePaint.color = AndroidColor.argb(155, 255, 255, 255)
-                        outlinePaint.strokeWidth = 7f
-                        setPoints(points)
-                    }
-                    val currentRoute = Polyline().apply {
-                        outlinePaint.color = accent.toArgb()
-                        outlinePaint.strokeWidth = 10f
-                        setPoints(travelled)
-                    }
-                    map.overlays.clear()
-                    map.overlays.add(fullRoute)
-                    map.overlays.add(currentRoute)
-                    if (currentPosition != null) {
-                        map.controller.setCenter(currentPosition)
-                        // MapView requests a finer tile level, so this is a real map-camera
-                        // zoom rather than scaling the already drawn preview bitmap.
-                        map.controller.setZoom(17.5 + kotlin.math.log2(mapZoom.coerceIn(.65f, 3.5f).toDouble()))
-                        map.mapOrientation = -(previousPosition?.bearingTo(nextPosition ?: currentPosition)?.toFloat() ?: 0f)
-                    } else if (map.tag != routeKey) {
-                        map.tag = routeKey
-                        map.post {
-                            if (points.size > 1) map.zoomToBoundingBox(BoundingBox.fromGeoPointsSafe(points), false, 26)
-                            else points.firstOrNull()?.let { map.controller.setCenter(it); map.controller.setZoom(17.0) }
-                        }
-                    }
-                    map.invalidate()
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-            val mapTint = when {
-                kind == OverlayElementKind.ROUTE_MAP_AMBER -> Color(0x55F28B22)
-                kind.usesLightMap -> Color.White.copy(alpha = .05f)
-                kind == OverlayElementKind.ROUTE_MAP_CIRCULAR -> Color(0x4A002B24)
-                else -> Color.Black.copy(alpha = .37f)
-            }
-            Box(Modifier.fillMaxSize().background(mapTint))
-            Canvas(Modifier.align(Alignment.Center).size(34.dp)) {
-                val arrow = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(size.width / 2, size.height * .06f)
-                    lineTo(size.width * .84f, size.height * .88f)
-                    lineTo(size.width / 2, size.height * .69f)
-                    lineTo(size.width * .16f, size.height * .88f)
-                    close()
-                }
-                drawPath(arrow, Color.White)
-                drawPath(
-                    arrow,
-                    accent,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3.dp.toPx())
-                )
-            }
-        } else {
-            Box(Modifier.fillMaxSize().background(Color(0xF0051116)), contentAlignment = Alignment.Center) {
-                Text(appText("NO GPS", "BRAK GPS"), color = TougeOrange, fontSize = 11.sp, fontWeight = FontWeight.Black)
-            }
-        }
-        Text("© OpenStreetMap", color = Color.White.copy(alpha = .72f), fontSize = 6.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = if (circular) 13.dp else 7.dp))
-    }
-}
-
-@Composable
-private fun ArcadeTachPreview(
-    sample: TelemetrySampleEntity,
-    kind: OverlayElementKind,
-    definition: VideoOverlayTemplateDefinition,
-    modifier: Modifier
-) {
-    val neon = kind == OverlayElementKind.NEON_TACH
-    val blacklist = kind == OverlayElementKind.BLACKLIST_TACH
-    val carbon = kind == OverlayElementKind.CARBON_TACH
-    val street = kind == OverlayElementKind.STREET_SHIFT_TACH
-    val accent = when {
-        neon -> Color(0xFF18BFFF)
-        blacklist -> Color(0xFFD62E2E)
-        carbon -> Color(0xFFE4A441)
-        else -> Color(0xFFF0A04B)
-    }
-    val face = when {
-        neon -> Color(0xF0040A0F)
-        carbon -> Color(0xF016130D)
-        street -> Color(0xE9080A08)
-        else -> Color(0xF00A0B0D)
-    }
-    val width = when { neon -> 184.dp; street -> 190.dp; else -> 150.dp }
-    val mainOffset = when { neon -> 17.dp; street -> (-20).dp; else -> 0.dp }
-    Box(modifier.width(width).height(150.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val dimension = size.height
-            val tachCenter = Offset(
-                when { neon -> size.width - dimension / 2; street -> dimension / 2; else -> size.width / 2 },
-                size.height / 2
-            )
-            val radius = dimension * .43f
-            drawCircle(face, radius = dimension / 2, center = tachCenter)
-            drawCircle(accent.copy(alpha = .7f), radius = dimension / 2 - 1.dp.toPx(), center = tachCenter, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
-            val faceTopLeft = Offset(tachCenter.x - dimension / 2, tachCenter.y - dimension / 2)
-            val faceSize = androidx.compose.ui.geometry.Size(dimension, dimension)
-            val rpmProgress = definition.progress(TelemetryMetric.RPM, sample.rpm)
-            repeat(41) { index ->
-                val fraction = index / 40f
-                val radians = Math.toRadians(140.0 + 260.0 * fraction)
-                val outer = Offset(tachCenter.x + cos(radians).toFloat() * radius, tachCenter.y + sin(radians).toFloat() * radius)
-                val major = index % 4 == 0
-                val tick = if (major) 9.dp.toPx() else 5.dp.toPx()
-                val inner = Offset(tachCenter.x + cos(radians).toFloat() * (radius - tick), tachCenter.y + sin(radians).toFloat() * (radius - tick))
-                val redline = (blacklist || street) && fraction > .78f
-                drawLine(
-                    if (redline) Color(0xFFDF3030) else Color.White.copy(alpha = if (major) .9f else .38f),
-                    inner,
-                    outer,
-                    strokeWidth = if (major) 2.dp.toPx() else 1.dp.toPx()
-                )
-            }
-            val labelPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.argb(205, 255, 255, 255)
-                textAlign = AndroidPaint.Align.CENTER
-                textSize = 7.dp.toPx()
-                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            }
-            val divisions = (definition.maximumRpm / 1_000).roundToInt().coerceIn(4, 12)
-            repeat(divisions + 1) { index ->
-                val angle = Math.toRadians(140.0 + 260.0 * index / divisions)
-                val labelRadius = radius * .69f
-                drawContext.canvas.nativeCanvas.drawText(
-                    index.toString(),
-                    tachCenter.x + cos(angle).toFloat() * labelRadius,
-                    tachCenter.y + sin(angle).toFloat() * labelRadius + labelPaint.textSize * .35f,
-                    labelPaint
-                )
-            }
-            drawArc(Color.White.copy(alpha = .12f), 140f, 260f, false, topLeft = faceTopLeft, size = faceSize, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
-            drawArc(accent.copy(alpha = .55f), 140f, 260f * rpmProgress, false, topLeft = faceTopLeft, size = faceSize, style = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx()))
-            val needleAngle = Math.toRadians(140.0 + 260.0 * rpmProgress)
-            drawLine(accent, tachCenter, Offset(tachCenter.x + cos(needleAngle).toFloat() * radius * .72f, tachCenter.y + sin(needleAngle).toFloat() * radius * .72f), 2.5.dp.toPx())
-            drawCircle(if (carbon) Color(0xFFFFD58A) else Color.White, 3.dp.toPx(), tachCenter)
-            if (neon) {
-                val boost = definition.progress(TelemetryMetric.BOOST, sample.boostBar)
-                val podCenter = Offset(dimension * .17f, dimension * .75f)
-                val podRadius = dimension * .173f
-                drawCircle(Color(0xFA040A0F), podRadius, podCenter)
-                val podArc = androidx.compose.ui.geometry.Size(podRadius * 1.52f, podRadius * 1.52f)
-                val podTopLeft = Offset(podCenter.x - podArc.width / 2, podCenter.y - podArc.height / 2)
-                drawArc(Color.White.copy(alpha = .12f), 135f, 270f, false, topLeft = podTopLeft, size = podArc, style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
-                drawArc(Color(0xFF26E76F), 135f, 270f * boost, false, topLeft = podTopLeft, size = podArc, style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
-            }
-            if (street) {
-                val throttle = definition.progress(TelemetryMetric.THROTTLE, sample.throttlePercent)
-                drawArc(Color(0xFF91EC37).copy(alpha = .18f), 35f, 110f, false, topLeft = faceTopLeft, size = faceSize, style = androidx.compose.ui.graphics.drawscope.Stroke(6.dp.toPx()))
-                drawArc(Color(0xFF91EC37), 35f, 110f * throttle, false, topLeft = faceTopLeft, size = faceSize, style = androidx.compose.ui.graphics.drawscope.Stroke(6.dp.toPx()))
-            }
-        }
-        Text("RPM ×1000", color = if (carbon) Color(0xFFFFD58A) else accent, fontSize = 7.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = mainOffset.toPx(); translationY = -29.dp.toPx() })
-        when {
-            street -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = 65.dp.toPx(); translationY = -24.dp.toPx() }) {
-                    Text("GEAR", color = Color(0xFFFFC27D), fontSize = 6.sp, fontWeight = FontWeight.Black)
-                    Text("–", color = Color(0xFF24170A), fontSize = 22.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(42.dp).background(Color(0xFFE7A85E), RoundedCornerShape(4.dp)))
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = 65.dp.toPx(); translationY = 29.dp.toPx() }) {
-                    Text(sample.speedKph.roundToInt().toString(), color = Color(0xFF24170A), fontSize = 20.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(54.dp).background(Color(0xFFE7A85E), RoundedCornerShape(4.dp)))
-                    Text("KM/H", color = Color.White, fontSize = 6.sp, fontWeight = FontWeight.Black)
-                }
-                Text("THROTTLE ${sample.throttlePercent.roundToInt()}%", color = Color(0xFF9BEA4A), fontSize = 7.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = mainOffset.toPx(); translationY = 58.dp.toPx() })
-            }
-            neon -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = mainOffset.toPx(); translationY = 23.dp.toPx() }) {
-                    Text(sample.speedKph.roundToInt().toString(), color = accent, fontSize = 28.sp, fontWeight = FontWeight.Black)
-                    Text("KM/H", color = accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).graphicsLayer { translationX = -66.dp.toPx(); translationY = 38.dp.toPx() }) {
-                    Text("BOOST", color = Color(0xFF7EF5A5), fontSize = 5.sp, fontWeight = FontWeight.Black)
-                    Text("%.1f".format(sample.boostBar), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                    Text("BAR", color = Color.White.copy(alpha = .7f), fontSize = 4.sp, fontWeight = FontWeight.Black)
-                }
-            }
-            else -> {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.align(Alignment.Center).padding(top = 26.dp)) {
-                    Text(sample.speedKph.roundToInt().toString(), color = if (blacklist) Color.White else accent, fontSize = 28.sp, fontWeight = FontWeight.Black)
-                    Text("KM/H", color = if (carbon) Color.White else accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
-                    Text(
-                        when {
-                            blacklist -> "BOOST ${"%.1f".format(sample.boostBar)} bar"
-                            else -> "OIL ${sample.oilTemperatureCelsius.roundToInt()}°C"
-                        },
-                        color = if (carbon) Color(0xFFFFCF77) else Color.White.copy(alpha = .8f),
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun RacingDial(
-    progress: Float,
-    range: ClosedFloatingPointRange<Double>,
-    metric: TelemetryMetric,
-    accent: Color,
-    modifier: Modifier = Modifier
-) {
-    Canvas(modifier) {
-        val stroke = androidx.compose.ui.graphics.drawscope.Stroke(3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        drawArc(Color.White.copy(alpha = .1f), 150f, 240f, false, style = stroke)
-        drawArc(accent.copy(alpha = .48f), 150f, 240f * progress, false, style = stroke)
-        val radius = size.minDimension * .43f
-        repeat(25) { index ->
-            val radians = Math.toRadians((150.0 + index * 10.0))
-            val outer = Offset(center.x + cos(radians).toFloat() * radius, center.y + sin(radians).toFloat() * radius)
-            val tick = if (index % 4 == 0) 9.dp.toPx() else 5.dp.toPx()
-            val inner = Offset(center.x + cos(radians).toFloat() * (radius - tick), center.y + sin(radians).toFloat() * (radius - tick))
-            drawLine(Color.White.copy(alpha = if (index % 4 == 0) .9f else .32f), inner, outer, strokeWidth = if (index % 4 == 0) 2.dp.toPx() else 1.dp.toPx())
-        }
-        val labelPaint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
-            color = android.graphics.Color.argb(190, 255, 255, 255)
-            textAlign = AndroidPaint.Align.CENTER
-            textSize = 5.dp.toPx()
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        }
-        repeat(7) { index ->
-            val angle = Math.toRadians(150.0 + index * 40.0)
-            val labelRadius = radius * .70f
-            val label = scaleLabel(range.start + (range.endInclusive - range.start) * index / 6.0, metric)
-            drawContext.canvas.nativeCanvas.drawText(
-                label,
-                center.x + cos(angle).toFloat() * labelRadius,
-                center.y + sin(angle).toFloat() * labelRadius + labelPaint.textSize * .35f,
-                labelPaint
-            )
-        }
-        val needleAngle = Math.toRadians((150.0 + 240.0 * progress))
-        val needleEnd = Offset(center.x + cos(needleAngle).toFloat() * radius * .7f, center.y + sin(needleAngle).toFloat() * radius * .7f)
-        drawLine(accent, center, needleEnd, strokeWidth = 2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-        drawCircle(Color.White, radius = 3.dp.toPx(), center = center)
-    }
-}
-
-private fun scaleLabel(value: Double, metric: TelemetryMetric): String = when (metric) {
-    TelemetryMetric.RPM -> "${(value / 1_000).roundToInt()}k"
-    TelemetryMetric.BOOST -> "%.1f".format(value)
-    else -> value.roundToInt().toString()
-}
-
-private fun VideoOverlayTemplateDefinition.progress(metric: TelemetryMetric, value: Double): Float {
-    val range = range(metric)
-    return ((value - range.start) / (range.endInclusive - range.start).coerceAtLeast(.0001)).coerceIn(0.0, 1.0).toFloat()
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1286,13 +1028,18 @@ private fun HudTemplateEditor(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("${index + 1}.", color = element.accent.color(), fontWeight = FontWeight.Black)
                                 VideoMetricMenu(element.metric) { metric -> value = value.withElement(element.copy(metric = metric)) }
-                                IconButton(onClick = { value = value.copy(definition = value.definition.copy(elements = value.definition.elements.filterNot { it.id == element.id })) }) { Icon(Icons.Default.Delete, null, tint = TougeRed) }
+                                IconButton(onClick = { value = value.copy(definition = value.definition.withoutElement(element.id)) }) { Icon(Icons.Default.Delete, null, tint = TougeRed) }
                             }
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                OverlayElementKind.entries.forEach { kind -> FilterChip(element.kind == kind, { value = value.withElement(element.copy(kind = kind)) }, label = { Text(kind.name.lowercase()) }) }
+                                OverlayElementKind.entries.forEach { kind -> FilterChip(element.kind == kind, { value = value.withElement(element.copy(kind = kind)) }, label = { Text(widgetKindName(kind)) }) }
                             }
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                OverlayElementScale.entries.forEach { scale -> FilterChip(element.scale == scale, { value = value.withElement(element.copy(scale = scale)) }, label = { Text(scale.name.lowercase().replace('_', ' ')) }) }
+                                OverlayElementScale.entries.forEach { scale -> FilterChip(element.scale == scale, { value = value.withElement(element.copy(scale = scale)) }, label = { Text(when (scale) {
+                                    OverlayElementScale.SMALL -> appText("Small", "Mały")
+                                    OverlayElementScale.MEDIUM -> appText("Medium", "Średni")
+                                    OverlayElementScale.LARGE -> appText("Large", "Duży")
+                                    OverlayElementScale.EXTRA_LARGE -> appText("Extra large", "Bardzo duży")
+                                }) }) }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                                 DashboardAccent.entries.forEach { accent ->
@@ -1314,7 +1061,7 @@ private fun HudTemplateEditor(
                 }
             }
         },
-        confirmButton = { Button(enabled = value.entity.name.isNotBlank() && value.definition.elements.isNotEmpty(), onClick = { save(value) }) { Text(appText("Save HUD", "Zapisz HUD")) } },
+        confirmButton = { Button(enabled = value.entity.name.isNotBlank(), onClick = { save(value) }) { Text(appText("Save HUD", "Zapisz HUD")) } },
         dismissButton = { TextButton(onClick = dismiss) { Text(appText("Cancel", "Anuluj")) } }
     )
 }
@@ -1398,12 +1145,13 @@ private fun List<Pair<TelemetrySampleEntity, GeoPoint>>.interpolatePosition(targ
     )
 }
 
-private fun videoDuration(seconds: Double): String { val value = seconds.coerceAtLeast(0.0).roundToInt(); return "%d:%02d".format(value / 60, value % 60) }
+private fun videoDuration(seconds: Double): String { val tenths = (seconds.coerceAtLeast(0.0) * 10).toLong(); return "%d:%02d.%d".format(tenths / 600, tenths / 10 % 60, tenths % 10) }
 private fun videoBytes(value: Long): String = when { value >= 1_073_741_824 -> "%.1f GB".format(value / 1_073_741_824.0); value >= 1_048_576 -> "%.1f MB".format(value / 1_048_576.0); else -> "%.0f kB".format(value / 1024.0) }
 
 @Composable
 private fun localizedVideoOperation(value: String): String = when (value) {
     "Copying video from gallery" -> appText("Copying video from gallery", "Kopiowanie filmu z galerii")
+    "Saving video to gallery" -> appText("Saving video to gallery", "Zapisywanie filmu w galerii")
     "Rendering telemetry HUD" -> appText("Rendering telemetry HUD", "Renderowanie HUD-u z telemetrią")
     else -> value
 }

@@ -140,6 +140,30 @@ final class TelemetryHistoryRecorder: ObservableObject {
     }
 
     #if DEBUG
+    // Explicit opt-in fixture for comparing the real editors on both platforms.
+    func seedPreviewVideoIfNeeded() async {
+        guard let path = ProcessInfo.processInfo.environment["TOUGE_DASH_VIDEO_PREVIEW_PATH"],
+              let session = try? context.fetch(FetchDescriptor<DriveSession>()).first,
+              (try? context.fetchCount(FetchDescriptor<DriveVideoRecording>())) == 0 else { return }
+        do {
+            let source = URL(fileURLWithPath: path)
+            let metadata = try await DriveVideoAssetInspector.metadata(for: source)
+            let destination = try DriveVideoFileStore.newRecordingURL(fileExtension: "mp4")
+            try FileManager.default.copyItem(at: source, to: destination)
+            let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
+            context.insert(DriveVideoRecording(
+                sessionID: session.id, fileName: destination.lastPathComponent,
+                startedAt: session.startedAt, endedAt: session.startedAt.addingTimeInterval(metadata.duration),
+                duration: metadata.duration, fileSizeBytes: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+                pixelWidth: metadata.width, pixelHeight: metadata.height, framesPerSecond: metadata.framesPerSecond,
+                cameraName: "Parity fixture", hasAudio: metadata.hasAudio, sourceKind: .photoLibrary,
+                sourceDisplayName: "parity-drive.mp4", videoTrimStartSeconds: 0,
+                telemetryTrimStartSeconds: 0, exportDurationSeconds: min(metadata.duration, session.duration)
+            ))
+            try context.save()
+        } catch { assertionFailure("Unable to prepare video comparison fixture: \(error)") }
+    }
+
     func seedPreviewDataIfNeeded() {
         var descriptor = FetchDescriptor<DriveSession>()
         descriptor.fetchLimit = 1

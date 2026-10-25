@@ -9,7 +9,7 @@ import it.letscode.tougedash.model.TelemetryMetric
 
 @Composable
 internal fun appText(english: String, polish: String): String =
-    if (LocalConfiguration.current.locales[0].language == "pl") polish else english
+    if (LocalAppLocale.current.language == "pl") polish else english
 
 @Composable
 internal fun DashboardTemplate.localizedName(): String =
@@ -28,7 +28,7 @@ internal fun ConnectionState.localizedLabel(): String = when (this) {
 }
 
 @Composable
-internal fun TelemetryMetric.localizedName(): String = localizedName(LocalConfiguration.current.locales[0].language)
+internal fun TelemetryMetric.localizedName(): String = localizedName(LocalAppLocale.current.language)
 
 internal fun TelemetryMetric.localizedName(language: String): String = when (this) {
     TelemetryMetric.BOOST -> if (language == "pl") "DOŁADOWANIE" else "BOOST"

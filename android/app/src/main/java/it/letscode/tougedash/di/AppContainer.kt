@@ -80,10 +80,12 @@ class AppContainer(val application: Application) {
                 db.execSQL("ALTER TABLE incidents ADD COLUMN conditionDurationMillis INTEGER NOT NULL DEFAULT 0")
             }
         })
+        .addMigrations(it.letscode.tougedash.data.local.DatabaseMigrations.VIDEO_PROJECT_LAYOUT)
         .build()
     val dao = database.dao()
     val runtime = TelemetryRuntime
     val ecuControls = EcuControlCoordinator(applicationScope)
+    val driveSegmentSettings = it.letscode.tougedash.history.DriveSegmentSettings(application)
     val historyRepository = HistoryRepository(dao, application)
     val accelerationEngine = AccelerationEngine()
     val alertNotifier = EngineAlertNotifier(application)
@@ -91,6 +93,7 @@ class AppContainer(val application: Application) {
     val incidentEngine = IncidentCaptureEngine(dao, json, alertNotifier::show)
     val dashboardRepository = DashboardRepository(dao, json)
     val locationTracker = LocationTracker(application)
+    val seventyMaiImporter = it.letscode.tougedash.video.SeventyMaiImporter(application, applicationScope, dao)
     val videoRepository = VideoRepository(application, dao, applicationScope)
     val videoRecordingSettings = VideoRecordingSettings(application)
     val cameraRecordingController = CameraRecordingController(application, videoRepository, videoRecordingSettings)
